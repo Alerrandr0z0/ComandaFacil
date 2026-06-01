@@ -1,0 +1,183 @@
+[project]
+name = "comandafacil-backend"
+version = "0.1.0"
+description = "ComandaFácil — Backend API (FastAPI + SQLAlchemy + Postgres/MongoDB)"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    # Framework
+    "fastapi[standard]>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    # ORM & Database (Write — Postgres)
+    "sqlalchemy[asyncio]>=2.0.0",
+    "asyncpg>=0.29.0",
+    "alembic>=1.13.0",
+    # Database (Read — MongoDB)
+    "motor>=3.5.0",
+    # Validation & Settings
+    "pydantic>=2.8.0",
+    "pydantic-settings>=2.4.0",
+    # Auth
+    "python-jose[cryptography]>=3.3.0",
+    "passlib[bcrypt]>=1.7.4",
+    # HTTP client (for payment gateways)
+    "httpx>=0.27.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    # Testing
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.23.0",
+    "pytest-cov>=5.0.0",
+    "httpx>=0.27.0",
+    "testcontainers[postgres,mongodb]>=4.7.0",
+    # Property-based testing
+    "hypothesis>=6.112.0",
+    # Mutation testing
+    "mutmut>=3.1.0",
+    # Lint & Format
+    "ruff>=0.5.0",
+    # Type checking
+    "pyright>=1.1.370",
+    # Complexity
+    "complexipy>=0.5.0",
+    # Security
+    "bandit>=1.7.9",
+    "pip-audit>=2.7.0",
+    # Pre-commit
+    "pre-commit>=3.8.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["app"]
+
+# ─── Ruff ─────────────────────────────────────────────────────────────────────
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = [
+    "E",    # pycodestyle errors
+    "W",    # pycodestyle warnings
+    "F",    # pyflakes
+    "I",    # isort (import sorting)
+    "B",    # flake8-bugbear (bugs/design)
+    "C4",   # flake8-comprehensions
+    "UP",   # pyupgrade (modern syntax upgrade)
+    "N",    # pep8-naming
+    "S",    # flake8-bandit (security)
+    "ANN",  # flake8-annotations (type-hint annotations)
+    "RUF",  # ruff-specific rules
+    "A",    # flake8-builtins (shadowing builtins)
+    "ARG",  # flake8-unused-arguments (clean functions)
+    "DTZ",  # flake8-datetimez (timezones enforced!)
+    "ERA",  # eradicate (dead/commented code)
+    "FA",   # flake8-future-annotations (clean annotation evaluations)
+    "ISC",  # flake8-implicit-str-concat (implicit string concat prevention)
+    "PIE",  # flake8-pie (miscellaneous style)
+    "PT",   # flake8-pytest-style (pytest standards)
+    "RET",  # flake8-return (return flow checks)
+    "SIM",  # flake8-simplify (code simplification)
+    "TCH",  # flake8-type-checking (if TYPE_CHECKING separation)
+    "TRY",  # tryceratops (exception best practices)
+    "PERF", # perflint (performance anti-patterns)
+    "PL",   # pylint rules (errors, conventions, refactors)
+]
+ignore = [
+    "ANN401", # allow Any in type annotations when explicitly needed
+    "TRY003", # allow custom strings inside Standard exception constructors (e.g. HTTPException)
+    "S101",   # assert statements allowed (also managed in per-file-ignores)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",     # assert is standard in pytest
+    "ANN",      # type annotations not strictly required in unit tests
+    "PLR2004",  # magic values are standard in test assertions (e.g. status_code == 200)
+    "ARG001",   # unused function arguments (fixtures often work as args)
+    "PT011",    # pytest.raises too strict about matching exception messages
+    "DTZ",      # timezone checks can be relaxed for local mock datetimes in tests
+]
+"alembic/**/*.py" = [
+    "ANN",      # alembic auto-generated migrations do not need manual annotations
+    "E501",     # auto-generated lines are sometimes long
+]
+"app/settings.py" = [
+    "S104",     # bind to all interfaces 0.0.0.0 is standard in dev server setting defaults
+    "S105",     # hardcoded password strings are local development defaults
+]
+"app/shared/database.py" = [
+    "PLW0603",  # global variables are standard for database connection pools in simple setups
+]
+"app/shared/exceptions.py" = [
+    "N818",     # exception names without 'Error' suffix is a design choice (e.g. DomainException)
+]
+
+[tool.ruff.lint.pylint]
+max-args = 8    # Allow up to 8 arguments for dependency-heavy FastAPI routers
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.pyright]
+pythonVersion = "3.12"
+typeCheckingMode = "strict"
+venvPath = "."
+venv = ".venv"
+exclude = [
+    "**/node_modules",
+    "**/__pycache__",
+    "alembic/",
+    ".venv"
+]
+
+# Enable rigorous type checking on app/ and tests/ with pragmatic third-party overrides
+reportMissingTypeStubs = false          # Avoid noise on untyped 3rd-party libs (motor, passlib)
+reportUnnecessaryTypeIgnoreComment = true # Flag dead type ignores
+reportUnknownMemberType = false          # Relax member typing for packages lacking full stubs
+reportUnknownVariableType = false
+reportUnknownArgumentType = false
+reportUnknownParameterType = false
+
+# ─── Pytest ───────────────────────────────────────────────────────────────────
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "unit: testes de unidade puro (sem I/O)",
+    "integration: testes com banco de dados real",
+    "hypothesis: testes baseados em propriedades",
+    "slow: testes lentos (excluir com -m 'not slow')",
+]
+addopts = [
+    "--strict-markers",
+    "-ra",
+]
+
+# ─── Coverage ─────────────────────────────────────────────────────────────────
+[tool.coverage.run]
+source = ["app"]
+omit = [
+    "app/main.py",
+    "alembic/*",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+fail_under = 80
+
+# ─── Mutmut ───────────────────────────────────────────────────────────────────
+[tool.mutmut]
+paths_to_mutate = "app/"
+test_command = "uv run pytest tests/unit/ -x -q"

@@ -1,0 +1,53 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+mutants/
+.mutmut-cache
+htmlcov/
+.coverage
+coverage.xml
+
+# Node
+node_modules/
+dist/
+.next/
+*.local
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Logs (mantém estrutura, ignora conteúdo)
+logs/franquias/**/app.log
+logs/franquias/**/*.log*
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+.docker/
+
+# Playwright
+playwright-report/
+test-results/

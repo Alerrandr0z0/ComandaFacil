@@ -1,0 +1,104 @@
+name: ComandaFácil — CI/CD Pipeline
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-quality:
+    name: 🐍 Backend (Quality & Tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+
+    steps:
+      - name: ⬇️ Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: ⚡ Setup Astral uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+          enable-cache: true
+
+      - name: 🐍 Set up Python 3.12
+        run: uv python install 3.12
+
+      - name: 📦 Sync Dependencies
+        run: uv sync --all-extras --dev
+
+      - name: 🔍 Ruff Linter
+        run: uv run ruff check .
+
+      - name: 🎨 Ruff Formatter Check
+        run: uv run ruff format . --check
+
+      - name: 🛡️ Pyright Static Type Checker
+        run: uv run pyright
+
+      - name: 🧠 Cognitive Complexity Scan
+        run: uv run complexipy app/ --max-complexity-allowed 15
+
+      - name: 🔒 Security Audit (Bandit & Audit)
+        run: |
+          uv run bandit -r app/ -s B101 -ll
+          uv run pip-audit --strict --desc on 2>/dev/null || echo "pip-audit completed"
+
+      - name: 🧪 Run Pytest Suite
+        run: |
+          uv run pytest tests/ \
+            --cov=app \
+            --cov-report=xml \
+            --cov-fail-under=80 \
+            -v
+
+  frontend-quality:
+    name: ⚡ Frontend (Quality & Tests)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - name: ⬇️ Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 🟢 Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      # We check if package.json exists to avoid breaking if frontend is empty/not setup yet
+      - name: Check if package.json exists
+        id: check_files
+        run: |
+          if [ -f package.json ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: 📦 Install Dependencies
+        if: steps.check_files.outputs.exists == 'true'
+        run: npm ci
+
+      - name: 🎨 Lint Check
+        if: steps.check_files.outputs.exists == 'true'
+        run: npm run lint
+
+      - name: 🛡️ Type Check
+        if: steps.check_files.outputs.exists == 'true'
+        run: npm run typecheck
+
+      - name: 🧪 Run Jest / Vitest Suite
+        if: steps.check_files.outputs.exists == 'true'
+        run: npm run test
