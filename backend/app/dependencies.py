@@ -2,14 +2,16 @@ from collections.abc import AsyncGenerator
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-
 from app.auth.domain.employee import Employee
 from app.auth.domain.session import Session
-from app.auth.infrastructure.repositories import SQLAlchemySessionRepository, SQLAlchemyEmployeeRepository
+from app.auth.infrastructure.repositories import (
+    SQLAlchemyEmployeeRepository,
+    SQLAlchemySessionRepository,
+)
 from app.settings import Settings, get_settings
 from app.shared.database import get_async_session, get_mongo_db
 from app.shared.tenant_context import tenant_context_var

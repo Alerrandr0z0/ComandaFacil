@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-from sqlalchemy import select, delete
-from sqlalchemy.ext.asyncio import AsyncSession
+from typing import TYPE_CHECKING
+
+from sqlalchemy import delete, select
 from sqlalchemy.orm import selectinload
 
-from app.auth.domain.employee import Employee, EmployeeRepository, UserTenantRole, RoleType
-from app.auth.domain.tenant import Tenant, TenantRepository, PlanType
+from app.auth.domain.employee import Employee, EmployeeRepository, RoleType, UserTenantRole
 from app.auth.domain.session import Session, SessionRepository
-from app.auth.infrastructure.orm_models import TenantORM, EmployeeORM, UserTenantRoleORM, SessionORM
+from app.auth.domain.tenant import PlanType, Tenant, TenantRepository
+from app.auth.infrastructure.orm_models import EmployeeORM, SessionORM, TenantORM, UserTenantRoleORM
 from app.shared.value_objects import Email
+
+if TYPE_CHECKING:
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class SQLAlchemyTenantRepository(TenantRepository):
@@ -75,7 +79,7 @@ class SQLAlchemyEmployeeRepository(EmployeeRepository):
         stmt = select(EmployeeORM).where(EmployeeORM.id == employee.id).options(selectinload(EmployeeORM.roles))
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
-        
+
         if orm:
             orm.name = employee.name
             orm.email = str(employee.email)
@@ -91,7 +95,7 @@ class SQLAlchemyEmployeeRepository(EmployeeRepository):
                 password_hash=employee.password_hash
             )
             self._session.add(orm)
-        
+
         # Add roles ORM mappings
         for role in employee.roles:
             role_orm = UserTenantRoleORM(
@@ -102,7 +106,7 @@ class SQLAlchemyEmployeeRepository(EmployeeRepository):
                 is_active=role.is_active
             )
             orm.roles.append(role_orm)
-            
+
         await self._session.flush()
 
     def _map_to_domain(self, orm: EmployeeORM) -> Employee:

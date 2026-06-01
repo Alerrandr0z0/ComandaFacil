@@ -24,10 +24,10 @@ class Session:
 
     def is_expired(self) -> bool:
         """Checks if the session has reached its expiration time."""
-        now = datetime.datetime.now(datetime.timezone.utc)
+        now = datetime.datetime.now(datetime.UTC)
         expires = self.expires_at
         if expires.tzinfo is None:
-            expires = expires.replace(tzinfo=datetime.timezone.utc)
+            expires = expires.replace(tzinfo=datetime.UTC)
         return now >= expires
 
     def __repr__(self) -> str:
@@ -48,14 +48,11 @@ class SessionRepository(ABC):
     @abstractmethod
     async def find_by_id(self, session_id: str) -> Session | None:
         """Retrieves a Session by its session ID."""
-        pass
 
     @abstractmethod
     async def save(self, session: Session) -> None:
         """Saves a Session in persistent storage."""
-        pass
 
     @abstractmethod
     async def invalidate(self, session_id: str) -> None:
         """Invalidates/removes a Session from persistent storage."""
-        pass

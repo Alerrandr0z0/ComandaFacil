@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import datetime
-from sqlalchemy import ForeignKey, String, Boolean, DateTime, Integer
+
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.auth.domain.tenant import PlanType
@@ -54,7 +55,7 @@ class UserTenantRoleORM(Base):
     role_type: Mapped[str] = mapped_column(String(50), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     assigned_at: Mapped[datetime.datetime] = mapped_column(
-        DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.timezone.utc)
+        DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC)
     )
 
     # Relationships

@@ -1,3 +1,5 @@
-from app.shared.base_orm import Base as Base  # noqa: F401
+from app.shared.base_orm import Base
+
+__all__ = ["Base"]
 
 # Payment ORM models — to be implemented

@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
-from app.auth.domain.employee import Employee, EmployeeRepository
-from app.auth.domain.session import Session, SessionRepository
 from app.shared.value_objects import Email
+
+if TYPE_CHECKING:
+    from app.auth.domain.employee import Employee, EmployeeRepository
+    from app.auth.domain.session import Session, SessionRepository
 
 
 @dataclass(frozen=True)

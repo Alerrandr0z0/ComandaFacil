@@ -93,6 +93,9 @@ ignore = [
     "ANN401", # allow Any in type annotations when explicitly needed
     "TRY003", # allow custom strings inside Standard exception constructors (e.g. HTTPException)
     "S101",   # assert statements allowed (also managed in per-file-ignores)
+    "B008",   # allow Depends() defaults for FastAPI DI
+    "A002",   # allow using 'id' as argument name
+    "E501",   # allow line length warnings
 ]
 
 [tool.ruff.lint.per-file-ignores]
@@ -103,6 +106,10 @@ ignore = [
     "ARG001",   # unused function arguments (fixtures often work as args)
     "PT011",    # pytest.raises too strict about matching exception messages
     "DTZ",      # timezone checks can be relaxed for local mock datetimes in tests
+    "S105",     # allow mock passwords in tests
+    "S106",     # allow mock passwords in tests
+    "B017",     # allow asserting blind Exception in test mocks
+    "PLC0415",  # allow local imports in test methods
 ]
 "alembic/**/*.py" = [
     "ANN",      # alembic auto-generated migrations do not need manual annotations

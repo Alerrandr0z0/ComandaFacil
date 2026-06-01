@@ -1,30 +1,30 @@
 from __future__ import annotations
 
 import datetime
-import pytest
-from unittest.mock import AsyncMock
 
-from app.auth.domain.employee import Employee, EmployeeRepository, UserTenantRole, RoleType
-from app.auth.domain.tenant import Tenant, TenantRepository, PlanType
-from app.auth.domain.session import Session, SessionRepository
+import pytest
+
 from app.auth.application.commands import (
-    CreateEmployeeCommand,
-    CreateEmployeeHandler,
     AssignRoleCommand,
     AssignRoleHandler,
+    CreateEmployeeCommand,
+    CreateEmployeeHandler,
     LoginCommand,
     LoginHandler,
     LogoutCommand,
     LogoutHandler,
 )
 from app.auth.application.queries import (
-    GetEmployeeQuery,
     GetEmployeeHandler,
-    GetSessionQuery,
+    GetEmployeeQuery,
     GetSessionHandler,
+    GetSessionQuery,
 )
-from app.shared.value_objects import Email
+from app.auth.domain.employee import Employee, EmployeeRepository, RoleType
+from app.auth.domain.session import Session, SessionRepository
+from app.auth.domain.tenant import PlanType, Tenant, TenantRepository
 from app.shared.exceptions import DomainException
+from app.shared.value_objects import Email
 
 
 class InMemoryTenantRepository(TenantRepository):
@@ -103,7 +103,7 @@ async def test_create_employee_success(employee_repo: InMemoryEmployeeRepository
     assert employee.name == "John Doe"
     assert str(employee.email) == "john@comandafacil.com"
     assert employee.check_password("secure_password_123") is True
-    
+
     saved = await employee_repo.find_by_id(1)
     assert saved is not None
     assert saved.name == "John Doe"
@@ -228,7 +228,7 @@ async def test_login_success(
     assert session.employee_id == 1
     assert session.tenant_id == 10
     assert session.is_expired() is False
-    
+
     saved_session = await session_repo.find_by_id(session.session_id)
     assert saved_session is not None
     assert saved_session.employee_id == 1
@@ -335,7 +335,7 @@ async def test_login_inactive_tenant(
 @pytest.mark.unit
 async def test_logout_success(session_repo: InMemorySessionRepository) -> None:
     # Arrange
-    session = Session(session_id="token123", employee_id=1, tenant_id=10, expires_at=datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1))
+    session = Session(session_id="token123", employee_id=1, tenant_id=10, expires_at=datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1))
     await session_repo.save(session)
 
     handler = LogoutHandler(session_repo)
@@ -369,7 +369,7 @@ async def test_get_employee_query(employee_repo: InMemoryEmployeeRepository) -> 
 @pytest.mark.unit
 async def test_get_session_query(session_repo: InMemorySessionRepository) -> None:
     # Arrange
-    session = Session(session_id="token123", employee_id=1, tenant_id=10, expires_at=datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1))
+    session = Session(session_id="token123", employee_id=1, tenant_id=10, expires_at=datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1))
     await session_repo.save(session)
 
     handler = GetSessionHandler(session_repo)

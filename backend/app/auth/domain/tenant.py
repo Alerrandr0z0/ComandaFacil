@@ -58,9 +58,7 @@ class TenantRepository(ABC):
     @abstractmethod
     async def find_by_id(self, id: int) -> Tenant | None:
         """Retrieves a Tenant by its unique identifier."""
-        pass
 
     @abstractmethod
     async def save(self, tenant: Tenant) -> None:
         """Saves or updates a Tenant in persistent storage."""
-        pass

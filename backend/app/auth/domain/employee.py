@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
 import datetime
 import hashlib
 import secrets
+from abc import ABC, abstractmethod
 from enum import StrEnum
-from typing import Final
+from typing import TYPE_CHECKING, Final
 
-from app.auth.domain.tenant import Tenant
 from app.shared.exceptions import DomainException
-from app.shared.value_objects import Email
+
+if TYPE_CHECKING:
+    from app.auth.domain.tenant import Tenant
+    from app.shared.value_objects import Email
 
 
 class RoleType(StrEnum):
@@ -25,13 +27,12 @@ class IEmployeeStrategy(ABC):
     @abstractmethod
     def permits(self, action: str) -> bool:
         """Determines if a specific action is permitted under this strategy."""
-        pass
 
 
 class ManagerStrategy(IEmployeeStrategy):
     """Strategy granting full permissions for managers."""
 
-    def permits(self, action: str) -> bool:
+    def permits(self, action: str) -> bool:  # noqa: ARG002
         return True
 
 
@@ -65,8 +66,8 @@ class RolePermissions:
         if not isinstance(role_type, RoleType):
             try:
                 role_type = RoleType(role_type)
-            except ValueError:
-                raise ValueError(f"Cargo inválido: {role_type}")
+            except ValueError as err:
+                raise ValueError(f"Cargo inválido: {role_type}") from err
 
         match role_type:
             case RoleType.MANAGER:
@@ -100,7 +101,7 @@ class UserTenantRole:
         self.employee_id: Final[int] = employee_id
         self.role_type: RoleType = role_type
         self.is_active: bool = is_active
-        self.assigned_at: Final[datetime.datetime] = datetime.datetime.now(datetime.timezone.utc)
+        self.assigned_at: Final[datetime.datetime] = datetime.datetime.now(datetime.UTC)
 
     def is_expired(self) -> bool:
         """Checks if the role assignment is currently suspended or inactive."""
@@ -168,7 +169,8 @@ class Employee:
             return False
         try:
             parts = hashed.split("$")
-            if len(parts) != 4:
+            pbkdf2_parts_count = 4
+            if len(parts) != pbkdf2_parts_count:
                 return False
             _, iterations_str, salt, original_key_hex = parts
             iterations = int(iterations_str)
@@ -186,8 +188,8 @@ class Employee:
         """Assigns a new role for a specific franchise/tenant."""
         for role in self.roles:
             if role.tenant_id == tenant.id:
-                raise DomainException(f"Funcionário já possui cargo associado a esta franquia.")
-        
+                raise DomainException("Funcionário já possui cargo associado a esta franquia.")
+
         new_role = UserTenantRole(
             id=len(self.roles) + 1,
             tenant_id=tenant.id,
@@ -202,7 +204,7 @@ class Employee:
         for role in self.roles:
             if role.tenant_id == tenant.id and role.is_active:
                 return role
-        raise DomainException(f"Funcionário não possui cargo ativo nesta franquia.")
+        raise DomainException("Funcionário não possui cargo ativo nesta franquia.")
 
     def remove_role(self, tenant: Tenant) -> None:
         """Removes the role assignment mapping associated with a specific tenant."""
@@ -210,11 +212,11 @@ class Employee:
             if role.tenant_id == tenant.id:
                 self.roles.pop(i)
                 return
-        raise DomainException(f"Cargo não encontrado para esta franquia.")
+        raise DomainException("Cargo não encontrado para esta franquia.")
 
     def permits(self, action: str, tenant: Tenant) -> bool:
         """
-        Pure OOP delegation: the aggregate root verifies permissions by delegating 
+        Pure OOP delegation: the aggregate root verifies permissions by delegating
         to the resolved behavioral strategy.
         """
         try:
@@ -242,14 +244,11 @@ class EmployeeRepository(ABC):
     @abstractmethod
     async def find_by_id(self, id: int) -> Employee | None:
         """Retrieves an Employee by their unique identifier."""
-        pass
 
     @abstractmethod
     async def find_by_email(self, email: Email) -> Employee | None:
         """Retrieves an Employee by their validated Email."""
-        pass
 
     @abstractmethod
     async def save(self, employee: Employee) -> None:
         """Saves or updates an Employee in persistent storage."""
-        pass

@@ -1,15 +1,17 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
 import datetime
 import secrets
-from typing import Final
+from dataclasses import dataclass
+from typing import TYPE_CHECKING, Final
 
 from app.auth.domain.employee import Employee, EmployeeRepository, RoleType
-from app.auth.domain.tenant import TenantRepository
 from app.auth.domain.session import Session, SessionRepository
-from app.shared.value_objects import Email
 from app.shared.exceptions import DomainException
+from app.shared.value_objects import Email
+
+if TYPE_CHECKING:
+    from app.auth.domain.tenant import TenantRepository
 
 
 @dataclass(frozen=True)
@@ -127,11 +129,11 @@ class LoginHandler:
         try:
             employee.get_role_for_tenant(tenant)
         except DomainException:
-            raise DomainException("No permissions in this tenant", status_code=403)
+            raise DomainException("No permissions in this tenant", status_code=403) from None
 
         # Generate stateful session
         session_id = secrets.token_urlsafe(32)
-        expires_at = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(minutes=60)
+        expires_at = datetime.datetime.now(datetime.UTC) + datetime.timedelta(minutes=60)
         session = Session(
             session_id=session_id,
             employee_id=employee.id,

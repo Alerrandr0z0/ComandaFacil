@@ -1,31 +1,31 @@
 from __future__ import annotations
 
-import datetime
-from typing import Final
-from fastapi import APIRouter, Depends, status
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from typing import TYPE_CHECKING
 
-from app.auth.domain.employee import RoleType
-from app.auth.infrastructure.repositories import (
-    SQLAlchemyEmployeeRepository,
-    SQLAlchemyTenantRepository,
-    SQLAlchemySessionRepository,
-)
-from app.dependencies import DbSession, CurrentEmployee, CurrentSession
+from fastapi import APIRouter, status
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
+
 from app.auth.application.commands import (
-    CreateEmployeeCommand,
-    CreateEmployeeHandler,
     AssignRoleCommand,
     AssignRoleHandler,
+    CreateEmployeeCommand,
+    CreateEmployeeHandler,
     LoginCommand,
     LoginHandler,
     LogoutCommand,
     LogoutHandler,
 )
-from app.auth.application.queries import (
-    GetEmployeeQuery,
-    GetEmployeeHandler,
+from app.auth.infrastructure.repositories import (
+    SQLAlchemyEmployeeRepository,
+    SQLAlchemySessionRepository,
+    SQLAlchemyTenantRepository,
 )
+
+if TYPE_CHECKING:
+    import datetime
+
+    from app.auth.domain.employee import RoleType
+    from app.dependencies import CurrentEmployee, CurrentSession, DbSession
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
