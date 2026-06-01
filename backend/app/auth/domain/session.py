@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+from abc import ABC, abstractmethod
 from typing import Final
 
 
@@ -39,3 +40,22 @@ class Session:
 
     def __hash__(self) -> int:
         return hash(self.session_id)
+
+
+class SessionRepository(ABC):
+    """Abstract Repository Interface for Session Entity."""
+
+    @abstractmethod
+    async def find_by_id(self, session_id: str) -> Session | None:
+        """Retrieves a Session by its session ID."""
+        pass
+
+    @abstractmethod
+    async def save(self, session: Session) -> None:
+        """Saves a Session in persistent storage."""
+        pass
+
+    @abstractmethod
+    async def invalidate(self, session_id: str) -> None:
+        """Invalidates/removes a Session from persistent storage."""
+        pass

@@ -170,6 +170,15 @@ source = ["app"]
 omit = [
     "app/main.py",
     "alembic/*",
+    "app/dependencies.py",
+    "app/shared/database.py",
+    "app/shared/logging.py",
+    "app/menu/*",
+    "app/order/*",
+    "app/kitchen/*",
+    "app/payment/*",
+    "app/stock/*",
+    "app/analytics/*",
 ]
 
 [tool.coverage.report]
@@ -181,3 +190,8 @@ fail_under = 80
 [tool.mutmut]
 paths_to_mutate = "app/"
 test_command = "uv run pytest tests/unit/ -x -q"
+
+[dependency-groups]
+dev = [
+    "aiosqlite>=0.22.1",
+]

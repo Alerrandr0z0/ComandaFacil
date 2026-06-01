@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from enum import StrEnum
 from typing import Final
 
@@ -49,3 +50,17 @@ class Tenant:
 
     def __hash__(self) -> int:
         return hash(self.id)
+
+
+class TenantRepository(ABC):
+    """Abstract Repository Interface for Tenant Aggregate Root."""
+
+    @abstractmethod
+    async def find_by_id(self, id: int) -> Tenant | None:
+        """Retrieves a Tenant by its unique identifier."""
+        pass
+
+    @abstractmethod
+    async def save(self, tenant: Tenant) -> None:
+        """Saves or updates a Tenant in persistent storage."""
+        pass

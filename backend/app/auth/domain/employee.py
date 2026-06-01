@@ -227,3 +227,22 @@ class Employee:
 
     def __hash__(self) -> int:
         return hash(self.id)
+
+
+class EmployeeRepository(ABC):
+    """Abstract Repository Interface for Employee Aggregate Root."""
+
+    @abstractmethod
+    async def find_by_id(self, id: int) -> Employee | None:
+        """Retrieves an Employee by their unique identifier."""
+        pass
+
+    @abstractmethod
+    async def find_by_email(self, email: Email) -> Employee | None:
+        """Retrieves an Employee by their validated Email."""
+        pass
+
+    @abstractmethod
+    async def save(self, employee: Employee) -> None:
+        """Saves or updates an Employee in persistent storage."""
+        pass
