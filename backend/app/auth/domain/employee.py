@@ -143,6 +143,13 @@ class Employee:
         self.password_hash: str = password_hash
         self.roles: list[UserTenantRole] = []
 
+    @classmethod
+    def create(cls, id: int, name: str, email: Email, password: str) -> Employee:
+        """Factory method to create a new Employee aggregate with a hashed password."""
+        employee = cls(id=id, name=name, email=email, password_hash="")
+        employee.set_password(password)
+        return employee
+
     def set_password(self, password: str) -> None:
         """Hashes and sets the password for the employee using PBKDF2-SHA256."""
         salt = secrets.token_hex(16)
