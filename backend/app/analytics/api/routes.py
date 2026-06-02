@@ -16,7 +16,7 @@ from app.analytics.application.queries import (
 )
 from app.analytics.domain.enums import AnalyticsPeriod
 from app.analytics.infrastructure.mongo_repository import MongoAnalyticsRepository
-from app.dependencies import CurrentTenantId, MongoDB
+from app.dependencies import CurrentTenantId, MongoDB  # noqa: TC001
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
