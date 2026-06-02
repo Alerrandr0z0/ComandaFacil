@@ -161,7 +161,6 @@ exclude = [
     "alembic/",
     ".venv",
     "mutants/",
-    "tests/",
 ]
 
 # Enable rigorous type checking on app/ and tests/ with pragmatic third-party overrides
