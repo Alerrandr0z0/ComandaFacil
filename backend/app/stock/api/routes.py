@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dependencies import CurrentTenantId, DbSession
+from app.dependencies import CurrentTenantId, DbSession, MongoDB
 from app.stock.application.commands import (
     AddStockCommand,
     AddStockHandler,
@@ -23,10 +23,12 @@ from app.stock.application.queries import (
     ListStockItemsQuery,
 )
 from app.stock.domain.stock_item import StockItem
+from app.stock.infrastructure.mongo_read_repository import MongoStockReadRepository
 from app.stock.infrastructure.pg_repository import (
     SQLAlchemyStockItemRepository,
     SQLAlchemyStockMovementRepository,
 )
+from app.stock.infrastructure.stock_read_sync import StockReadModelSync
 
 router = APIRouter(prefix="/stock", tags=["Stock"])
 
@@ -116,6 +118,8 @@ class StockMovementResponseSchema(BaseModel):
 async def create_stock_item(
     schema: StockItemCreateSchema,
     db: DbSession,
+    background_tasks: BackgroundTasks,
+    mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
     repo = SQLAlchemyStockItemRepository(db)
@@ -131,6 +135,7 @@ async def create_stock_item(
     )
     item = await handler.handle(command)
     await db.commit()
+    background_tasks.add_task(StockReadModelSync(mongo).sync, item)
     return _item_to_response(item)
 
 
@@ -141,16 +146,16 @@ async def create_stock_item(
     summary="List all stock items",
 )
 async def list_stock_items(
-    db: DbSession,
+    mongo: MongoDB,
     tenant_id: CurrentTenantId,
     low_stock_only: bool = Query(False, description="Filter low stock items only"),
 ) -> list[StockItemResponseSchema]:
-    repo = SQLAlchemyStockItemRepository(db)
+    repo = MongoStockReadRepository(mongo)
     handler = ListStockItemsHandler(repo)
     items = await handler.handle(
         ListStockItemsQuery(tenant_id=tenant_id, low_stock_only=low_stock_only)
     )
-    return [_item_to_response(i) for i in items]
+    return [_stock_dict_to_response(i) for i in items]
 
 
 @router.get(
@@ -161,16 +166,15 @@ async def list_stock_items(
 )
 async def get_stock_item(
     item_id: int,
-    db: DbSession,
+    mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
-    repo = SQLAlchemyStockItemRepository(db)
+    repo = MongoStockReadRepository(mongo)
     handler = GetStockItemHandler(repo)
-    try:
-        item = await handler.handle(GetStockItemQuery(stock_item_id=item_id, tenant_id=tenant_id))
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e)) from e
-    return _item_to_response(item)
+    item = await handler.handle(GetStockItemQuery(stock_item_id=item_id, tenant_id=tenant_id))
+    if not item:
+        raise HTTPException(status_code=404, detail=f"StockItem '{item_id}' não encontrado.")
+    return _stock_dict_to_response(item)
 
 
 @router.post(
@@ -183,6 +187,8 @@ async def add_stock(
     item_id: int,
     schema: StockAddSchema,
     db: DbSession,
+    background_tasks: BackgroundTasks,
+    mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
     item_repo = SQLAlchemyStockItemRepository(db)
@@ -199,6 +205,7 @@ async def add_stock(
         )
     )
     await db.commit()
+    background_tasks.add_task(StockReadModelSync(mongo).sync, item)
     return _item_to_response(item)
 
 
@@ -212,6 +219,8 @@ async def deduct_stock(
     item_id: int,
     schema: StockDeductSchema,
     db: DbSession,
+    background_tasks: BackgroundTasks,
+    mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
     item_repo = SQLAlchemyStockItemRepository(db)
@@ -231,6 +240,7 @@ async def deduct_stock(
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
     await db.commit()
+    background_tasks.add_task(StockReadModelSync(mongo).sync, item)
     return _item_to_response(item)
 
 
@@ -244,6 +254,8 @@ async def set_min_stock_level(
     item_id: int,
     schema: MinStockLevelSchema,
     db: DbSession,
+    background_tasks: BackgroundTasks,
+    mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
     repo = SQLAlchemyStockItemRepository(db)
@@ -256,6 +268,7 @@ async def set_min_stock_level(
         )
     )
     await db.commit()
+    background_tasks.add_task(StockReadModelSync(mongo).sync, item)
     return _item_to_response(item)
 
 
@@ -269,6 +282,8 @@ async def adjust_stock(
     item_id: int,
     schema: StockAdjustSchema,
     db: DbSession,
+    background_tasks: BackgroundTasks,
+    mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
     item_repo = SQLAlchemyStockItemRepository(db)
@@ -283,6 +298,7 @@ async def adjust_stock(
         )
     )
     await db.commit()
+    background_tasks.add_task(StockReadModelSync(mongo).sync, item)
     return _item_to_response(item)
 
 
@@ -328,4 +344,18 @@ def _item_to_response(item: object) -> StockItemResponseSchema:
         min_stock_level=i.min_stock_level,
         is_active=i.is_active,
         is_low_stock=i.is_low_stock,
+    )
+
+
+def _stock_dict_to_response(data: dict[str, object]) -> StockItemResponseSchema:
+    sid = data["stock_item_id"]
+    return StockItemResponseSchema(
+        id=sid if isinstance(sid, int) else int(str(sid)),
+        name=str(data["name"]),
+        category=str(data["category"]),
+        current_quantity_amount=float(str(data["current_quantity"])),
+        current_quantity_unit=str(data["unit"]),
+        min_stock_level=float(str(data["min_stock_level"])),
+        is_active=bool(data["is_active"]),
+        is_low_stock=bool(data["is_low_stock"]),
     )

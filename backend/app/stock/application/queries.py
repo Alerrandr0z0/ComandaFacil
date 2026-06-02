@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final
-
-from app.shared.exceptions import NotFoundError
+from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
-    from app.stock.domain.stock_item import StockItem, StockItemRepository
+    from app.stock.infrastructure.mongo_read_repository import (
+        MongoStockReadRepository,
+    )
 
 
 @dataclass(frozen=True)
@@ -16,14 +16,13 @@ class GetStockItemQuery:
 
 
 class GetStockItemHandler:
-    def __init__(self, repo: StockItemRepository) -> None:
-        self._repo: Final[StockItemRepository] = repo
+    def __init__(self, read_repo: MongoStockReadRepository) -> None:
+        self._read_repo: Final[MongoStockReadRepository] = read_repo
 
-    async def handle(self, query: GetStockItemQuery) -> StockItem:
-        item = await self._repo.find_by_id(query.stock_item_id, query.tenant_id)
-        if not item:
-            raise NotFoundError("StockItem", query.stock_item_id)
-        return item
+    async def handle(self, query: GetStockItemQuery) -> dict[str, Any] | None:
+        return await self._read_repo.find_by_id(
+            query.stock_item_id, query.tenant_id
+        )
 
 
 @dataclass(frozen=True)
@@ -33,10 +32,10 @@ class ListStockItemsQuery:
 
 
 class ListStockItemsHandler:
-    def __init__(self, repo: StockItemRepository) -> None:
-        self._repo: Final[StockItemRepository] = repo
+    def __init__(self, read_repo: MongoStockReadRepository) -> None:
+        self._read_repo: Final[MongoStockReadRepository] = read_repo
 
-    async def handle(self, query: ListStockItemsQuery) -> list[StockItem]:
+    async def handle(self, query: ListStockItemsQuery) -> list[dict[str, Any]]:
         if query.low_stock_only:
-            return await self._repo.find_low_stock(query.tenant_id)
-        return await self._repo.find_all(query.tenant_id)
+            return await self._read_repo.find_low_stock(query.tenant_id)
+        return await self._read_repo.find_all(query.tenant_id)
