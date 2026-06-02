@@ -70,6 +70,7 @@ async def tenant_middleware(
 
 # ─── Exception Handlers ───────────────────────────────────────────────────────
 
+
 @app.exception_handler(DomainException)
 async def domain_exception_handler(_request: Request, exc: DomainException) -> JSONResponse:
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.message})
