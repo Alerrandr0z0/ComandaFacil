@@ -12,12 +12,12 @@ class KitchenOrderItemRepository(ABC):
     """Abstract Repository interface for KitchenOrder_Item aggregate root."""
 
     @abstractmethod
-    async def find_by_id(self, id: int) -> KitchenOrder_Item | None:
-        """Finds a KitchenOrder_Item by its unique ID."""
+    async def find_by_id(self, id: int, tenant_id: str) -> KitchenOrder_Item | None:
+        """Finds a KitchenOrder_Item by its unique ID scoped to a tenant."""
 
     @abstractmethod
-    async def find_by_correlation(self, correlation_id: int) -> KitchenOrder_Item | None:
-        """Finds a KitchenOrder_Item by its original OrderFormItem correlation ID."""
+    async def find_by_correlation(self, correlation_id: int, tenant_id: str) -> KitchenOrder_Item | None:
+        """Finds a KitchenOrder_Item by its original OrderFormItem correlation ID scoped to a tenant."""
 
     @abstractmethod
     async def find_by_station(self, station_type: str, tenant_id: str) -> list[KitchenOrder_Item]:

@@ -1,11 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
-    from app.kitchen.domain.kitchen_item import KitchenOrder_Item
-    from app.kitchen.domain.repository import KitchenOrderItemRepository
+    from app.kitchen.infrastructure.mongo_read_repository import (
+        MongoKitchenReadRepository,
+    )
 
 
 @dataclass(frozen=True)
@@ -20,11 +21,13 @@ class GetActiveKitchenItemsQuery:
 
 
 class GetActiveKitchenItemsHandler:
-    def __init__(self, item_repo: KitchenOrderItemRepository) -> None:
-        self._item_repo: Final[KitchenOrderItemRepository] = item_repo
+    def __init__(self, read_repo: MongoKitchenReadRepository) -> None:
+        self._read_repo: Final[MongoKitchenReadRepository] = read_repo
 
-    async def handle(self, query: GetActiveKitchenItemsQuery) -> list[KitchenOrder_Item]:
-        """Fetches all items destined for a station that are currently active (in WAITING or PREPARING state)."""
-        items = await self._item_repo.find_by_station(query.station_type, query.tenant_id)
-        # Filter out terminal states (READY, CANCELLED)
-        return [item for item in items if item.state.name in ("WAITING", "PREPARING")]
+    async def handle(
+        self, query: GetActiveKitchenItemsQuery
+    ) -> list[dict[str, Any]]:
+        """Fetches all active kitchen items for a station from the Mongo read model."""
+        return await self._read_repo.find_active_by_station(
+            query.station_type, query.tenant_id
+        )

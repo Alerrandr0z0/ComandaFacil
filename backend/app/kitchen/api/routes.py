@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, BackgroundTasks, WebSocket, WebSocketDisconnect
 
-from app.dependencies import CurrentTenantId, DbSession
+from app.dependencies import CurrentTenantId, DbSession, MongoDB
 from app.kitchen.application.commands import (
     CancelKitchenItemCommand,
     CancelKitchenItemHandler,
@@ -15,6 +15,8 @@ from app.kitchen.application.queries import (
     GetActiveKitchenItemsHandler,
     GetActiveKitchenItemsQuery,
 )
+from app.kitchen.infrastructure.kitchen_read_sync import KitchenReadModelSync
+from app.kitchen.infrastructure.mongo_read_repository import MongoKitchenReadRepository
 from app.kitchen.infrastructure.pg_repository import SQLAlchemyKitchenOrderItemRepository
 from app.kitchen.infrastructure.websocket_manager import kds_ws_manager
 
@@ -25,16 +27,15 @@ router = APIRouter(prefix="/kitchen", tags=["Kitchen"])
 async def prepare_item(
     id: int,
     session: DbSession,
+    background_tasks: BackgroundTasks,
+    mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> dict[str, str]:
-    """Transitions a kitchen order item to the PREPARING state."""
+    """Transitions a kitchen order item to the PREPARING state, scoped to tenant."""
     repo = SQLAlchemyKitchenOrderItemRepository(session)
-    item = await repo.find_by_id(id)
-    if not item or item.tenant_id != tenant_id:
-        raise HTTPException(status_code=404, detail=f"Kitchen item {id} not found.")
-
     handler = PrepareKitchenItemHandler(repo)
-    updated_item = await handler.handle(PrepareKitchenItemCommand(item_id=id))
+    updated_item = await handler.handle(PrepareKitchenItemCommand(item_id=id, tenant_id=tenant_id))
+    background_tasks.add_task(KitchenReadModelSync(mongo).sync, updated_item)
     return {"status": "success", "state": updated_item.state.name}
 
 
@@ -42,16 +43,15 @@ async def prepare_item(
 async def mark_item_ready(
     id: int,
     session: DbSession,
+    background_tasks: BackgroundTasks,
+    mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> dict[str, str]:
-    """Transitions a kitchen order item to the READY state."""
+    """Transitions a kitchen order item to the READY state, scoped to tenant."""
     repo = SQLAlchemyKitchenOrderItemRepository(session)
-    item = await repo.find_by_id(id)
-    if not item or item.tenant_id != tenant_id:
-        raise HTTPException(status_code=404, detail=f"Kitchen item {id} not found.")
-
     handler = MarkKitchenItemReadyHandler(repo)
-    updated_item = await handler.handle(MarkKitchenItemReadyCommand(item_id=id))
+    updated_item = await handler.handle(MarkKitchenItemReadyCommand(item_id=id, tenant_id=tenant_id))
+    background_tasks.add_task(KitchenReadModelSync(mongo).sync, updated_item)
     return {"status": "success", "state": updated_item.state.name}
 
 
@@ -59,41 +59,30 @@ async def mark_item_ready(
 async def cancel_item(
     id: int,
     session: DbSession,
+    background_tasks: BackgroundTasks,
+    mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> dict[str, str]:
-    """Transitions a kitchen order item to the CANCELLED state."""
+    """Transitions a kitchen order item to the CANCELLED state, scoped to tenant."""
     repo = SQLAlchemyKitchenOrderItemRepository(session)
-    item = await repo.find_by_id(id)
-    if not item or item.tenant_id != tenant_id:
-        raise HTTPException(status_code=404, detail=f"Kitchen item {id} not found.")
-
     handler = CancelKitchenItemHandler(repo)
-    updated_item = await handler.handle(CancelKitchenItemCommand(item_id=id))
+    updated_item = await handler.handle(CancelKitchenItemCommand(item_id=id, tenant_id=tenant_id))
+    background_tasks.add_task(KitchenReadModelSync(mongo).sync, updated_item)
     return {"status": "success", "state": updated_item.state.name}
 
 
 @router.get("/items")
 async def get_active_items(
     station_type: str,
-    session: DbSession,
+    mongo: MongoDB,
     tenant_id: CurrentTenantId,
-) -> list[dict[str, str | int]]:
+) -> list[dict[str, object]]:
     """Returns a list of all active (non-terminal) kitchen items for the specified station and tenant."""
-    repo = SQLAlchemyKitchenOrderItemRepository(session)
+    repo = MongoKitchenReadRepository(mongo)
     handler = GetActiveKitchenItemsHandler(repo)
-    items = await handler.handle(
+    return await handler.handle(
         GetActiveKitchenItemsQuery(tenant_id=tenant_id, station_type=station_type)
     )
-    return [
-        {
-            "id": item.id,
-            "correlation_id": item.correlation_id,
-            "name_cpy": item.name_cpy,
-            "station_type_cpy": item.station_type_cpy,
-            "state": item.state.name,
-        }
-        for item in items
-    ]
 
 
 @router.websocket("/ws")

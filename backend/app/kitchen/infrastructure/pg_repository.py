@@ -25,17 +25,20 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def find_by_id(self, id: int) -> KitchenOrder_Item | None:
-        stmt = select(KitchenOrderItemORM).where(KitchenOrderItemORM.id == id)
+    async def find_by_id(self, id: int, tenant_id: str) -> KitchenOrder_Item | None:
+        stmt = select(KitchenOrderItemORM).where(
+            KitchenOrderItemORM.id == id, KitchenOrderItemORM.tenant_id == tenant_id
+        )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
         if not orm:
             return None
         return self._map_to_domain(orm)
 
-    async def find_by_correlation(self, correlation_id: int) -> KitchenOrder_Item | None:
+    async def find_by_correlation(self, correlation_id: int, tenant_id: str) -> KitchenOrder_Item | None:
         stmt = select(KitchenOrderItemORM).where(
-            KitchenOrderItemORM.correlation_id == correlation_id
+            KitchenOrderItemORM.correlation_id == correlation_id,
+            KitchenOrderItemORM.tenant_id == tenant_id,
         )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
