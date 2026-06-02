@@ -319,7 +319,7 @@ async def test_get_stock_item_when_exists_then_returns(
 
 
 @pytest.mark.unit
-async def test_get_stock_item_when_not_found_then_raises(
+async def test_get_stock_item_when_not_found_then_returns_none(
     item_repo: InMemoryStockItemRepository,
 ) -> None:
     # Arrange
@@ -327,11 +327,13 @@ async def test_get_stock_item_when_not_found_then_raises(
 
     handler = GetStockItemHandler(item_repo)
 
-    # Act & Assert
-    with pytest.raises(NotFoundError):
-        await handler.handle(
-            GetStockItemQuery(stock_item_id=999, tenant_id="franquia_001")
-        )
+    # Act
+    result = await handler.handle(
+        GetStockItemQuery(stock_item_id=999, tenant_id="franquia_001")
+    )
+
+    # Assert
+    assert result is None
 
 
 @pytest.mark.unit

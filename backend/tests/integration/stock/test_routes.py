@@ -13,6 +13,7 @@ from app.shared.value_objects import MeasuredQuantity, MeasurementUnit
 from app.stock.domain.enums import StockCategory
 from app.stock.domain.stock_item import StockItem
 from app.stock.infrastructure.pg_repository import SQLAlchemyStockItemRepository
+from tests.integration.conftest_helpers import make_mock_db
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -33,10 +34,18 @@ async def sqlite_session() -> AsyncGenerator[AsyncSession, None]:
 
 @pytest.fixture
 async def api_client(sqlite_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+    _store, mock_db = make_mock_db()
+
     async def override_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield sqlite_session
 
+    async def override_mongo_db() -> object:
+        return mock_db
+
+    from app.dependencies import mongo_db
+
     app.dependency_overrides[db_session] = override_db_session
+    app.dependency_overrides[mongo_db] = override_mongo_db
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
@@ -114,26 +123,16 @@ async def test_create_stock_item_duplicate_name_returns_409(
 
 
 @pytest.mark.asyncio
-async def test_list_stock_items_endpoint(api_client: AsyncClient, sqlite_session: AsyncSession) -> None:
-    # Arrange
-    repo = SQLAlchemyStockItemRepository(sqlite_session)
-    item_a = StockItem(
-        id=10,
-        tenant_id="franquia_001",
-        name="Arroz",
-        category=StockCategory.RAW_MATERIAL.value,
-        current_quantity=MeasuredQuantity(100.0, MeasurementUnit.KILOGRAM),
-    )
-    item_b = StockItem(
-        id=11,
-        tenant_id="franquia_001",
-        name="Feijão",
-        category=StockCategory.RAW_MATERIAL.value,
-        current_quantity=MeasuredQuantity(80.0, MeasurementUnit.KILOGRAM),
-    )
-    await repo.save(item_a)
-    await repo.save(item_b)
-    await sqlite_session.commit()
+async def test_list_stock_items_endpoint(
+    api_client: AsyncClient, sqlite_session: AsyncSession
+) -> None:
+    # Arrange — create via API so BackgroundTasks populate Mongo read model
+    for sid, name, cat in [(10, "Arroz", "RAW_MATERIAL"), (11, "Feijão", "RAW_MATERIAL")]:
+        resp = await api_client.post(
+            "/api/v1/stock/items",
+            json={"id": sid, "name": name, "category": cat, "current_quantity": 100.0, "unit": "kg"},
+        )
+        assert resp.status_code == 201
 
     # Act
     response = await api_client.get("/api/v1/stock/items")
@@ -150,27 +149,17 @@ async def test_list_stock_items_endpoint(api_client: AsyncClient, sqlite_session
 async def test_list_stock_items_low_stock_filter(
     api_client: AsyncClient, sqlite_session: AsyncSession
 ) -> None:
-    # Arrange
-    repo = SQLAlchemyStockItemRepository(sqlite_session)
-    item_low = StockItem(
-        id=20,
-        tenant_id="franquia_001",
-        name="Leite",
-        category=StockCategory.RAW_MATERIAL.value,
-        current_quantity=MeasuredQuantity(2.0, MeasurementUnit.LITER),
-        min_stock_level=10.0,
+    # Arrange — create via API so BackgroundTasks populate Mongo read model
+    resp = await api_client.post(
+        "/api/v1/stock/items",
+        json={"id": 20, "name": "Leite", "category": "RAW_MATERIAL", "current_quantity": 2.0, "unit": "l", "min_stock_level": 10.0},
     )
-    item_ok = StockItem(
-        id=21,
-        tenant_id="franquia_001",
-        name="Café",
-        category=StockCategory.RAW_MATERIAL.value,
-        current_quantity=MeasuredQuantity(15.0, MeasurementUnit.KILOGRAM),
-        min_stock_level=5.0,
+    assert resp.status_code == 201
+    resp = await api_client.post(
+        "/api/v1/stock/items",
+        json={"id": 21, "name": "Café", "category": "RAW_MATERIAL", "current_quantity": 15.0, "unit": "kg", "min_stock_level": 5.0},
     )
-    await repo.save(item_low)
-    await repo.save(item_ok)
-    await sqlite_session.commit()
+    assert resp.status_code == 201
 
     # Act
     response = await api_client.get("/api/v1/stock/items?low_stock_only=true")
@@ -185,17 +174,12 @@ async def test_list_stock_items_low_stock_filter(
 
 @pytest.mark.asyncio
 async def test_get_stock_item_endpoint(api_client: AsyncClient, sqlite_session: AsyncSession) -> None:
-    # Arrange
-    repo = SQLAlchemyStockItemRepository(sqlite_session)
-    item = StockItem(
-        id=30,
-        tenant_id="franquia_001",
-        name="Sal",
-        category=StockCategory.RAW_MATERIAL.value,
-        current_quantity=MeasuredQuantity(25.0, MeasurementUnit.KILOGRAM),
+    # Arrange — create via API so BackgroundTasks populate Mongo read model
+    resp = await api_client.post(
+        "/api/v1/stock/items",
+        json={"id": 30, "name": "Sal", "category": "RAW_MATERIAL", "current_quantity": 25.0, "unit": "kg"},
     )
-    await repo.save(item)
-    await sqlite_session.commit()
+    assert resp.status_code == 201
 
     # Act
     response = await api_client.get("/api/v1/stock/items/30")

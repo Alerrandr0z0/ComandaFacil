@@ -20,6 +20,9 @@ from app.order.domain.order_form import OrderForm
 from app.order.infrastructure.pg_repository import SQLAlchemyOrderRepository
 from app.shared.base_orm import Base
 from app.shared.value_objects import TableNum
+from tests.integration.conftest_helpers import make_mock_db
+
+_KITCHEN_MOCK: list[object] = []
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -56,7 +59,17 @@ async def api_client(sqlite_session: AsyncSession) -> AsyncGenerator[AsyncClient
     async def override_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield sqlite_session
 
+    _store, mock_db = make_mock_db()
+    _KITCHEN_MOCK.clear()
+    _KITCHEN_MOCK.append(mock_db)
+
+    async def override_mongo_db() -> object:
+        return mock_db
+
+    from app.dependencies import mongo_db
+
     app.dependency_overrides[db_session] = override_db_session
+    app.dependency_overrides[mongo_db] = override_mongo_db
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
@@ -108,14 +121,14 @@ async def test_kitchen_order_item_persistence_success(sqlite_session: AsyncSessi
     await sqlite_session.commit()
 
     # Assert
-    persisted = await repo.find_by_id(42)
+    persisted = await repo.find_by_id(42, "franquia_001")
     assert persisted is not None
     assert persisted.correlation_id == 42
     assert persisted.name_cpy == "Classic Burger"
     assert persisted.station_type_cpy == "GRILL"
     assert persisted.state.name == "WAITING"
 
-    persisted_by_corr = await repo.find_by_correlation(42)
+    persisted_by_corr = await repo.find_by_correlation(42, "franquia_001")
     assert persisted_by_corr is not None
     assert persisted_by_corr.id == 42
 
@@ -135,6 +148,11 @@ async def test_kds_http_lifecycle_endpoints_success(
     )
     await repo.save(item)
     await sqlite_session.commit()
+
+    # Sync to Mongo read model (since the test writes directly to Postgres)
+    from app.kitchen.infrastructure.kitchen_read_sync import KitchenReadModelSync
+
+    await KitchenReadModelSync(_KITCHEN_MOCK[0]).sync(item)
 
     # Act & Assert 1: Get Active Items
     get_res = await api_client.get("/api/v1/kitchen/items?station_type=BEVERAGE")
@@ -177,11 +195,19 @@ async def test_kds_websocket_and_background_task_dispatch_flow_success(
     # TestClient supports synchronous/async WebSockets perfectly
     client = TestClient(app)
 
+    from app.dependencies import mongo_db
+
     # Override session dependency on the TestClient app instance too
     async def override_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield sqlite_session
 
+    _store2, mock_db2 = make_mock_db()
+
+    async def override_mongo_db() -> object:
+        return mock_db2
+
     app.dependency_overrides[db_session] = override_db_session
+    app.dependency_overrides[mongo_db] = override_mongo_db
 
     with client.websocket_connect(
         "/api/v1/kitchen/ws?station_type=BEVERAGE&tenant_id=franquia_001"

@@ -12,6 +12,7 @@ from app.menu.domain.category import Category
 from app.menu.domain.menu import Menu, MenuItem
 from app.menu.infrastructure.repositories import SQLAlchemyMenuRepository
 from app.shared.base_orm import Base
+from tests.integration.conftest_helpers import make_mock_db
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -34,22 +35,13 @@ async def sqlite_session() -> AsyncGenerator[AsyncSession, None]:
 async def api_client(sqlite_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """Client overriding db_session and mongo_db dependencies to use our temporary SQLite db and a mock MongoDB."""
 
+    _store, mock_db = make_mock_db()
+
     async def override_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield sqlite_session
 
     async def override_mongo_db() -> object:
-        class MockCollection:
-            async def replace_one(self, *args: object, **kwargs: object) -> None:
-                pass
-
-            async def delete_one(self, *args: object, **kwargs: object) -> None:
-                pass
-
-        class MockDB:
-            def __getitem__(self, name: str) -> MockCollection:
-                return MockCollection()
-
-        return MockDB()
+        return mock_db
 
     from app.dependencies import mongo_db
 
@@ -84,7 +76,7 @@ async def test_create_menu_endpoint_success(
 
     # Verify db persistence
     repo = SQLAlchemyMenuRepository(sqlite_session)
-    persisted = await repo.find_by_id(1)
+    persisted = await repo.find_by_id(1, "test_franchise")
     assert persisted is not None
     assert persisted.name == "Almoço"
 
@@ -93,13 +85,23 @@ async def test_create_menu_endpoint_success(
 async def test_get_menu_endpoint_success(
     api_client: AsyncClient, sqlite_session: AsyncSession
 ) -> None:
-    # Arrange
-    repo = SQLAlchemyMenuRepository(sqlite_session)
-    menu = Menu(id=1, name="Almoço", description="Pratos executivos")
-    item = MenuItem(id=10, name="Feijoada", description="Completa", category=Category("Pratos"))
-    menu.add_item(item)
-    await repo.save(menu)
-    await sqlite_session.commit()
+    # Arrange — create via API so BackgroundTasks populate Mongo read model
+    create_resp = await api_client.post(
+        "/api/v1/menu", json={"id": 1, "name": "Almoço", "description": "Pratos executivos"}
+    )
+    assert create_resp.status_code == 201
+
+    add_resp = await api_client.post(
+        "/api/v1/menu/1/items",
+        json={
+            "id": 10,
+            "name": "Feijoada",
+            "description": "Completa",
+            "category": "Pratos",
+            "is_available": True,
+        },
+    )
+    assert add_resp.status_code == 201
 
     # Act
     response = await api_client.get("/api/v1/menu/1")
@@ -121,7 +123,7 @@ async def test_add_menu_item_endpoint_success(
 ) -> None:
     # Arrange
     repo = SQLAlchemyMenuRepository(sqlite_session)
-    menu = Menu(id=1, name="Almoço")
+    menu = Menu(id=1, tenant_id="test_franchise", name="Almoço")
     await repo.save(menu)
     await sqlite_session.commit()
 
@@ -145,7 +147,7 @@ async def test_add_menu_item_endpoint_success(
     assert json_data["category"] == "Bebidas"
 
     # Verify db items
-    updated = await repo.find_by_id(1)
+    updated = await repo.find_by_id(1, "test_franchise")
     assert updated is not None
     assert len(updated.items) == 1
     assert updated.items[0].name == "Suco de Laranja"
@@ -157,7 +159,7 @@ async def test_remove_menu_item_endpoint_success(
 ) -> None:
     # Arrange
     repo = SQLAlchemyMenuRepository(sqlite_session)
-    menu = Menu(id=1, name="Almoço")
+    menu = Menu(id=1, tenant_id="test_franchise", name="Almoço")
     item = MenuItem(id=10, name="Feijoada", description="Completa", category=Category("Pratos"))
     menu.add_item(item)
     await repo.save(menu)
@@ -171,7 +173,7 @@ async def test_remove_menu_item_endpoint_success(
     assert response.json() == {"detail": "Item removido do cardápio com sucesso."}
 
     # Verify database
-    updated = await repo.find_by_id(1)
+    updated = await repo.find_by_id(1, "test_franchise")
     assert updated is not None
     assert len(updated.items) == 0
 
@@ -182,7 +184,7 @@ async def test_toggle_menu_endpoint_success(
 ) -> None:
     # Arrange
     repo = SQLAlchemyMenuRepository(sqlite_session)
-    menu = Menu(id=1, name="Almoço", is_active=True)
+    menu = Menu(id=1, tenant_id="test_franchise", name="Almoço", is_active=True)
     await repo.save(menu)
     await sqlite_session.commit()
 
@@ -194,6 +196,6 @@ async def test_toggle_menu_endpoint_success(
     assert response.json()["is_active"] is False
 
     # Verify db
-    updated = await repo.find_by_id(1)
+    updated = await repo.find_by_id(1, "test_franchise")
     assert updated is not None
     assert updated.is_active is False

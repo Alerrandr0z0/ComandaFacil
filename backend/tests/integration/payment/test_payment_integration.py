@@ -15,6 +15,7 @@ from app.payment.domain.payment import Payment
 from app.payment.infrastructure.pg_repository import SQLAlchemyPaymentRepository
 from app.shared.base_orm import Base
 from app.shared.money import Money
+from tests.integration.conftest_helpers import make_mock_db
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -36,12 +37,20 @@ async def sqlite_session() -> AsyncGenerator[AsyncSession, None]:
 
 @pytest.fixture
 async def api_client(sqlite_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
-    """HTTP Client that overrides db_session to use our temporary SQLite db."""
+    """HTTP Client that overrides db_session and mongo_db to use our temporary SQLite db and stateful mock Mongo."""
+
+    _store, mock_db = make_mock_db()
 
     async def override_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield sqlite_session
 
+    async def override_mongo_db() -> object:
+        return mock_db
+
+    from app.dependencies import mongo_db
+
     app.dependency_overrides[db_session] = override_db_session
+    app.dependency_overrides[mongo_db] = override_mongo_db
     async with AsyncClient(
         transport=ASGITransport(app=app),
         base_url="http://test",
@@ -207,18 +216,13 @@ async def test_refund_payment_endpoint_card_success(
 async def test_get_payment_endpoint_success(
     api_client: AsyncClient, sqlite_session: AsyncSession
 ) -> None:
-    # Arrange: Insert a payment record
-    repo = SQLAlchemyPaymentRepository(sqlite_session)
-    payment = Payment(
-        id=30,
-        order_id=300,
-        tenant_id="franquia_001",
-        amount=Money.from_float(80.00),
-        method=PaymentMethod.DEBIT_CARD,
+    # Arrange: Create payment via API (CASH auto-confirms locally, no Stripe call)
+    create_resp = await api_client.post(
+        "/api/v1/payments/request",
+        json={"order_id": 300, "amount": "80.00", "method": "CASH"},
     )
-    payment.confirm(gateway_ref="pi_debit_300")
-    await repo.save(payment)
-    await sqlite_session.commit()
+    assert create_resp.status_code == 200
+    assert create_resp.json()["status"] == "CONFIRMED"
 
     # Act
     response = await api_client.get("/api/v1/payments/order/300")
@@ -229,7 +233,6 @@ async def test_get_payment_endpoint_success(
     assert json_data["order_id"] == 300
     assert json_data["amount"] == "80.00"
     assert json_data["status"] == "CONFIRMED"
-    assert json_data["gateway_ref"] == "pi_debit_300"
 
 
 @pytest.mark.asyncio

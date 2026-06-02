@@ -60,7 +60,7 @@ async def test_order_repository_lifecycle_with_table(db_session: AsyncSession) -
     await db_session.commit()
 
     # 2. Retrieve order and verify mappings
-    retrieved = await repo.find_by_id(42)
+    retrieved = await repo.find_by_id(42, "franquia_001")
     assert retrieved is not None
     assert retrieved.id == 42
     assert retrieved.tenant_id == "franquia_001"
@@ -85,17 +85,17 @@ async def test_order_repository_lifecycle_with_table(db_session: AsyncSession) -
     await db_session.commit()
 
     # 4. Verify updates
-    updated = await repo.find_by_id(42)
+    updated = await repo.find_by_id(42, "franquia_001")
     assert updated is not None
     assert updated.state.name == "CLOSED"
     assert updated.fulfillment_strategy is not None
     assert updated.fulfillment_strategy.get_status() == FulfillmentStatus.SUCCESS
 
     # 5. Delete order and verify cascade deletion of items
-    await repo.delete(42)
+    await repo.delete(42, "franquia_001")
     await db_session.commit()
 
-    deleted = await repo.find_by_id(42)
+    deleted = await repo.find_by_id(42, "franquia_001")
     assert deleted is None
 
 
@@ -114,7 +114,7 @@ async def test_order_repository_lifecycle_with_delivery(db_session: AsyncSession
     await db_session.commit()
 
     # 2. Retrieve and check delivery details
-    retrieved = await repo.find_by_id(43)
+    retrieved = await repo.find_by_id(43, "franquia_001")
     assert retrieved is not None
     assert retrieved.fulfillment_strategy is not None
     strat = retrieved.fulfillment_strategy
@@ -133,7 +133,7 @@ async def test_order_repository_lifecycle_with_delivery(db_session: AsyncSession
     await db_session.commit()
 
     # Verify failed transit status in DB
-    updated = await repo.find_by_id(43)
+    updated = await repo.find_by_id(43, "franquia_001")
     assert updated is not None
     assert updated.fulfillment_strategy is not None
     assert updated.fulfillment_strategy.get_status() == FulfillmentStatus.FAILED
@@ -156,6 +156,8 @@ async def test_mongo_order_history_repository() -> None:
             self, filter: dict[str, Any], projection: dict[str, Any] | None = None
         ) -> dict[str, Any] | None:
             doc = self.data.get(filter["order_id"])
+            if doc and doc.get("tenant_id") != filter.get("tenant_id"):
+                return None
             if doc and projection and "_id" in projection:
                 return {k: v for k, v in doc.items() if k != "_id"}
             return doc
@@ -195,7 +197,7 @@ async def test_mongo_order_history_repository() -> None:
     await mongo_repo.save(order)
 
     # Assert - Retrieve from Mongo read model
-    doc = await mongo_repo.find_by_id(100)
+    doc = await mongo_repo.find_by_id(100, "franquia_002")
     assert doc is not None
     assert doc["order_id"] == 100
     assert doc["tenant_id"] == "franquia_002"

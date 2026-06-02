@@ -63,12 +63,14 @@ async def api_client(sqlite_session: AsyncSession) -> AsyncGenerator[AsyncClient
         ) -> MockCollection:
             return self
 
-    mock_collection = MockCollection()
+    collections: dict[str, MockCollection] = {}
 
     async def override_mongo_db() -> object:
         class MockDB:
             def __getitem__(self, name: str) -> MockCollection:
-                return mock_collection
+                if name not in collections:
+                    collections[name] = MockCollection()
+                return collections[name]
 
         return MockDB()
 
@@ -108,7 +110,7 @@ async def test_create_order_endpoint_success(
 
     # Verify relational db persistence
     repo = SQLAlchemyOrderRepository(sqlite_session)
-    persisted = await repo.find_by_id(100)
+    persisted = await repo.find_by_id(100, "franquia_001")
     assert persisted is not None
     assert persisted.tenant_id == "franquia_001"
 
@@ -167,7 +169,7 @@ async def test_add_order_item_endpoint_success(
     assert json_data["subtotal"] == "59.80"
 
     # Verify db items
-    updated = await repo.find_by_id(102)
+    updated = await repo.find_by_id(102, "franquia_001")
     assert updated is not None
     assert len(updated.items) == 1
     assert updated.items[0].name_cpy == "X-Burger"

@@ -45,7 +45,7 @@ def test_menu_item_update_availability() -> None:
 
 
 def test_menu_creation() -> None:
-    menu = Menu(id=1, name="Almoço", description="Cardápio do almoço", is_active=True)
+    menu = Menu(id=1, tenant_id="test", name="Almoço", description="Cardápio do almoço", is_active=True)
     assert menu.id == 1
     assert menu.name == "Almoço"
     assert menu.description == "Cardápio do almoço"
@@ -54,7 +54,7 @@ def test_menu_creation() -> None:
 
 
 def test_menu_add_item() -> None:
-    menu = Menu(id=1, name="Jantar")
+    menu = Menu(id=1, tenant_id="test", name="Jantar")
     item = MenuItem(id=1, name="Pizza", description="Pizza margherita", category=Category("Pizzas"))
     menu.add_item(item)
     assert len(menu.items) == 1
@@ -62,7 +62,7 @@ def test_menu_add_item() -> None:
 
 
 def test_menu_add_duplicate_item_raises() -> None:
-    menu = Menu(id=1, name="Jantar")
+    menu = Menu(id=1, tenant_id="test", name="Jantar")
     item = MenuItem(id=1, name="Pizza", description="Pizza margherita", category=Category("Pizzas"))
     menu.add_item(item)
     duplicate = MenuItem(
@@ -73,7 +73,7 @@ def test_menu_add_duplicate_item_raises() -> None:
 
 
 def test_menu_remove_item() -> None:
-    menu = Menu(id=1, name="Jantar")
+    menu = Menu(id=1, tenant_id="test", name="Jantar")
     item = MenuItem(id=1, name="Pizza", description="Pizza", category=Category("Pizzas"))
     menu.add_item(item)
     menu.remove_item(1)
@@ -81,13 +81,13 @@ def test_menu_remove_item() -> None:
 
 
 def test_menu_remove_nonexistent_item_raises() -> None:
-    menu = Menu(id=1, name="Jantar")
+    menu = Menu(id=1, tenant_id="test", name="Jantar")
     with pytest.raises(ValueError, match="Item com id 99 não encontrado no cardápio"):
         menu.remove_item(99)
 
 
 def test_menu_update_item() -> None:
-    menu = Menu(id=1, name="Jantar")
+    menu = Menu(id=1, tenant_id="test", name="Jantar")
     item = MenuItem(id=1, name="Pizza", description="Pizza margherita", category=Category("Pizzas"))
     menu.add_item(item)
     menu.update_item(1, name="Pizza Calabresa", description="Pizza de calabresa")
@@ -96,13 +96,13 @@ def test_menu_update_item() -> None:
 
 
 def test_menu_update_nonexistent_item_raises() -> None:
-    menu = Menu(id=1, name="Jantar")
+    menu = Menu(id=1, tenant_id="test", name="Jantar")
     with pytest.raises(ValueError, match="Item com id 99 não encontrado no cardápio"):
         menu.update_item(99, name="Test")
 
 
 def test_menu_activate_deactivate() -> None:
-    menu = Menu(id=1, name="Almoço", is_active=True)
+    menu = Menu(id=1, tenant_id="test", name="Almoço", is_active=True)
     assert menu.is_active is True
     menu.deactivate()
     assert menu.is_active is False
@@ -111,7 +111,7 @@ def test_menu_activate_deactivate() -> None:
 
 
 def test_menu_items_public_access() -> None:
-    menu = Menu(id=1, name="Jantar")
+    menu = Menu(id=1, tenant_id="test", name="Jantar")
     item = MenuItem(id=1, name="Pizza", description="Pizza", category=Category("Pizzas"))
     menu.add_item(item)
     assert len(menu.items) == 1
@@ -119,9 +119,9 @@ def test_menu_items_public_access() -> None:
 
 
 def test_menu_equality() -> None:
-    menu1 = Menu(id=1, name="A")
-    menu2 = Menu(id=1, name="B")
-    menu3 = Menu(id=2, name="A")
+    menu1 = Menu(id=1, tenant_id="test", name="A")
+    menu2 = Menu(id=1, tenant_id="test", name="B")
+    menu3 = Menu(id=2, tenant_id="test", name="A")
     assert menu1 == menu2
     assert menu1 != menu3
     assert hash(menu1) == hash(menu2)
@@ -137,7 +137,7 @@ def test_menu_item_equality() -> None:
 
 
 def test_menu_representation() -> None:
-    menu = Menu(id=1, name="Jantar")
+    menu = Menu(id=1, tenant_id="test", name="Jantar")
     assert "Menu" in repr(menu)
     assert "1" in repr(menu)
     assert "Jantar" in repr(menu)
@@ -177,7 +177,7 @@ def test_price_list_creation() -> None:
     from app.menu.domain.price_list import PriceList
 
     now = datetime.datetime.now(datetime.UTC)
-    pl = PriceList(id=1, name="Happy Hour", description="Preços promocionais", valid_from=now)
+    pl = PriceList(id=1, tenant_id="test", name="Happy Hour", description="Preços promocionais", valid_from=now)
     assert pl.id == 1
     assert pl.name == "Happy Hour"
     assert pl.is_active is True
@@ -190,7 +190,7 @@ def test_price_list_add_item() -> None:
     from app.menu.domain.price_list import PriceList, PriceListItem
     from app.shared.money import Money
 
-    pl = PriceList(id=1, name="Regular")
+    pl = PriceList(id=1, tenant_id="test", name="Regular")
     item = PriceListItem(id=1, price_list_id=1, menu_item_id=10, price=Money(Decimal("25.00")))
     pl.add_item(item)
     assert len(pl.items) == 1
@@ -202,7 +202,7 @@ def test_price_list_add_duplicate_item_raises() -> None:
     from app.menu.domain.price_list import PriceList, PriceListItem
     from app.shared.money import Money
 
-    pl = PriceList(id=1, name="Regular")
+    pl = PriceList(id=1, tenant_id="test", name="Regular")
     item = PriceListItem(id=1, price_list_id=1, menu_item_id=10, price=Money(Decimal("25.00")))
     pl.add_item(item)
     duplicate = PriceListItem(id=2, price_list_id=1, menu_item_id=10, price=Money(Decimal("30.00")))
@@ -216,7 +216,7 @@ def test_price_list_remove_item() -> None:
     from app.menu.domain.price_list import PriceList, PriceListItem
     from app.shared.money import Money
 
-    pl = PriceList(id=1, name="Regular")
+    pl = PriceList(id=1, tenant_id="test", name="Regular")
     pl.add_item(
         PriceListItem(id=1, price_list_id=1, menu_item_id=10, price=Money(Decimal("25.00")))
     )
@@ -227,7 +227,7 @@ def test_price_list_remove_item() -> None:
 def test_price_list_remove_nonexistent_raises() -> None:
     from app.menu.domain.price_list import PriceList
 
-    pl = PriceList(id=1, name="Regular")
+    pl = PriceList(id=1, tenant_id="test", name="Regular")
     with pytest.raises(ValueError, match="Item de menu 99 não encontrado nesta lista de preços"):
         pl.remove_item(99)
 
@@ -238,7 +238,7 @@ def test_price_list_get_price() -> None:
     from app.menu.domain.price_list import PriceList, PriceListItem
     from app.shared.money import Money
 
-    pl = PriceList(id=1, name="Regular")
+    pl = PriceList(id=1, tenant_id="test", name="Regular")
     pl.add_item(
         PriceListItem(id=1, price_list_id=1, menu_item_id=10, price=Money(Decimal("25.00")))
     )
@@ -255,14 +255,15 @@ def test_price_list_is_valid_now() -> None:
     from app.menu.domain.price_list import PriceList
 
     now = datetime.datetime.now(datetime.UTC)
-    pl = PriceList(id=1, name="Happy Hour", valid_from=now - datetime.timedelta(hours=1))
+    pl = PriceList(id=1, tenant_id="test", name="Happy Hour", valid_from=now - datetime.timedelta(hours=1))
     assert pl.is_valid_now() is True
 
-    future = PriceList(id=2, name="Futuro", valid_from=now + datetime.timedelta(days=30))
+    future = PriceList(id=2, tenant_id="test", name="Futuro", valid_from=now + datetime.timedelta(days=30))
     assert future.is_valid_now() is False
 
     expired = PriceList(
         id=3,
+        tenant_id="test",
         name="Expirado",
         valid_from=now - datetime.timedelta(days=10),
         valid_until=now - datetime.timedelta(days=1),
@@ -273,7 +274,7 @@ def test_price_list_is_valid_now() -> None:
 def test_price_list_activate_deactivate() -> None:
     from app.menu.domain.price_list import PriceList
 
-    pl = PriceList(id=1, name="Regular", is_active=True)
+    pl = PriceList(id=1, tenant_id="test", name="Regular", is_active=True)
     assert pl.is_active is True
     pl.deactivate()
     assert pl.is_active is False
@@ -284,9 +285,9 @@ def test_price_list_activate_deactivate() -> None:
 def test_price_list_equality() -> None:
     from app.menu.domain.price_list import PriceList
 
-    pl1 = PriceList(id=1, name="A")
-    pl2 = PriceList(id=1, name="B")
-    pl3 = PriceList(id=2, name="A")
+    pl1 = PriceList(id=1, tenant_id="test", name="A")
+    pl2 = PriceList(id=1, tenant_id="test", name="B")
+    pl3 = PriceList(id=2, tenant_id="test", name="A")
     assert pl1 == pl2
     assert pl1 != pl3
 

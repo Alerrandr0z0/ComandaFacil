@@ -43,7 +43,7 @@ async def test_menu_repository_lifecycle(db_session: AsyncSession) -> None:
     repo = SQLAlchemyMenuRepository(db_session)
 
     # 1. Save new menu
-    menu = Menu(id=1, name="Almoço", description="Cardápio de almoço", is_active=True)
+    menu = Menu(id=1, tenant_id="test", name="Almoço", description="Cardápio de almoço", is_active=True)
     item = MenuItem(
         id=10,
         name="Feijoada",
@@ -57,7 +57,7 @@ async def test_menu_repository_lifecycle(db_session: AsyncSession) -> None:
     await db_session.commit()
 
     # 2. Retrieve menu and verify mapping
-    retrieved = await repo.find_by_id(1)
+    retrieved = await repo.find_by_id(1, "test")
     assert retrieved is not None
     assert retrieved.id == 1
     assert retrieved.name == "Almoço"
@@ -84,7 +84,7 @@ async def test_menu_repository_lifecycle(db_session: AsyncSession) -> None:
     await db_session.commit()
 
     # 4. Verify updates
-    updated = await repo.find_by_id(1)
+    updated = await repo.find_by_id(1, "test")
     assert updated is not None
     assert updated.name == "Almoço Executivo"
     assert updated.is_active is False
@@ -92,10 +92,10 @@ async def test_menu_repository_lifecycle(db_session: AsyncSession) -> None:
     assert any(x.id == 11 and x.name == "Guaraná" for x in updated.items)
 
     # 5. Delete menu and verify cascade deletion
-    await repo.delete(1)
+    await repo.delete(1, "test")
     await db_session.commit()
 
-    deleted = await repo.find_by_id(1)
+    deleted = await repo.find_by_id(1, "test")
     assert deleted is None
 
 
@@ -109,6 +109,7 @@ async def test_price_list_repository_lifecycle(db_session: AsyncSession) -> None
     # 1. Save new PriceList
     pl = PriceList(
         id=1,
+        tenant_id="test",
         name="Preços Padrão",
         description="Tabela regular",
         is_active=True,
@@ -121,7 +122,7 @@ async def test_price_list_repository_lifecycle(db_session: AsyncSession) -> None
     await db_session.commit()
 
     # 2. Find by id
-    retrieved = await repo.find_by_id(1)
+    retrieved = await repo.find_by_id(1, "test")
     assert retrieved is not None
     assert retrieved.id == 1
     assert retrieved.name == "Preços Padrão"
@@ -131,7 +132,7 @@ async def test_price_list_repository_lifecycle(db_session: AsyncSession) -> None
     assert retrieved.items[0].price == Money.from_float(39.90)
 
     # 3. Find active price lists
-    active_lists = await repo.find_active()
+    active_lists = await repo.find_active("test")
     assert len(active_lists) == 1
     assert active_lists[0].id == 1
 
@@ -146,7 +147,7 @@ async def test_price_list_repository_lifecycle(db_session: AsyncSession) -> None
     await db_session.commit()
 
     # 5. Verify update
-    updated = await repo.find_by_id(1)
+    updated = await repo.find_by_id(1, "test")
     assert updated is not None
     assert updated.is_active is False
     assert len(updated.items) == 2

@@ -29,16 +29,16 @@ class InMemoryMenuRepository(MenuRepository):
     def __init__(self) -> None:
         self._menus: dict[int, Menu] = {}
 
-    async def find_by_id(self, id: int) -> Menu | None:
+    async def find_by_id(self, id: int, tenant_id: str = "") -> Menu | None:
         return self._menus.get(id)
 
-    async def find_all(self) -> list[Menu]:
+    async def find_all(self, tenant_id: str = "") -> list[Menu]:
         return list(self._menus.values())
 
     async def save(self, menu: Menu) -> None:
         self._menus[menu.id] = menu
 
-    async def delete(self, id: int) -> None:
+    async def delete(self, id: int, tenant_id: str = "") -> None:
         self._menus.pop(id, None)
 
 
@@ -51,7 +51,7 @@ def menu_repo() -> InMemoryMenuRepository:
 async def test_create_menu_success(menu_repo: InMemoryMenuRepository) -> None:
     # Arrange
     handler = CreateMenuHandler(menu_repo)
-    command = CreateMenuCommand(id=1, name="Almoço", description="Cardápio do almoço")
+    command = CreateMenuCommand(id=1, tenant_id="test", name="Almoço", description="Cardápio do almoço")
 
     # Act
     menu = await handler.handle(command)
@@ -71,9 +71,9 @@ async def test_create_menu_success(menu_repo: InMemoryMenuRepository) -> None:
 async def test_create_menu_duplicate_id(menu_repo: InMemoryMenuRepository) -> None:
     # Arrange
     handler = CreateMenuHandler(menu_repo)
-    existing = Menu(id=1, name="Almoço", description="", is_active=True)
+    existing = Menu(id=1, tenant_id="test", name="Almoço", description="", is_active=True)
     await menu_repo.save(existing)
-    command = CreateMenuCommand(id=1, name="Jantar", description="")
+    command = CreateMenuCommand(id=1, tenant_id="test", name="Jantar", description="")
 
     # Act & Assert
     with pytest.raises(ConflictError, match="Cardápio com id 1 já existe"):
@@ -83,11 +83,12 @@ async def test_create_menu_duplicate_id(menu_repo: InMemoryMenuRepository) -> No
 @pytest.mark.unit
 async def test_add_menu_item_success(menu_repo: InMemoryMenuRepository) -> None:
     # Arrange
-    menu = Menu(id=1, name="Almoço")
+    menu = Menu(id=1, tenant_id="test", name="Almoço")
     await menu_repo.save(menu)
     handler = AddMenuItemHandler(menu_repo)
     command = AddMenuItemCommand(
         menu_id=1,
+        tenant_id="test",
         item_id=10,
         name="Feijoada",
         description="Feijoada completa",
@@ -114,6 +115,7 @@ async def test_add_menu_item_nonexistent_menu(menu_repo: InMemoryMenuRepository)
     handler = AddMenuItemHandler(menu_repo)
     command = AddMenuItemCommand(
         menu_id=99,
+        tenant_id="test",
         item_id=1,
         name="Pizza",
         description="Pizza",
@@ -128,12 +130,12 @@ async def test_add_menu_item_nonexistent_menu(menu_repo: InMemoryMenuRepository)
 @pytest.mark.unit
 async def test_remove_menu_item_success(menu_repo: InMemoryMenuRepository) -> None:
     # Arrange
-    menu = Menu(id=1, name="Almoço")
+    menu = Menu(id=1, tenant_id="test", name="Almoço")
     item = MenuItem(id=10, name="Feijoada", description="", category=Category("Pratos"))
     menu.add_item(item)
     await menu_repo.save(menu)
     handler = RemoveMenuItemHandler(menu_repo)
-    command = RemoveMenuItemCommand(menu_id=1, item_id=10)
+    command = RemoveMenuItemCommand(menu_id=1, tenant_id="test", item_id=10)
 
     # Act
     await handler.handle(command)
@@ -148,7 +150,7 @@ async def test_remove_menu_item_success(menu_repo: InMemoryMenuRepository) -> No
 async def test_remove_menu_item_nonexistent_menu(menu_repo: InMemoryMenuRepository) -> None:
     # Arrange
     handler = RemoveMenuItemHandler(menu_repo)
-    command = RemoveMenuItemCommand(menu_id=99, item_id=1)
+    command = RemoveMenuItemCommand(menu_id=99, tenant_id="test", item_id=1)
 
     # Act & Assert
     with pytest.raises(NotFoundError, match="Cardápio '99' não encontrado"):
@@ -158,10 +160,11 @@ async def test_remove_menu_item_nonexistent_menu(menu_repo: InMemoryMenuReposito
 @pytest.mark.unit
 async def test_toggle_menu_activate(menu_repo: InMemoryMenuRepository) -> None:
     # Arrange
-    menu = Menu(id=1, name="Almoço", is_active=False)
+    menu = Menu(id=1, tenant_id="test", name="Almoço", is_active=False)
     await menu_repo.save(menu)
     handler = ToggleMenuHandler(menu_repo)
-    command = ToggleMenuCommand(menu_id=1, activate=True)
+    command = ToggleMenuCommand(menu_id=1, tenant_id="test", activate=True)
+
 
     # Act
     result = await handler.handle(command)
@@ -177,10 +180,10 @@ async def test_toggle_menu_activate(menu_repo: InMemoryMenuRepository) -> None:
 @pytest.mark.unit
 async def test_toggle_menu_deactivate(menu_repo: InMemoryMenuRepository) -> None:
     # Arrange
-    menu = Menu(id=1, name="Almoço", is_active=True)
+    menu = Menu(id=1, tenant_id="test", name="Almoço", is_active=True)
     await menu_repo.save(menu)
     handler = ToggleMenuHandler(menu_repo)
-    command = ToggleMenuCommand(menu_id=1, activate=False)
+    command = ToggleMenuCommand(menu_id=1, tenant_id="test", activate=False)
 
     # Act
     result = await handler.handle(command)
@@ -193,7 +196,7 @@ async def test_toggle_menu_deactivate(menu_repo: InMemoryMenuRepository) -> None
 async def test_toggle_menu_nonexistent(menu_repo: InMemoryMenuRepository) -> None:
     # Arrange
     handler = ToggleMenuHandler(menu_repo)
-    command = ToggleMenuCommand(menu_id=99, activate=True)
+    command = ToggleMenuCommand(menu_id=99, tenant_id="test", activate=True)
 
     # Act & Assert
     with pytest.raises(NotFoundError, match="Cardápio '99' não encontrado"):
@@ -203,10 +206,10 @@ async def test_toggle_menu_nonexistent(menu_repo: InMemoryMenuRepository) -> Non
 @pytest.mark.unit
 async def test_delete_menu_success(menu_repo: InMemoryMenuRepository) -> None:
     # Arrange
-    menu = Menu(id=1, name="Almoço")
+    menu = Menu(id=1, tenant_id="test", name="Almoço")
     await menu_repo.save(menu)
     handler = DeleteMenuHandler(menu_repo)
-    command = DeleteMenuCommand(menu_id=1)
+    command = DeleteMenuCommand(menu_id=1, tenant_id="test")
 
     # Act
     await handler.handle(command)
@@ -219,7 +222,7 @@ async def test_delete_menu_success(menu_repo: InMemoryMenuRepository) -> None:
 async def test_delete_menu_nonexistent(menu_repo: InMemoryMenuRepository) -> None:
     # Arrange
     handler = DeleteMenuHandler(menu_repo)
-    command = DeleteMenuCommand(menu_id=99)
+    command = DeleteMenuCommand(menu_id=99, tenant_id="test")
 
     # Act & Assert
     with pytest.raises(NotFoundError, match="Cardápio '99' não encontrado"):
@@ -229,10 +232,10 @@ async def test_delete_menu_nonexistent(menu_repo: InMemoryMenuRepository) -> Non
 @pytest.mark.unit
 async def test_get_menu_query(menu_repo: InMemoryMenuRepository) -> None:
     # Arrange
-    menu = Menu(id=1, name="Almoço")
+    menu = Menu(id=1, tenant_id="test", name="Almoço")
     await menu_repo.save(menu)
     handler = GetMenuHandler(menu_repo)
-    query = GetMenuQuery(menu_id=1)
+    query = GetMenuQuery(menu_id=1, tenant_id="test")
 
     # Act
     result = await handler.handle(query)
@@ -247,7 +250,7 @@ async def test_get_menu_query(menu_repo: InMemoryMenuRepository) -> None:
 async def test_get_menu_query_not_found(menu_repo: InMemoryMenuRepository) -> None:
     # Arrange
     handler = GetMenuHandler(menu_repo)
-    query = GetMenuQuery(menu_id=99)
+    query = GetMenuQuery(menu_id=99, tenant_id="test")
 
     # Act
     result = await handler.handle(query)
@@ -259,10 +262,10 @@ async def test_get_menu_query_not_found(menu_repo: InMemoryMenuRepository) -> No
 @pytest.mark.unit
 async def test_list_menus_query(menu_repo: InMemoryMenuRepository) -> None:
     # Arrange
-    await menu_repo.save(Menu(id=1, name="Almoço"))
-    await menu_repo.save(Menu(id=2, name="Jantar"))
+    await menu_repo.save(Menu(id=1, tenant_id="test", name="Almoço"))
+    await menu_repo.save(Menu(id=2, tenant_id="test", name="Jantar"))
     handler = ListMenusHandler(menu_repo)
-    query = ListMenusQuery()
+    query = ListMenusQuery(tenant_id="test")
 
     # Act
     results = await handler.handle(query)
