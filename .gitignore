@@ -32,10 +32,10 @@ dist/
 !.env.example
 
 # Logs (mantém estrutura, ignora conteúdo)
-logs/franquias/**/app.log
-logs/franquias/**/*.log*
-backend/logs/franquias/**/app.log
-backend/logs/franquias/**/*.log*
+**/logs/**/*.log
+**/logs/**/*.log*
+**/logs/*.log
+**/logs/*.log*
 
 # IDEs
 .vscode/
