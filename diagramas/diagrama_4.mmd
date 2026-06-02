@@ -1,0 +1,61 @@
+flowchart TD
+    subgraph API["[API] order/api/routes.py · Prefixo: /api/v1/order"]
+        R1["POST / → CreateOrderHandler"]
+        R2["GET /{id} → GetOrderHandler"]
+        R3["POST /{id}/items → AddOrderItemHandler\n+ BackgroundTask → _notify_kitchen"]
+        R4["POST /{id}/request-payment → RequestPaymentHandler"]
+        R5["POST /{id}/process-payment → ProcessPaymentHandler"]
+        R6["POST /{id}/cancel → CancelOrderHandler"]
+        R7["POST /{id}/deliver → DeliverOrderHandler + mongo sync"]
+        R8["GET /history/all → MongoDB read model"]
+
+        R1 & R2 & R3 & R4 & R5 & R6 & R7 & R8 -.->|"Dependências"| API_DEP["DbSession, MongoDB,\nCurrentTenantId, BackgroundTasks"]
+    end
+
+    subgraph APP["[Application] order/application/"]
+        direction TB
+        subgraph CMDS["commands.py"]
+            C1["CreateOrderCommand/Handler\n→ valida fulfillment\nOrderForm.set_fulfillment_strategy()"]
+            C2["AddOrderItemCommand/Handler\n→ OrderFormItem snapshot\nOrderForm.add_item()"]
+            C3["RequestPaymentCommand/Handler\n→ OrderForm.request_payment()"]
+            C4["ProcessPaymentCommand/Handler\n→ OrderForm.process_payment()\nOpen → Paid"]
+            C5["CancelOrderCommand/Handler\n→ OrderForm.cancel()"]
+            C6["DeliverOrderCommand/Handler\n→ OrderForm.deliver()\n+ sync mongo (history + orders_read)"]
+        end
+        subgraph QRS["queries.py"]
+            Q1["GetOrderQuery/Handler\n→ OrderRepository.find_by_id()"]
+            Q2["GetOrderHistoryQuery/Handler\n→ MongoDB find()"]
+        end
+    end
+
+    subgraph DOMAIN["[Domain] order/domain/"]
+        OF["order_form.py\nclass OrderForm (Aggregate Root)\nid, tenant_id, state, items, fulfillment_strategy\nadd_item(), remove_item()\nrequest_payment(), process_payment()\ncancel(), deliver()\ntotal() → calcula soma + taxa"]
+        ST["states.py: IOrderState (State Pattern)\nOpen, Paid, Closed\nCada estado implementa add_item(),\nrequest_payment(), process_payment(),\ncancel(), deliver() → raise se inválido"]
+        FL["fulfillment.py: IFulfillmentStratrgy\nTable → R$0 | Takeaway → R$0\nDelivery → R$7,00 + máquina de estados"]
+        DS["delivery_states.py: IDeliveryState\nAwaitingPickup → InTransit →\nDelivered / FailedDelivery"]
+        OI["order_item.py\nOrderFormItem (entidade filha)\nsnapshot fields, calculate_subtotal()"]
+        REPO["repository.py: OrderRepository (ABC)\nfind_by_id(id, tenant_id)\nfind_all_by_tenant(tenant_id)\nsave(order)\ndelete(id, tenant_id)"]
+    end
+
+    subgraph INFRA["[Infrastructure] order/infrastructure/"]
+        ORM["orm_models.py\nOrderFormORM → order_forms (tenant_id indexado)\nOrderFormItemORM → order_items"]
+        PG_REPO["pg_repository.py\nSQLAlchemyOrderRepository\nfind_by_id: SELECT + WHERE\nid AND tenant_id + selectinload"]
+        MONGO_REPO["mongo_repository.py\nOrderHistoryMongoRepository\nsave/find_by_id/find_all_by_tenant\ncollection: order_history"]
+        SYNC["order_read_sync.py\nOrderReadModelSync\nsync order → orders_read (analytics)"]
+    end
+
+    PG_DB[("PostgreSQL 16\norder_forms · order_items\nACID · Migrações Alembic")]
+    MONGO_DB[("MongoDB 7\norder_history · orders_read\nDocumentos denormalizados")]
+
+    API --> APP
+    APP --> DOMAIN
+    DOMAIN --> INFRA
+    INFRA --> PG_DB
+    INFRA -.-> MONGO_DB
+    SYNC --> MONGO_DB
+    MONGO_REPO --> MONGO_DB
+    PG_REPO --> PG_DB
+    REPO -.->|"implementado por"| PG_REPO
+    ST -.->|"usado por"| OF
+    FL -.->|"usado por"| OF
+    DS -.->|"usado por"| FL

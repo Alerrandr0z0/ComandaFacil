@@ -1,0 +1,14 @@
+flowchart LR
+    subgraph Containers["COMANDAFÁCIL — Containers"]
+        SPA["Frontend Web\nReact 19 + TS 6 + Vite 8\nTailwindCSS 4 + TanStack Query 5\nPorta: 5173 (dev) / 80 (prod)"]
+        API["FastAPI Server\nPython 3.12 + Uvicorn\nPydantic + SQLAlchemy + Motor\nPorta: 8000\n\nMiddleware: tenant_id (ContextVar), logging, CORS\n7 Routers: /auth, /menu, /order, /kitchen,\n/payments, /stock, /analytics, /health\nDependencies: DbSession, MongoDB, CurrentTenantId\nBackgroundTasks: sync MongoDB, notificar cozinha"]
+    end
+
+    PG[("PostgreSQL 16\nPorta: 5432\nACID Transactions\nAlembic Migrations\n10 tabelas c/ tenant")]
+    MONGO[("MongoDB 7\nPorta: 27017\nDocumentos JSON\nAggregation Pipeline\n4 coleções de leitura")]
+    STRIPE[("Stripe API\nPorta: 443\nREST + HTTPS\nPayment Intents\nRefunds")]
+
+    SPA -->|"HTTPS / WSS"| API
+    API --> PG
+    API -.->|"BackgroundTasks"| MONGO
+    API --> STRIPE
