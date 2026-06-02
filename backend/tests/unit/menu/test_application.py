@@ -243,8 +243,8 @@ async def test_get_menu_query(menu_repo: InMemoryMenuRepository) -> None:
 
     # Assert
     assert result is not None
-    assert result.id == 1
-    assert result.name == "Almoço"
+    assert result.id == 1  # type: ignore[reportAttributeAccessIssue, reportOptionalMemberAccess]
+    assert result.name == "Almoço"  # type: ignore[reportAttributeAccessIssue, reportOptionalMemberAccess]
 
 
 @pytest.mark.unit
@@ -273,5 +273,5 @@ async def test_list_menus_query(menu_repo: InMemoryMenuRepository) -> None:
 
     # Assert
     assert len(results) == 2
-    assert results[0].name == "Almoço"
-    assert results[1].name == "Jantar"
+    assert results[0].name == "Almoço"  # type: ignore[reportAttributeAccessIssue]
+    assert results[1].name == "Jantar"  # type: ignore[reportAttributeAccessIssue]

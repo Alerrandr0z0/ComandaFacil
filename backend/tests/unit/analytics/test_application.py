@@ -27,10 +27,10 @@ from app.analytics.domain.value_objects import (
 
 class InMemoryAnalyticsRepository:
     def __init__(self) -> None:
-        self._dashboard: DashboardData | None = None
-        self._sales: SalesReportData | None = None
-        self._orders: OrderInsights | None = None
-        self._kitchen: KitchenPerformance | None = None
+        self.dashboard: DashboardData | None = None
+        self.sales: SalesReportData | None = None
+        self.orders: OrderInsights | None = None
+        self.kitchen: KitchenPerformance | None = None
         self.last_tenant_id: str | None = None
         self.last_period: AnalyticsPeriod | None = None
         self.last_date_range: DateRange | None = None
@@ -44,8 +44,8 @@ class InMemoryAnalyticsRepository:
         self.last_tenant_id = tenant_id
         self.last_period = period
         self.last_date_range = date_range
-        assert self._dashboard is not None
-        return self._dashboard
+        assert self.dashboard is not None
+        return self.dashboard
 
     async def get_sales_report(
         self,
@@ -56,8 +56,8 @@ class InMemoryAnalyticsRepository:
         self.last_tenant_id = tenant_id
         self.last_period = period
         self.last_date_range = date_range
-        assert self._sales is not None
-        return self._sales
+        assert self.sales is not None
+        return self.sales
 
     async def get_order_insights(
         self,
@@ -68,8 +68,8 @@ class InMemoryAnalyticsRepository:
         self.last_tenant_id = tenant_id
         self.last_period = period
         self.last_date_range = date_range
-        assert self._orders is not None
-        return self._orders
+        assert self.orders is not None
+        return self.orders
 
     async def get_kitchen_performance(
         self,
@@ -80,8 +80,8 @@ class InMemoryAnalyticsRepository:
         self.last_tenant_id = tenant_id
         self.last_period = period
         self.last_date_range = date_range
-        assert self._kitchen is not None
-        return self._kitchen
+        assert self.kitchen is not None
+        return self.kitchen
 
 
 # ─── Happy path: data exists ─────────────────────────────────────────────────
@@ -97,7 +97,7 @@ async def test_get_dashboard_when_data_exists_then_returns() -> None:
         low_stock_items=1,
         average_prep_time_minutes=8.0,
     )
-    repo._dashboard = expected
+    repo.dashboard = expected
     handler = GetDashboardHandler(repo)
     query = GetDashboardQuery(tenant_id="t1")
 
@@ -117,7 +117,7 @@ async def test_get_sales_report_when_data_exists_then_returns() -> None:
         average_ticket=Decimal("37.50"),
         by_category={"BEBIDAS": Decimal("10000.00")},
     )
-    repo._sales = expected
+    repo.sales = expected
     handler = GetSalesReportHandler(repo)
     query = GetSalesReportQuery(tenant_id="t1", period=AnalyticsPeriod.MONTH)
 
@@ -136,7 +136,7 @@ async def test_get_order_insights_when_data_exists_then_returns() -> None:
         average_items_per_order=2.4,
         peak_hour=19,
     )
-    repo._orders = expected
+    repo.orders = expected
     handler = GetOrderInsightsHandler(repo)
     query = GetOrderInsightsQuery(tenant_id="t1", period=AnalyticsPeriod.WEEK)
 
@@ -155,7 +155,7 @@ async def test_get_kitchen_performance_when_data_exists_then_returns() -> None:
         items_prepared=200,
         completion_rate=0.95,
     )
-    repo._kitchen = expected
+    repo.kitchen = expected
     handler = GetKitchenPerformanceHandler(repo)
     query = GetKitchenPerformanceQuery(tenant_id="t1")
 
@@ -170,7 +170,7 @@ async def test_get_kitchen_performance_when_data_exists_then_returns() -> None:
 @pytest.mark.unit
 async def test_get_dashboard_when_tenant_id_then_passed_to_repo() -> None:
     repo = InMemoryAnalyticsRepository()
-    repo._dashboard = DashboardData(
+    repo.dashboard = DashboardData(
         total_sales=Decimal("0"),
         orders_count=0,
         average_ticket=Decimal("0"),
@@ -188,7 +188,7 @@ async def test_get_dashboard_when_tenant_id_then_passed_to_repo() -> None:
 @pytest.mark.unit
 async def test_get_dashboard_when_period_then_passed_to_repo() -> None:
     repo = InMemoryAnalyticsRepository()
-    repo._dashboard = DashboardData(
+    repo.dashboard = DashboardData(
         total_sales=Decimal("0"),
         orders_count=0,
         average_ticket=Decimal("0"),
@@ -206,7 +206,7 @@ async def test_get_dashboard_when_period_then_passed_to_repo() -> None:
 @pytest.mark.unit
 async def test_get_dashboard_when_date_range_then_passed_to_repo() -> None:
     repo = InMemoryAnalyticsRepository()
-    repo._dashboard = DashboardData(
+    repo.dashboard = DashboardData(
         total_sales=Decimal("0"),
         orders_count=0,
         average_ticket=Decimal("0"),
@@ -228,7 +228,7 @@ async def test_get_dashboard_when_date_range_then_passed_to_repo() -> None:
 @pytest.mark.unit
 async def test_get_dashboard_when_default_period_then_day() -> None:
     repo = InMemoryAnalyticsRepository()
-    repo._dashboard = DashboardData(
+    repo.dashboard = DashboardData(
         total_sales=Decimal("0"),
         orders_count=0,
         average_ticket=Decimal("0"),
@@ -246,7 +246,7 @@ async def test_get_dashboard_when_default_period_then_day() -> None:
 @pytest.mark.unit
 async def test_get_dashboard_when_default_date_range_then_none() -> None:
     repo = InMemoryAnalyticsRepository()
-    repo._dashboard = DashboardData(
+    repo.dashboard = DashboardData(
         total_sales=Decimal("0"),
         orders_count=0,
         average_ticket=Decimal("0"),
@@ -280,26 +280,26 @@ async def test_all_handlers_when_tenant_id_then_passed_to_repo(
     field: str,
 ) -> None:
     repo = InMemoryAnalyticsRepository()
-    repo._dashboard = DashboardData(
+    repo.dashboard = DashboardData(
         total_sales=Decimal("0"),
         orders_count=0,
         average_ticket=Decimal("0"),
         low_stock_items=0,
         average_prep_time_minutes=0.0,
     )
-    repo._sales = SalesReportData(
+    repo.sales = SalesReportData(
         period=AnalyticsPeriod.DAY,
         total_sales=Decimal("0"),
         total_orders=0,
         average_ticket=Decimal("0"),
     )
-    repo._orders = OrderInsights(
+    repo.orders = OrderInsights(
         period=AnalyticsPeriod.DAY,
         total_orders=0,
         average_items_per_order=0.0,
         peak_hour=0,
     )
-    repo._kitchen = KitchenPerformance(
+    repo.kitchen = KitchenPerformance(
         period=AnalyticsPeriod.DAY,
         average_prep_time_minutes=0.0,
         items_prepared=0,

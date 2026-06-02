@@ -300,8 +300,8 @@ async def test_get_stock_item_when_exists_then_returns(
     item = await handler.handle(GetStockItemQuery(stock_item_id=1, tenant_id="franquia_001"))
 
     # Assert
-    assert item.id == 1
-    assert item.name == "Farinha"
+    assert item.id == 1  # type: ignore[reportAttributeAccessIssue, reportOptionalMemberAccess]
+    assert item.name == "Farinha"  # type: ignore[reportAttributeAccessIssue, reportOptionalMemberAccess]
 
 
 @pytest.mark.unit
@@ -389,7 +389,7 @@ async def test_list_stock_items_when_low_stock_filter_then_returns_only_low(
 
     # Assert
     assert len(items) == 1
-    assert items[0].name == "Arroz"
+    assert items[0].name == "Arroz"  # type: ignore[reportAttributeAccessIssue]
 
 
 # ─── StockService ──────────────────────────────────────────────────────────

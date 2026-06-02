@@ -184,7 +184,7 @@ def test_dashboard_data_when_negative_then_creates_anyway(
         "average_prep_time_minutes": 0.0,
     }
     kwargs[field] = value
-    data = DashboardData(**kwargs)
+    data = DashboardData(**kwargs)  # type: ignore[arg-type]
     assert getattr(data, field) == value
 
 

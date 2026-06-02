@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -18,10 +19,10 @@ from app.analytics.domain.value_objects import (
 
 class InMemoryAnalyticsRepository(AnalyticsRepository):
     def __init__(self) -> None:
-        self._dashboard: DashboardData | None = None
-        self._sales: SalesReportData | None = None
-        self._orders: OrderInsights | None = None
-        self._kitchen: KitchenPerformance | None = None
+        self.dashboard: DashboardData | None = None
+        self.sales: SalesReportData | None = None
+        self.orders: OrderInsights | None = None
+        self.kitchen: KitchenPerformance | None = None
 
     async def get_dashboard(
         self,
@@ -29,8 +30,8 @@ class InMemoryAnalyticsRepository(AnalyticsRepository):
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
         date_range: DateRange | None = None,
     ) -> DashboardData:
-        assert self._dashboard is not None
-        return self._dashboard
+        assert self.dashboard is not None
+        return self.dashboard
 
     async def get_sales_report(
         self,
@@ -38,8 +39,8 @@ class InMemoryAnalyticsRepository(AnalyticsRepository):
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
         date_range: DateRange | None = None,
     ) -> SalesReportData:
-        assert self._sales is not None
-        return self._sales
+        assert self.sales is not None
+        return self.sales
 
     async def get_order_insights(
         self,
@@ -47,8 +48,8 @@ class InMemoryAnalyticsRepository(AnalyticsRepository):
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
         date_range: DateRange | None = None,
     ) -> OrderInsights:
-        assert self._orders is not None
-        return self._orders
+        assert self.orders is not None
+        return self.orders
 
     async def get_kitchen_performance(
         self,
@@ -56,8 +57,8 @@ class InMemoryAnalyticsRepository(AnalyticsRepository):
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
         date_range: DateRange | None = None,
     ) -> KitchenPerformance:
-        assert self._kitchen is not None
-        return self._kitchen
+        assert self.kitchen is not None
+        return self.kitchen
 
 
 def _dashboard() -> DashboardData:
@@ -113,7 +114,7 @@ async def test_analytics_repository_when_protocol_then_is_runtime_checkable() ->
 async def test_repository_get_dashboard_when_data_exists_then_returns() -> None:
     repo = InMemoryAnalyticsRepository()
     expected = _dashboard()
-    repo._dashboard = expected
+    repo.dashboard = expected
 
     result = await repo.get_dashboard(tenant_id="t1")
 
@@ -125,7 +126,7 @@ async def test_repository_get_dashboard_when_data_exists_then_returns() -> None:
 async def test_repository_get_sales_report_when_data_exists_then_returns() -> None:
     repo = InMemoryAnalyticsRepository()
     expected = _sales_report()
-    repo._sales = expected
+    repo.sales = expected
 
     result = await repo.get_sales_report(tenant_id="t1", period=AnalyticsPeriod.WEEK)
 
@@ -137,7 +138,7 @@ async def test_repository_get_sales_report_when_data_exists_then_returns() -> No
 async def test_repository_get_order_insights_when_data_exists_then_returns() -> None:
     repo = InMemoryAnalyticsRepository()
     expected = _order_insights()
-    repo._orders = expected
+    repo.orders = expected
 
     result = await repo.get_order_insights(tenant_id="t1", period=AnalyticsPeriod.WEEK)
 
@@ -149,7 +150,7 @@ async def test_repository_get_order_insights_when_data_exists_then_returns() -> 
 async def test_repository_get_kitchen_performance_when_data_exists_then_returns() -> None:
     repo = InMemoryAnalyticsRepository()
     expected = _kitchen_performance()
-    repo._kitchen = expected
+    repo.kitchen = expected
 
     result = await repo.get_kitchen_performance(tenant_id="t1")
 
@@ -162,7 +163,7 @@ async def test_repository_get_kitchen_performance_when_data_exists_then_returns(
 
 class PassthroughTracker(AnalyticsRepository):
     def __init__(self) -> None:
-        self.captured: list[dict] = []
+        self.captured: list[dict[str, Any]] = []
 
     async def get_dashboard(
         self,
@@ -229,12 +230,14 @@ class PassthroughTracker(AnalyticsRepository):
         ("get_kitchen_performance", {"tenant_id": "t1"}),
     ],
 )
-async def test_repository_when_called_then_returns_proper_type(method: str, kwargs: dict) -> None:
+async def test_repository_when_called_then_returns_proper_type(
+    method: str, kwargs: dict[str, Any]
+) -> None:
     repo = InMemoryAnalyticsRepository()
-    repo._dashboard = _dashboard()
-    repo._sales = _sales_report()
-    repo._orders = _order_insights()
-    repo._kitchen = _kitchen_performance()
+    repo.dashboard = _dashboard()
+    repo.sales = _sales_report()
+    repo.orders = _order_insights()
+    repo.kitchen = _kitchen_performance()
 
     result = await getattr(repo, method)(**kwargs)
 
@@ -244,7 +247,7 @@ async def test_repository_when_called_then_returns_proper_type(method: str, kwar
 @pytest.mark.unit
 async def test_repository_when_date_range_passed_then_ignored_by_stub() -> None:
     repo = InMemoryAnalyticsRepository()
-    repo._dashboard = _dashboard()
+    repo.dashboard = _dashboard()
 
     result = await repo.get_dashboard(
         tenant_id="t1",

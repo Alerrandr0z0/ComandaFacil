@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Final
+from typing import Any, Final, Protocol, runtime_checkable
 
-if TYPE_CHECKING:
-    from app.menu.infrastructure.mongo_read_repository import (
-        MongoMenuReadRepository,
-    )
+
+@runtime_checkable
+class MenuReadRepository(Protocol):
+    async def find_by_id(self, menu_id: int, tenant_id: str, /) -> Any | None: ...
+    async def find_all(self, tenant_id: str, /) -> list[Any]: ...
 
 
 @dataclass(frozen=True)
@@ -19,8 +20,8 @@ class GetMenuQuery:
 
 
 class GetMenuHandler:
-    def __init__(self, read_repo: MongoMenuReadRepository) -> None:
-        self._read_repo: Final[MongoMenuReadRepository] = read_repo
+    def __init__(self, read_repo: MenuReadRepository) -> None:
+        self._read_repo: Final[MenuReadRepository] = read_repo
 
     async def handle(self, query: GetMenuQuery) -> dict[str, Any] | None:
         return await self._read_repo.find_by_id(query.menu_id, query.tenant_id)
@@ -38,8 +39,8 @@ class ListMenusQuery:
 
 
 class ListMenusHandler:
-    def __init__(self, read_repo: MongoMenuReadRepository) -> None:
-        self._read_repo: Final[MongoMenuReadRepository] = read_repo
+    def __init__(self, read_repo: MenuReadRepository) -> None:
+        self._read_repo: Final[MenuReadRepository] = read_repo
 
     async def handle(self, query: ListMenusQuery) -> list[dict[str, Any]]:
         return await self._read_repo.find_all(query.tenant_id)

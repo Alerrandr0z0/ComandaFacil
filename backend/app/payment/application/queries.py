@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Final
+from typing import Any, Final, Protocol, runtime_checkable
 
-if TYPE_CHECKING:
-    from app.payment.infrastructure.mongo_read_repository import (
-        MongoPaymentReadRepository,
-    )
+
+@runtime_checkable
+class PaymentReadRepository(Protocol):
+    async def find_by_order(self, order_id: int, tenant_id: str, /) -> Any | None: ...
+    async def find_by_id(self, payment_id: int, tenant_id: str, /) -> Any | None: ...
 
 
 @dataclass(frozen=True)
@@ -19,8 +20,8 @@ class GetPaymentByOrderQuery:
 
 
 class GetPaymentByOrderHandler:
-    def __init__(self, read_repo: MongoPaymentReadRepository) -> None:
-        self._read_repo: Final[MongoPaymentReadRepository] = read_repo
+    def __init__(self, read_repo: PaymentReadRepository) -> None:
+        self._read_repo: Final[PaymentReadRepository] = read_repo
 
     async def handle(self, query: GetPaymentByOrderQuery) -> dict[str, Any] | None:
         """Fetch a payment read model by order ID."""
@@ -40,8 +41,8 @@ class GetPaymentByIdQuery:
 
 
 class GetPaymentByIdHandler:
-    def __init__(self, read_repo: MongoPaymentReadRepository) -> None:
-        self._read_repo: Final[MongoPaymentReadRepository] = read_repo
+    def __init__(self, read_repo: PaymentReadRepository) -> None:
+        self._read_repo: Final[PaymentReadRepository] = read_repo
 
     async def handle(self, query: GetPaymentByIdQuery) -> dict[str, Any] | None:
         """Fetch a payment read model by payment ID."""

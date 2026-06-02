@@ -19,15 +19,15 @@ class FakeMongoCollection:
     def __init__(self, *data_batches: list[dict[str, Any]]) -> None:
         self._batches = list(data_batches) if data_batches else [[]]
         self._call_count = 0
-        self._count = 5
+        self.count = 5
 
     def aggregate(self, pipeline: list[dict[str, Any]]) -> FakeCursor:
         idx = min(self._call_count, len(self._batches) - 1)
         self._call_count += 1
         return FakeCursor(self._batches[idx])
 
-    async def count_documents(self, filter: dict) -> int:
-        return self._count
+    async def count_documents(self, filter: dict[str, Any]) -> int:
+        return self.count
 
 
 class FakeMongoDB:
@@ -38,7 +38,7 @@ class FakeMongoDB:
         self._collections[collection] = FakeMongoCollection(*data_batches)
 
     def set_count(self, collection: str, count: int) -> None:
-        self._collections.setdefault(collection, FakeMongoCollection())._count = count
+        self._collections.setdefault(collection, FakeMongoCollection()).count = count
 
     def __getitem__(self, name: str) -> FakeMongoCollection:
         return self._collections.get(name, FakeMongoCollection())
@@ -75,7 +75,7 @@ def fake_mongo() -> FakeMongoDB:
 
 
 @pytest.fixture
-async def api_client(fake_mongo: FakeMongoDB):  # type: ignore[reportReturnType, reportInvalidTypeForm]
+async def api_client(fake_mongo: FakeMongoDB):
     app = _build_app(fake_mongo)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac

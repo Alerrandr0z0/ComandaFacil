@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Final
+from typing import Any, Final, Protocol, runtime_checkable
 
-if TYPE_CHECKING:
-    from app.stock.infrastructure.mongo_read_repository import (
-        MongoStockReadRepository,
-    )
+
+@runtime_checkable
+class StockItemReadRepository(Protocol):
+    async def find_by_id(self, stock_item_id: int, tenant_id: str, /) -> Any | None: ...
+    async def find_all(self, tenant_id: str, /) -> list[Any]: ...
+    async def find_low_stock(self, tenant_id: str, /) -> list[Any]: ...
 
 
 @dataclass(frozen=True)
@@ -16,8 +18,8 @@ class GetStockItemQuery:
 
 
 class GetStockItemHandler:
-    def __init__(self, read_repo: MongoStockReadRepository) -> None:
-        self._read_repo: Final[MongoStockReadRepository] = read_repo
+    def __init__(self, read_repo: StockItemReadRepository) -> None:
+        self._read_repo: Final[StockItemReadRepository] = read_repo
 
     async def handle(self, query: GetStockItemQuery) -> dict[str, Any] | None:
         return await self._read_repo.find_by_id(query.stock_item_id, query.tenant_id)
@@ -30,8 +32,8 @@ class ListStockItemsQuery:
 
 
 class ListStockItemsHandler:
-    def __init__(self, read_repo: MongoStockReadRepository) -> None:
-        self._read_repo: Final[MongoStockReadRepository] = read_repo
+    def __init__(self, read_repo: StockItemReadRepository) -> None:
+        self._read_repo: Final[StockItemReadRepository] = read_repo
 
     async def handle(self, query: ListStockItemsQuery) -> list[dict[str, Any]]:
         if query.low_stock_only:

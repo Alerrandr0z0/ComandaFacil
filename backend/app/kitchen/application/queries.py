@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Final
+from typing import Any, Final, Protocol, runtime_checkable
 
-if TYPE_CHECKING:
-    from app.kitchen.infrastructure.mongo_read_repository import (
-        MongoKitchenReadRepository,
-    )
+
+@runtime_checkable
+class KitchenReadRepository(Protocol):
+    async def find_active_by_station(self, station_type: str, tenant_id: str, /) -> list[Any]: ...
 
 
 @dataclass(frozen=True)
@@ -21,8 +21,8 @@ class GetActiveKitchenItemsQuery:
 
 
 class GetActiveKitchenItemsHandler:
-    def __init__(self, read_repo: MongoKitchenReadRepository) -> None:
-        self._read_repo: Final[MongoKitchenReadRepository] = read_repo
+    def __init__(self, read_repo: KitchenReadRepository) -> None:
+        self._read_repo: Final[KitchenReadRepository] = read_repo
 
     async def handle(self, query: GetActiveKitchenItemsQuery) -> list[dict[str, Any]]:
         """Fetches all active kitchen items for a station from the Mongo read model."""
