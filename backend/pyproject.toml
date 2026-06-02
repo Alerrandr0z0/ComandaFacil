@@ -213,12 +213,34 @@ fail_under = 80
 
 # ─── Mutmut ───────────────────────────────────────────────────────────────────
 [tool.mutmut]
-paths_to_mutate = ["app/payment/"]
-tests_dir = ["tests/unit/payment/"]
+paths_to_mutate = [
+    "app/analytics/",
+    "app/auth/",
+    "app/kitchen/",
+    "app/menu/",
+    "app/order/",
+    "app/payment/",
+    "app/stock/",
+]
+tests_dir = [
+    "tests/unit/analytics/",
+    "tests/unit/auth/",
+    "tests/unit/kitchen/",
+    "tests/unit/menu/",
+    "tests/unit/order/",
+    "tests/unit/payment/",
+    "tests/unit/stock/",
+]
 also_copy = [
     "app/__init__.py",
+    "app/dependencies.py",
     "app/settings.py",
     "app/shared/",
+    "app/auth/domain/",
+    "app/auth/infrastructure/repositories.py",
+    "app/auth/infrastructure/orm_models.py",
+    "app/auth/infrastructure/__init__.py",
+    "app/auth/__init__.py",
 ]
 debug = true
 

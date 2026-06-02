@@ -78,12 +78,12 @@ def test_payment_invalid_transitions_then_raises_value_error() -> None:
     payment = Payment(1, 42, "franquia_001", Money.from_float(50.0), PaymentMethod.PIX)
 
     # Act & Assert 1: Cannot refund a pending payment
-    with pytest.raises(ValueError, match="Can only refund a CONFIRMED payment"):
+    with pytest.raises(ValueError, match=r"^Can only refund a CONFIRMED payment\.$"):
         payment.refund()
 
     # Act & Assert 2: Cannot confirm a failed payment
     payment.fail("Expired")
-    with pytest.raises(ValueError, match="Cannot confirm a terminal payment"):
+    with pytest.raises(ValueError, match=r"^Cannot confirm a terminal payment\.$"):
         payment.confirm("tr_123")
 
     # Arrange 2: Confirmed payment
@@ -91,7 +91,7 @@ def test_payment_invalid_transitions_then_raises_value_error() -> None:
     payment2.confirm("tr_cash")
 
     # Act & Assert 3: Cannot fail a confirmed payment
-    with pytest.raises(ValueError, match="Cannot fail a terminal payment"):
+    with pytest.raises(ValueError, match=r"^Cannot fail a terminal payment\.$"):
         payment2.fail("Cancelled")
 
 
