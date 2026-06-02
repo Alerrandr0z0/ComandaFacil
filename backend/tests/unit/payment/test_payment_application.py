@@ -240,3 +240,116 @@ async def test_payment_service_facade_request(
     # Assert
     assert payment.order_id == 50
     assert payment.status == PaymentStatus.CONFIRMED
+
+
+@pytest.mark.unit
+async def test_payment_service_facade_refund(
+    repo: InMemoryPaymentRepository, success_gateway: MockGateway
+) -> None:
+    # Arrange
+    service = PaymentService(repo, success_gateway)
+    payment = Payment(id=60, order_id=30, tenant_id="franquia_001",
+                      amount=Money.from_float(150.0), method=PaymentMethod.CREDIT_CARD)
+    payment.confirm("pi_orig_002")
+    await repo.save(payment)
+
+    # Act
+    result = await service.refund_payment(order_id=30, tenant_id="franquia_001")
+
+    # Assert
+    assert result.status == PaymentStatus.REFUNDED
+    assert len(success_gateway.refund_calls) == 1
+
+
+@pytest.mark.unit
+async def test_refund_payment_handler_cash_skips_gateway(
+    repo: InMemoryPaymentRepository, success_gateway: MockGateway
+) -> None:
+    # Arrange
+    handler = RefundPaymentHandler(repo, success_gateway)
+    payment = Payment(id=40, order_id=20, tenant_id="franquia_001",
+                      amount=Money.from_float(60.0), method=PaymentMethod.CASH)
+    payment.confirm("ch_cash_9999")
+    await repo.save(payment)
+    command = RefundPaymentCommand(order_id=20, tenant_id="franquia_001")
+
+    # Act
+    result = await handler.handle(command)
+
+    # Assert
+    assert result.status == PaymentStatus.REFUNDED
+    assert len(success_gateway.refund_calls) == 0
+
+
+@pytest.mark.unit
+async def test_refund_payment_handler_gateway_failure_raises_error(
+    repo: InMemoryPaymentRepository, success_gateway: MockGateway
+) -> None:
+    # Arrange
+    fail_refund_gateway = MockGateway()
+    fail_refund_gateway.refund_result = GatewayResponse(
+        success=False, gateway_ref=None, error_message="Stripe error: insufficient balance"
+    )
+    handler = RefundPaymentHandler(repo, fail_refund_gateway)
+    payment = Payment(id=50, order_id=25, tenant_id="franquia_001",
+                      amount=Money.from_float(200.0), method=PaymentMethod.CREDIT_CARD)
+    payment.confirm("pi_fail_001")
+    await repo.save(payment)
+    command = RefundPaymentCommand(order_id=25, tenant_id="franquia_001")
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="Stripe refund failed"):
+        await handler.handle(command)
+
+
+@pytest.mark.unit
+async def test_request_payment_handler_duplicate_refunded_returns_existing(
+    repo: InMemoryPaymentRepository, success_gateway: MockGateway
+) -> None:
+    # Arrange
+    handler = RequestPaymentHandler(repo, success_gateway)
+    existing = Payment(id=70, order_id=35, tenant_id="franquia_001",
+                       amount=Money.from_float(30.0), method=PaymentMethod.CASH)
+    existing.confirm("ch_cash_7000")
+    existing.refund()
+    await repo.save(existing)
+    command = RequestPaymentCommand(
+        order_id=35,
+        amount=Money.from_float(50.0),
+        method=PaymentMethod.CREDIT_CARD,
+        tenant_id="franquia_001",
+    )
+
+    # Act
+    payment = await handler.handle(command)
+
+    # Assert
+    assert payment.id == 70
+    assert payment.status == PaymentStatus.REFUNDED
+    assert len(success_gateway.charge_calls) == 0
+
+
+@pytest.mark.unit
+async def test_request_payment_handler_gateway_none_error_message(
+    repo: InMemoryPaymentRepository,
+) -> None:
+    # Arrange
+    no_msg_gateway = MockGateway(
+        charge_result=GatewayResponse(
+            success=False, gateway_ref=None, error_message=None
+        )
+    )
+    handler = RequestPaymentHandler(repo, no_msg_gateway)
+    command = RequestPaymentCommand(
+        order_id=40,
+        amount=Money.from_float(100.0),
+        method=PaymentMethod.CREDIT_CARD,
+        tenant_id="franquia_001",
+    )
+
+    # Act
+    payment = await handler.handle(command)
+
+    # Assert
+    assert payment.status == PaymentStatus.FAILED
+    assert payment.failure_reason == "Gateway charge failed"
