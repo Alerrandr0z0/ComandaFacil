@@ -51,3 +51,9 @@ Thumbs.db
 # Playwright
 playwright-report/
 test-results/
+
+# Graphify
+graphify-out/
+
+# Staging skills
+*.skill

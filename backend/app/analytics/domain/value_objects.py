@@ -1,10 +1,13 @@
 from __future__ import annotations
 
-import datetime
 from dataclasses import dataclass, field
-from decimal import Decimal
+from typing import TYPE_CHECKING
 
-from app.analytics.domain.enums import AnalyticsPeriod
+if TYPE_CHECKING:
+    import datetime
+    from decimal import Decimal
+
+    from app.analytics.domain.enums import AnalyticsPeriod
 
 
 @dataclass(frozen=True)

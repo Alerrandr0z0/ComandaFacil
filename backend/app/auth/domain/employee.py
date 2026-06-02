@@ -95,7 +95,9 @@ class UserTenantRole:
         assigned_at: Timestamp indicating when the role was assigned.
     """
 
-    def __init__(self, id: int, tenant_id: int, employee_id: int, role_type: RoleType, is_active: bool = True) -> None:
+    def __init__(
+        self, id: int, tenant_id: int, employee_id: int, role_type: RoleType, is_active: bool = True
+    ) -> None:
         self.id: Final[int] = id
         self.tenant_id: Final[int] = tenant_id
         self.employee_id: Final[int] = employee_id
@@ -154,12 +156,7 @@ class Employee:
     def set_password(self, password: str) -> None:
         """Hashes and sets the password for the employee using PBKDF2-SHA256."""
         salt = secrets.token_hex(16)
-        key = hashlib.pbkdf2_hmac(
-            'sha256',
-            password.encode('utf-8'),
-            salt.encode('utf-8'),
-            100000
-        )
+        key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt.encode("utf-8"), 100000)
         self.password_hash = f"pbkdf2_sha256$100000${salt}${key.hex()}"
 
     def check_password(self, password: str) -> bool:
@@ -175,10 +172,7 @@ class Employee:
             _, iterations_str, salt, original_key_hex = parts
             iterations = int(iterations_str)
             key = hashlib.pbkdf2_hmac(
-                'sha256',
-                password.encode('utf-8'),
-                salt.encode('utf-8'),
-                iterations
+                "sha256", password.encode("utf-8"), salt.encode("utf-8"), iterations
             )
             return secrets.compare_digest(key.hex(), original_key_hex)
         except Exception:
@@ -195,7 +189,7 @@ class Employee:
             tenant_id=tenant.id,
             employee_id=self.id,
             role_type=role_type,
-            is_active=True
+            is_active=True,
         )
         self.roles.append(new_role)
 

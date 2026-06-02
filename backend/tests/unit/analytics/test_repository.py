@@ -4,8 +4,6 @@ from decimal import Decimal
 
 import pytest
 
-from typing import Optional
-
 from app.analytics.domain.enums import AnalyticsPeriod
 from app.analytics.domain.repository import AnalyticsRepository
 from app.analytics.domain.value_objects import (
@@ -28,7 +26,7 @@ class InMemoryAnalyticsRepository(AnalyticsRepository):
         self,
         tenant_id: str,
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
-        date_range: Optional[DateRange] = None,
+        date_range: DateRange | None = None,
     ) -> DashboardData:
         assert self._dashboard is not None
         return self._dashboard
@@ -37,7 +35,7 @@ class InMemoryAnalyticsRepository(AnalyticsRepository):
         self,
         tenant_id: str,
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
-        date_range: Optional[DateRange] = None,
+        date_range: DateRange | None = None,
     ) -> SalesReportData:
         assert self._sales is not None
         return self._sales
@@ -46,7 +44,7 @@ class InMemoryAnalyticsRepository(AnalyticsRepository):
         self,
         tenant_id: str,
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
-        date_range: Optional[DateRange] = None,
+        date_range: DateRange | None = None,
     ) -> OrderInsights:
         assert self._orders is not None
         return self._orders
@@ -55,7 +53,7 @@ class InMemoryAnalyticsRepository(AnalyticsRepository):
         self,
         tenant_id: str,
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
-        date_range: Optional[DateRange] = None,
+        date_range: DateRange | None = None,
     ) -> KitchenPerformance:
         assert self._kitchen is not None
         return self._kitchen
@@ -81,7 +79,7 @@ async def test_repository_get_dashboard_when_data_exists_then_returns() -> None:
         low_stock_items=2,
         average_prep_time_minutes=10.0,
     )
-    repo._dashboard = expected  # noqa: SLF001
+    repo._dashboard = expected
 
     # Act
     result = await repo.get_dashboard(tenant_id="t1")
@@ -102,7 +100,7 @@ async def test_repository_get_sales_report_when_data_exists_then_returns() -> No
         average_ticket=Decimal("41.67"),
         by_category={"BEBIDAS": Decimal("2000.00")},
     )
-    repo._sales = expected  # noqa: SLF001
+    repo._sales = expected
 
     # Act
     result = await repo.get_sales_report(tenant_id="t1", period=AnalyticsPeriod.WEEK)

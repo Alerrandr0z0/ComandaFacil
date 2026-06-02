@@ -1,12 +1,10 @@
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Any
 
 import pytest
 from httpx import ASGITransport, AsyncClient
 
-from app.analytics.domain.value_objects import DashboardData
 from app.dependencies import mongo_db
 from app.main import app
 
@@ -26,7 +24,7 @@ class FakeMongoCollection:
     def aggregate(self, pipeline: list[dict]) -> FakeCursor:
         return FakeCursor(self._data)
 
-    async def count_documents(self, filter: dict) -> int:  # noqa: A002
+    async def count_documents(self, filter: dict) -> int:
         return 5
 
 
@@ -88,7 +86,7 @@ async def test_get_dashboard_when_no_data_then_returns_zeros(
     fake_mongo: FakeMongoDB,
 ) -> None:
     # Arrange
-    fake_mongo._dashboard_data = []  # noqa: SLF001
+    fake_mongo._dashboard_data = []
     fake_mongo._kitchen_data = []
 
     # Act

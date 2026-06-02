@@ -78,7 +78,7 @@ async def test_get_dashboard_when_data_exists_then_returns() -> None:
         low_stock_items=1,
         average_prep_time_minutes=8.0,
     )
-    repo._dashboard = expected  # noqa: SLF001
+    repo._dashboard = expected
     handler = GetDashboardHandler(repo)
     query = GetDashboardQuery(tenant_id="t1")
 
@@ -101,7 +101,7 @@ async def test_get_sales_report_when_data_exists_then_returns() -> None:
         average_ticket=Decimal("37.50"),
         by_category={"BEBIDAS": Decimal("10000.00")},
     )
-    repo._sales = expected  # noqa: SLF001
+    repo._sales = expected
     handler = GetSalesReportHandler(repo)
     query = GetSalesReportQuery(tenant_id="t1", period=AnalyticsPeriod.MONTH)
 
@@ -123,7 +123,7 @@ async def test_get_order_insights_when_data_exists_then_returns() -> None:
         average_items_per_order=2.4,
         peak_hour=19,
     )
-    repo._orders = expected  # noqa: SLF001
+    repo._orders = expected
     handler = GetOrderInsightsHandler(repo)
     query = GetOrderInsightsQuery(tenant_id="t1", period=AnalyticsPeriod.WEEK)
 
@@ -145,7 +145,7 @@ async def test_get_kitchen_performance_when_data_exists_then_returns() -> None:
         items_prepared=200,
         completion_rate=0.95,
     )
-    repo._kitchen = expected  # noqa: SLF001
+    repo._kitchen = expected
     handler = GetKitchenPerformanceHandler(repo)
     query = GetKitchenPerformanceQuery(tenant_id="t1")
 

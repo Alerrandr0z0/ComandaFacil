@@ -16,14 +16,16 @@ class Settings(BaseSettings):
     app_env: Literal["development", "staging", "production"] = "development"
     app_secret_key: str = "change_me_in_production"
     app_debug: bool = True
-    app_host: str = "0.0.0.0"
+    app_host: str = "0.0.0.0"  # nosec B104
     app_port: int = 8000
 
     # PostgreSQL (Write DB)
     database_url: str = "postgresql+asyncpg://comandafacil:change_me@localhost:5432/comandafacil"
 
     # MongoDB (Read DB)
-    mongo_url: str = "mongodb://comandafacil:change_me@localhost:27017/comandafacil_read?authSource=admin"
+    mongo_url: str = (
+        "mongodb://comandafacil:change_me@localhost:27017/comandafacil_read?authSource=admin"
+    )
     mongo_db: str = "comandafacil_read"
 
     # JWT

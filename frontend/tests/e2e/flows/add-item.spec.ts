@@ -1,4 +1,4 @@
-import { test, expect } from '@playwright/test'
+import { expect, test } from '@playwright/test'
 
 // Regra dos 3 cliques: adicionar item a uma comanda
 test('should add an item to order in 3 clicks or less', async ({ page }) => {

@@ -33,14 +33,13 @@ async def sqlite_session() -> AsyncGenerator[AsyncSession, None]:
 @pytest.fixture
 async def api_client(sqlite_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
     """Client overriding db_session dependency to use our temporary SQLite db."""
+
     async def override_db_session() -> AsyncGenerator[AsyncSession, None]:
         yield sqlite_session
 
     app.dependency_overrides[db_session] = override_db_session
     async with AsyncClient(
-        transport=ASGITransport(app=app),
-        base_url="http://test",
-        headers={"X-Tenant-ID": "10"}
+        transport=ASGITransport(app=app), base_url="http://test", headers={"X-Tenant-ID": "10"}
     ) as ac:
         yield ac
     app.dependency_overrides.clear()
@@ -55,8 +54,8 @@ async def test_register_employee_endpoint_success(api_client: AsyncClient) -> No
             "id": 1,
             "name": "Jane Doe",
             "email": "jane@comandafacil.com",
-            "password": "secure_password_123"
-        }
+            "password": "secure_password_123",
+        },
     )
 
     # Assert
@@ -68,7 +67,9 @@ async def test_register_employee_endpoint_success(api_client: AsyncClient) -> No
 
 
 @pytest.mark.asyncio
-async def test_assign_role_endpoint_success(api_client: AsyncClient, sqlite_session: AsyncSession) -> None:
+async def test_assign_role_endpoint_success(
+    api_client: AsyncClient, sqlite_session: AsyncSession
+) -> None:
     # Arrange
     tenant_repo = SQLAlchemyTenantRepository(sqlite_session)
     tenant = Tenant(id=10, name="Main Franchise", plan_type=PlanType.PRO, is_active=True)
@@ -82,17 +83,13 @@ async def test_assign_role_endpoint_success(api_client: AsyncClient, sqlite_sess
             "id": 1,
             "name": "Jane Doe",
             "email": "jane@comandafacil.com",
-            "password": "secure_password_123"
-        }
+            "password": "secure_password_123",
+        },
     )
 
     # Act - Assign Role
     response = await api_client.post(
-        "/api/v1/auth/employees/1/roles",
-        json={
-            "tenant_id": 10,
-            "role_type": "WAITER"
-        }
+        "/api/v1/auth/employees/1/roles", json={"tenant_id": 10, "role_type": "WAITER"}
     )
 
     # Assert
@@ -101,7 +98,9 @@ async def test_assign_role_endpoint_success(api_client: AsyncClient, sqlite_sess
 
 
 @pytest.mark.asyncio
-async def test_login_endpoint_success(api_client: AsyncClient, sqlite_session: AsyncSession) -> None:
+async def test_login_endpoint_success(
+    api_client: AsyncClient, sqlite_session: AsyncSession
+) -> None:
     # Arrange
     tenant_repo = SQLAlchemyTenantRepository(sqlite_session)
     tenant = Tenant(id=10, name="Main Franchise", plan_type=PlanType.PRO, is_active=True)
@@ -115,27 +114,19 @@ async def test_login_endpoint_success(api_client: AsyncClient, sqlite_session: A
             "id": 1,
             "name": "Jane Doe",
             "email": "jane@comandafacil.com",
-            "password": "secure_password_123"
-        }
+            "password": "secure_password_123",
+        },
     )
 
     # Assign Role
     await api_client.post(
-        "/api/v1/auth/employees/1/roles",
-        json={
-            "tenant_id": 10,
-            "role_type": "WAITER"
-        }
+        "/api/v1/auth/employees/1/roles", json={"tenant_id": 10, "role_type": "WAITER"}
     )
 
     # Act - Login
     response = await api_client.post(
         "/api/v1/auth/login",
-        json={
-            "email": "jane@comandafacil.com",
-            "password": "secure_password_123",
-            "tenant_id": 10
-        }
+        json={"email": "jane@comandafacil.com", "password": "secure_password_123", "tenant_id": 10},
     )
 
     # Assert
@@ -146,7 +137,9 @@ async def test_login_endpoint_success(api_client: AsyncClient, sqlite_session: A
 
 
 @pytest.mark.asyncio
-async def test_me_and_logout_endpoints_success(api_client: AsyncClient, sqlite_session: AsyncSession) -> None:
+async def test_me_and_logout_endpoints_success(
+    api_client: AsyncClient, sqlite_session: AsyncSession
+) -> None:
     # Arrange
     tenant_repo = SQLAlchemyTenantRepository(sqlite_session)
     tenant = Tenant(id=10, name="Main Franchise", plan_type=PlanType.PRO, is_active=True)
@@ -160,34 +153,25 @@ async def test_me_and_logout_endpoints_success(api_client: AsyncClient, sqlite_s
             "id": 1,
             "name": "Jane Doe",
             "email": "jane@comandafacil.com",
-            "password": "secure_password_123"
-        }
+            "password": "secure_password_123",
+        },
     )
 
     # Assign Role
     await api_client.post(
-        "/api/v1/auth/employees/1/roles",
-        json={
-            "tenant_id": 10,
-            "role_type": "WAITER"
-        }
+        "/api/v1/auth/employees/1/roles", json={"tenant_id": 10, "role_type": "WAITER"}
     )
 
     # Login to get session
     login_response = await api_client.post(
         "/api/v1/auth/login",
-        json={
-            "email": "jane@comandafacil.com",
-            "password": "secure_password_123",
-            "tenant_id": 10
-        }
+        json={"email": "jane@comandafacil.com", "password": "secure_password_123", "tenant_id": 10},
     )
     session_id = login_response.json()["session_id"]
 
     # Act - Me query using Bearer token
     me_response = await api_client.get(
-        "/api/v1/auth/me",
-        headers={"Authorization": f"Bearer {session_id}"}
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {session_id}"}
     )
 
     # Assert Me
@@ -199,8 +183,7 @@ async def test_me_and_logout_endpoints_success(api_client: AsyncClient, sqlite_s
 
     # Act - Logout using Bearer token
     logout_response = await api_client.post(
-        "/api/v1/auth/logout",
-        headers={"Authorization": f"Bearer {session_id}"}
+        "/api/v1/auth/logout", headers={"Authorization": f"Bearer {session_id}"}
     )
 
     # Assert Logout
@@ -209,7 +192,6 @@ async def test_me_and_logout_endpoints_success(api_client: AsyncClient, sqlite_s
 
     # Act - Me query after logout (should fail)
     me_after_logout = await api_client.get(
-        "/api/v1/auth/me",
-        headers={"Authorization": f"Bearer {session_id}"}
+        "/api/v1/auth/me", headers={"Authorization": f"Bearer {session_id}"}
     )
     assert me_after_logout.status_code == 401

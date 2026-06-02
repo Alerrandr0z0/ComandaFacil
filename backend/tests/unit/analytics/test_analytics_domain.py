@@ -1,10 +1,9 @@
 from __future__ import annotations
 
 import datetime
+from decimal import Decimal
 
 import pytest
-
-from decimal import Decimal
 
 from app.analytics.domain.enums import AnalyticsPeriod
 from app.analytics.domain.value_objects import DashboardData, DateRange

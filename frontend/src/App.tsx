@@ -1,4 +1,4 @@
-import { Routes, Route, Navigate } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 
 // Pages will be imported here as they are implemented
 const PlaceholderPage = ({ name }: { name: string }) => (

@@ -1,21 +1,26 @@
-@import 'tailwindcss';
+@import "tailwindcss";
 
-@layer base {
-  *, *::before, *::after {
-    box-sizing: border-box;
-  }
+@theme {
+  --color-brand-50: hsl(25, 100%, 97%);
+  --color-brand-100: hsl(25, 95%, 92%);
+  --color-brand-200: hsl(25, 90%, 82%);
+  --color-brand-300: hsl(25, 85%, 70%);
+  --color-brand-400: hsl(25, 80%, 58%);
+  --color-brand-500: hsl(25, 75%, 48%);
+  --color-brand-600: hsl(25, 80%, 40%);
+  --color-brand-700: hsl(25, 85%, 32%);
+  --color-brand-800: hsl(25, 90%, 24%);
+  --color-brand-900: hsl(25, 95%, 16%);
+}
 
-  html {
-    font-family: 'Inter', system-ui, sans-serif;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-  }
+body {
+  background-color: var(--color-gray-950);
+  color: var(--color-gray-100);
+  min-height: 100vh;
+}
 
-  body {
-    @apply bg-gray-950 text-gray-100 min-h-screen;
-  }
-
-  :focus-visible {
-    @apply outline-2 outline-offset-2 outline-brand-400;
-  }
+:focus-visible {
+  outline-width: 2px;
+  outline-offset: 2px;
+  outline-color: var(--color-brand-400);
 }

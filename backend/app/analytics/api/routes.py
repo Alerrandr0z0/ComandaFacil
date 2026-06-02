@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, Query
 
 from app.analytics.application.queries import (
@@ -24,7 +26,7 @@ async def get_dashboard(
     tenant_id: CurrentTenantId,
     mongo: MongoDB,
     period: AnalyticsPeriod = Query(default=AnalyticsPeriod.DAY),
-) -> dict:
+) -> dict[str, Any]:
     repo = MongoAnalyticsRepository(mongo)
     handler = GetDashboardHandler(repo)
     data = await handler.handle(GetDashboardQuery(tenant_id=tenant_id, period=period))
@@ -42,7 +44,7 @@ async def get_sales_report(
     tenant_id: CurrentTenantId,
     mongo: MongoDB,
     period: AnalyticsPeriod = Query(default=AnalyticsPeriod.DAY),
-) -> dict:
+) -> dict[str, Any]:
     repo = MongoAnalyticsRepository(mongo)
     handler = GetSalesReportHandler(repo)
     data = await handler.handle(GetSalesReportQuery(tenant_id=tenant_id, period=period))
@@ -60,7 +62,7 @@ async def get_order_insights(
     tenant_id: CurrentTenantId,
     mongo: MongoDB,
     period: AnalyticsPeriod = Query(default=AnalyticsPeriod.DAY),
-) -> dict:
+) -> dict[str, Any]:
     repo = MongoAnalyticsRepository(mongo)
     handler = GetOrderInsightsHandler(repo)
     data = await handler.handle(GetOrderInsightsQuery(tenant_id=tenant_id, period=period))
@@ -77,12 +79,10 @@ async def get_kitchen_performance(
     tenant_id: CurrentTenantId,
     mongo: MongoDB,
     period: AnalyticsPeriod = Query(default=AnalyticsPeriod.DAY),
-) -> dict:
+) -> dict[str, Any]:
     repo = MongoAnalyticsRepository(mongo)
     handler = GetKitchenPerformanceHandler(repo)
-    data = await handler.handle(
-        GetKitchenPerformanceQuery(tenant_id=tenant_id, period=period)
-    )
+    data = await handler.handle(GetKitchenPerformanceQuery(tenant_id=tenant_id, period=period))
     return {
         "period": data.period.value,
         "average_prep_time_minutes": data.average_prep_time_minutes,

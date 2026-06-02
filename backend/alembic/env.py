@@ -5,26 +5,25 @@ from sqlalchemy import pool
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
-
-# Import all ORM models so Alembic can detect them
 from app.settings import get_settings
 
-# this is the Alembic Config object
 config = context.config
 
-# Interpret the config file for Python logging
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Import metadata from all ORM models
-# Add imports here as new bounded contexts are created
-# Import all ORM models to register them with Base.metadata
-import app.auth.infrastructure.orm_models  # noqa: E402
-import app.kitchen.infrastructure.orm_models  # noqa: E402
-import app.menu.infrastructure.orm_models  # noqa: E402
-import app.order.infrastructure.orm_models  # noqa: E402
-import app.payment.infrastructure.orm_models  # noqa: E402
-import app.stock.infrastructure.orm_models  # noqa: F401, E402
+# ── Dynamic ORM model discovery ──────────────────────────────────────────
+# Every `app/{context}/infrastructure/orm_models.py` is auto-imported
+# so Alembic detects its tables. No manual import list to maintain.
+from pathlib import Path  # noqa: E402
+
+import app  # noqa: E402
+
+_context_dir = Path(app.__file__).resolve().parent
+for _orm_path in sorted(_context_dir.glob("*/infrastructure/orm_models.py")):
+    _ctx = _orm_path.parent.parent.name
+    __import__(f"app.{_ctx}.infrastructure.orm_models", fromlist=[""])
+
 from app.shared.base_orm import Base  # noqa: E402
 
 target_metadata = Base.metadata
@@ -43,6 +42,7 @@ def run_migrations_offline() -> None:
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
         compare_type=True,
+        compare_server_default=True,
     )
     with context.begin_transaction():
         context.run_migrations()
@@ -53,6 +53,7 @@ def do_run_migrations(connection):
         connection=connection,
         target_metadata=target_metadata,
         compare_type=True,
+        compare_server_default=True,
     )
     with context.begin_transaction():
         context.run_migrations()

@@ -88,6 +88,7 @@ select = [
     "TRY",  # tryceratops (exception best practices)
     "PERF", # perflint (performance anti-patterns)
     "PL",   # pylint rules (errors, conventions, refactors)
+    "C90",  # mccabe (cyclomatic complexity!)
 ]
 ignore = [
     "ANN401", # allow Any in type annotations when explicitly needed
@@ -98,12 +99,17 @@ ignore = [
     "E501",   # allow line length warnings
 ]
 
+[tool.ruff.lint.mccabe]
+max-complexity = 10
+
+
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = [
     "S101",     # assert is standard in pytest
     "ANN",      # type annotations not strictly required in unit tests
     "PLR2004",  # magic values are standard in test assertions (e.g. status_code == 200)
     "ARG001",   # unused function arguments (fixtures often work as args)
+    "ARG002",   # unused method arguments (mocks/stubs conform to signatures)
     "PT011",    # pytest.raises too strict about matching exception messages
     "DTZ",      # timezone checks can be relaxed for local mock datetimes in tests
     "S105",     # allow mock passwords in tests
@@ -119,11 +125,22 @@ ignore = [
     "S104",     # bind to all interfaces 0.0.0.0 is standard in dev server setting defaults
     "S105",     # hardcoded password strings are local development defaults
 ]
+"app/**/api/routes.py" = [
+    "TCH001",   # allow importing dependencies at runtime even if only used as type annotations
+    "TCH002",
+    "TCH003",
+]
 "app/shared/database.py" = [
     "PLW0603",  # global variables are standard for database connection pools in simple setups
 ]
 "app/shared/exceptions.py" = [
     "N818",     # exception names without 'Error' suffix is a design choice (e.g. DomainException)
+]
+"app/stock/domain/stock_movement.py" = [
+    "TC001",    # MovementType is used in dataclass fields and repr at runtime
+]
+"app/stock/infrastructure/orm_models.py" = [
+    "TC003",    # datetime needed at runtime for SQLAlchemy Mapped column type resolution
 ]
 
 [tool.ruff.lint.pylint]
@@ -142,7 +159,8 @@ exclude = [
     "**/node_modules",
     "**/__pycache__",
     "alembic/",
-    ".venv"
+    ".venv",
+    "mutants/",
 ]
 
 # Enable rigorous type checking on app/ and tests/ with pragmatic third-party overrides
@@ -195,10 +213,19 @@ fail_under = 80
 
 # ─── Mutmut ───────────────────────────────────────────────────────────────────
 [tool.mutmut]
-paths_to_mutate = "app/"
-test_command = "uv run pytest tests/unit/ -x -q"
+paths_to_mutate = ["app/payment/"]
+tests_dir = ["tests/unit/payment/"]
+also_copy = [
+    "app/__init__.py",
+    "app/settings.py",
+    "app/shared/",
+]
+debug = true
 
 [dependency-groups]
 dev = [
     "aiosqlite>=0.22.1",
 ]
+
+[tool.ruff.lint.flake8-type-checking]
+runtime-evaluated-base-classes = ["pydantic.BaseModel", "pydantic_settings.BaseSettings"]

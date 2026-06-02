@@ -152,8 +152,13 @@ async def test_request_payment_handler_duplicate_confirmed_returns_existing(
 ) -> None:
     # Arrange
     handler = RequestPaymentHandler(repo, success_gateway)
-    existing = Payment(id=10, order_id=5, tenant_id="franquia_001",
-                       amount=Money.from_float(50.0), method=PaymentMethod.CASH)
+    existing = Payment(
+        id=10,
+        order_id=5,
+        tenant_id="franquia_001",
+        amount=Money.from_float(50.0),
+        method=PaymentMethod.CASH,
+    )
     existing.confirm("ch_cash_5000")
     await repo.save(existing)
     command = RequestPaymentCommand(
@@ -179,8 +184,13 @@ async def test_refund_payment_handler_success(
 ) -> None:
     # Arrange
     handler = RefundPaymentHandler(repo, success_gateway)
-    payment = Payment(id=20, order_id=10, tenant_id="franquia_001",
-                      amount=Money.from_float(100.0), method=PaymentMethod.CREDIT_CARD)
+    payment = Payment(
+        id=20,
+        order_id=10,
+        tenant_id="franquia_001",
+        amount=Money.from_float(100.0),
+        method=PaymentMethod.CREDIT_CARD,
+    )
     payment.confirm("pi_orig_001")
     await repo.save(payment)
     command = RefundPaymentCommand(order_id=10, tenant_id="franquia_001")
@@ -212,8 +222,13 @@ async def test_refund_payment_handler_wrong_state_raises_error(
 ) -> None:
     # Arrange
     handler = RefundPaymentHandler(repo, success_gateway)
-    payment = Payment(id=30, order_id=11, tenant_id="franquia_001",
-                      amount=Money.from_float(50.0), method=PaymentMethod.PIX)
+    payment = Payment(
+        id=30,
+        order_id=11,
+        tenant_id="franquia_001",
+        amount=Money.from_float(50.0),
+        method=PaymentMethod.PIX,
+    )
     await repo.save(payment)
     command = RefundPaymentCommand(order_id=11, tenant_id="franquia_001")
 

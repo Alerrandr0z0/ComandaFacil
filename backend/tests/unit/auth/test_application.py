@@ -89,10 +89,7 @@ async def test_create_employee_success(employee_repo: InMemoryEmployeeRepository
     # Arrange
     handler = CreateEmployeeHandler(employee_repo)
     command = CreateEmployeeCommand(
-        id=1,
-        name="John Doe",
-        email="john@comandafacil.com",
-        password="secure_password_123"
+        id=1, name="John Doe", email="john@comandafacil.com", password="secure_password_123"
     )
 
     # Act
@@ -117,10 +114,7 @@ async def test_create_employee_duplicate_email(employee_repo: InMemoryEmployeeRe
     await employee_repo.save(existing_emp)
 
     command = CreateEmployeeCommand(
-        id=2,
-        name="John Doe",
-        email="john@comandafacil.com",
-        password="secure_password_123"
+        id=2, name="John Doe", email="john@comandafacil.com", password="secure_password_123"
     )
 
     # Act & Assert
@@ -130,8 +124,7 @@ async def test_create_employee_duplicate_email(employee_repo: InMemoryEmployeeRe
 
 @pytest.mark.unit
 async def test_assign_role_success(
-    employee_repo: InMemoryEmployeeRepository,
-    tenant_repo: InMemoryTenantRepository
+    employee_repo: InMemoryEmployeeRepository, tenant_repo: InMemoryTenantRepository
 ) -> None:
     # Arrange
     tenant = Tenant(id=10, name="Main Franchise", plan_type=PlanType.PRO, is_active=True)
@@ -141,11 +134,7 @@ async def test_assign_role_success(
     await employee_repo.save(employee)
 
     handler = AssignRoleHandler(employee_repo, tenant_repo)
-    command = AssignRoleCommand(
-        employee_id=1,
-        tenant_id=10,
-        role_type=RoleType.MANAGER
-    )
+    command = AssignRoleCommand(employee_id=1, tenant_id=10, role_type=RoleType.MANAGER)
 
     # Act
     await handler.handle(command)
@@ -160,19 +149,14 @@ async def test_assign_role_success(
 
 @pytest.mark.unit
 async def test_assign_role_nonexistent_employee(
-    employee_repo: InMemoryEmployeeRepository,
-    tenant_repo: InMemoryTenantRepository
+    employee_repo: InMemoryEmployeeRepository, tenant_repo: InMemoryTenantRepository
 ) -> None:
     # Arrange
     tenant = Tenant(id=10, name="Main Franchise", plan_type=PlanType.PRO, is_active=True)
     await tenant_repo.save(tenant)
 
     handler = AssignRoleHandler(employee_repo, tenant_repo)
-    command = AssignRoleCommand(
-        employee_id=99,
-        tenant_id=10,
-        role_type=RoleType.MANAGER
-    )
+    command = AssignRoleCommand(employee_id=99, tenant_id=10, role_type=RoleType.MANAGER)
 
     # Act & Assert
     with pytest.raises(DomainException, match="Employee not found"):
@@ -181,19 +165,14 @@ async def test_assign_role_nonexistent_employee(
 
 @pytest.mark.unit
 async def test_assign_role_nonexistent_tenant(
-    employee_repo: InMemoryEmployeeRepository,
-    tenant_repo: InMemoryTenantRepository
+    employee_repo: InMemoryEmployeeRepository, tenant_repo: InMemoryTenantRepository
 ) -> None:
     # Arrange
     employee = Employee.create(1, "John Doe", Email("john@comandafacil.com"), "pass")
     await employee_repo.save(employee)
 
     handler = AssignRoleHandler(employee_repo, tenant_repo)
-    command = AssignRoleCommand(
-        employee_id=1,
-        tenant_id=99,
-        role_type=RoleType.MANAGER
-    )
+    command = AssignRoleCommand(employee_id=1, tenant_id=99, role_type=RoleType.MANAGER)
 
     # Act & Assert
     with pytest.raises(DomainException, match="Tenant not found"):
@@ -204,7 +183,7 @@ async def test_assign_role_nonexistent_tenant(
 async def test_login_success(
     employee_repo: InMemoryEmployeeRepository,
     tenant_repo: InMemoryTenantRepository,
-    session_repo: InMemorySessionRepository
+    session_repo: InMemorySessionRepository,
 ) -> None:
     # Arrange
     tenant = Tenant(id=10, name="Main Franchise", plan_type=PlanType.PRO, is_active=True)
@@ -215,11 +194,7 @@ async def test_login_success(
     await employee_repo.save(employee)
 
     handler = LoginHandler(employee_repo, tenant_repo, session_repo)
-    command = LoginCommand(
-        email="john@comandafacil.com",
-        password="secure_password",
-        tenant_id=10
-    )
+    command = LoginCommand(email="john@comandafacil.com", password="secure_password", tenant_id=10)
 
     # Act
     session = await handler.handle(command)
@@ -238,15 +213,11 @@ async def test_login_success(
 async def test_login_invalid_credentials(
     employee_repo: InMemoryEmployeeRepository,
     tenant_repo: InMemoryTenantRepository,
-    session_repo: InMemorySessionRepository
+    session_repo: InMemorySessionRepository,
 ) -> None:
     # Arrange
     handler = LoginHandler(employee_repo, tenant_repo, session_repo)
-    command = LoginCommand(
-        email="nonexistent@comandafacil.com",
-        password="any",
-        tenant_id=10
-    )
+    command = LoginCommand(email="nonexistent@comandafacil.com", password="any", tenant_id=10)
 
     # Act & Assert
     with pytest.raises(DomainException, match="Invalid credentials"):
@@ -257,7 +228,7 @@ async def test_login_invalid_credentials(
 async def test_login_incorrect_password(
     employee_repo: InMemoryEmployeeRepository,
     tenant_repo: InMemoryTenantRepository,
-    session_repo: InMemorySessionRepository
+    session_repo: InMemorySessionRepository,
 ) -> None:
     # Arrange
     tenant = Tenant(id=10, name="Main Franchise", plan_type=PlanType.PRO, is_active=True)
@@ -267,11 +238,7 @@ async def test_login_incorrect_password(
     await employee_repo.save(employee)
 
     handler = LoginHandler(employee_repo, tenant_repo, session_repo)
-    command = LoginCommand(
-        email="john@comandafacil.com",
-        password="wrong_password",
-        tenant_id=10
-    )
+    command = LoginCommand(email="john@comandafacil.com", password="wrong_password", tenant_id=10)
 
     # Act & Assert
     with pytest.raises(DomainException, match="Invalid credentials"):
@@ -282,7 +249,7 @@ async def test_login_incorrect_password(
 async def test_login_no_role_in_tenant(
     employee_repo: InMemoryEmployeeRepository,
     tenant_repo: InMemoryTenantRepository,
-    session_repo: InMemorySessionRepository
+    session_repo: InMemorySessionRepository,
 ) -> None:
     # Arrange
     tenant = Tenant(id=10, name="Main Franchise", plan_type=PlanType.PRO, is_active=True)
@@ -295,11 +262,7 @@ async def test_login_no_role_in_tenant(
     await employee_repo.save(employee)
 
     handler = LoginHandler(employee_repo, tenant_repo, session_repo)
-    command = LoginCommand(
-        email="john@comandafacil.com",
-        password="secure_password",
-        tenant_id=10
-    )
+    command = LoginCommand(email="john@comandafacil.com", password="secure_password", tenant_id=10)
 
     # Act & Assert
     with pytest.raises(DomainException, match="No permissions in this tenant"):
@@ -310,7 +273,7 @@ async def test_login_no_role_in_tenant(
 async def test_login_inactive_tenant(
     employee_repo: InMemoryEmployeeRepository,
     tenant_repo: InMemoryTenantRepository,
-    session_repo: InMemorySessionRepository
+    session_repo: InMemorySessionRepository,
 ) -> None:
     # Arrange
     tenant = Tenant(id=10, name="Main Franchise", plan_type=PlanType.PRO, is_active=False)
@@ -321,11 +284,7 @@ async def test_login_inactive_tenant(
     await employee_repo.save(employee)
 
     handler = LoginHandler(employee_repo, tenant_repo, session_repo)
-    command = LoginCommand(
-        email="john@comandafacil.com",
-        password="secure_password",
-        tenant_id=10
-    )
+    command = LoginCommand(email="john@comandafacil.com", password="secure_password", tenant_id=10)
 
     # Act & Assert
     with pytest.raises(DomainException, match="Tenant is inactive"):
@@ -335,7 +294,12 @@ async def test_login_inactive_tenant(
 @pytest.mark.unit
 async def test_logout_success(session_repo: InMemorySessionRepository) -> None:
     # Arrange
-    session = Session(session_id="token123", employee_id=1, tenant_id=10, expires_at=datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1))
+    session = Session(
+        session_id="token123",
+        employee_id=1,
+        tenant_id=10,
+        expires_at=datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1),
+    )
     await session_repo.save(session)
 
     handler = LogoutHandler(session_repo)
@@ -369,7 +333,12 @@ async def test_get_employee_query(employee_repo: InMemoryEmployeeRepository) -> 
 @pytest.mark.unit
 async def test_get_session_query(session_repo: InMemorySessionRepository) -> None:
     # Arrange
-    session = Session(session_id="token123", employee_id=1, tenant_id=10, expires_at=datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1))
+    session = Session(
+        session_id="token123",
+        employee_id=1,
+        tenant_id=10,
+        expires_at=datetime.datetime.now(datetime.UTC) + datetime.timedelta(hours=1),
+    )
     await session_repo.save(session)
 
     handler = GetSessionHandler(session_repo)

@@ -1,0 +1,1 @@
+{"root":["./src/App.tsx","./src/main.tsx","./src/vite-env.d.ts","./src/shared/lib/api-client.ts","./src/shared/lib/query-client.ts","./tests/setup.ts","./tests/e2e/flows/add-item.spec.ts","./tests/e2e/flows/close-bill.spec.ts","./tests/e2e/flows/open-order.spec.ts","./tests/property/order-price.test.ts"],"version":"6.0.3"}

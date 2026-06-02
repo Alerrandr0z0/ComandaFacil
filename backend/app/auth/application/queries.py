@@ -13,6 +13,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class GetEmployeeQuery:
     """Query to fetch an Employee by their email."""
+
     email: str
 
     def __repr__(self) -> str:
@@ -37,6 +38,7 @@ class GetEmployeeHandler:
 @dataclass(frozen=True)
 class GetSessionQuery:
     """Query to fetch a Session by its session ID."""
+
     session_id: str
 
     def __repr__(self) -> str:

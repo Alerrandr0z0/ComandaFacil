@@ -1,45 +1,47 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING
 
 from app.analytics.domain.enums import AnalyticsPeriod
-from app.analytics.domain.repository import AnalyticsRepository
-from app.analytics.domain.value_objects import (
-    DashboardData,
-    DateRange,
-    KitchenPerformance,
-    OrderInsights,
-    SalesReportData,
-)
+
+if TYPE_CHECKING:
+    from app.analytics.domain.repository import AnalyticsRepository
+    from app.analytics.domain.value_objects import (
+        DashboardData,
+        DateRange,
+        KitchenPerformance,
+        OrderInsights,
+        SalesReportData,
+    )
 
 
 @dataclass(frozen=True)
 class GetDashboardQuery:
     tenant_id: str
     period: AnalyticsPeriod = AnalyticsPeriod.DAY
-    date_range: Optional[DateRange] = None
+    date_range: DateRange | None = None
 
 
 @dataclass(frozen=True)
 class GetSalesReportQuery:
     tenant_id: str
     period: AnalyticsPeriod = AnalyticsPeriod.DAY
-    date_range: Optional[DateRange] = None
+    date_range: DateRange | None = None
 
 
 @dataclass(frozen=True)
 class GetOrderInsightsQuery:
     tenant_id: str
     period: AnalyticsPeriod = AnalyticsPeriod.DAY
-    date_range: Optional[DateRange] = None
+    date_range: DateRange | None = None
 
 
 @dataclass(frozen=True)
 class GetKitchenPerformanceQuery:
     tenant_id: str
     period: AnalyticsPeriod = AnalyticsPeriod.DAY
-    date_range: Optional[DateRange] = None
+    date_range: DateRange | None = None
 
 
 class GetDashboardHandler:

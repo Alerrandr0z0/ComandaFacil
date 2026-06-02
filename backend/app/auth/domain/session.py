@@ -16,7 +16,9 @@ class Session:
         expires_at: Expiration timestamp.
     """
 
-    def __init__(self, session_id: str, employee_id: int, tenant_id: int, expires_at: datetime.datetime) -> None:
+    def __init__(
+        self, session_id: str, employee_id: int, tenant_id: int, expires_at: datetime.datetime
+    ) -> None:
         self.session_id: Final[str] = session_id
         self.employee_id: Final[int] = employee_id
         self.tenant_id: Final[int] = tenant_id

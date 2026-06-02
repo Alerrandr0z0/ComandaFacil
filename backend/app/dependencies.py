@@ -54,8 +54,7 @@ http_bearer = HTTPBearer(auto_error=False)
 
 
 async def get_current_session(
-    db: DbSession,
-    credentials: HTTPAuthorizationCredentials | None = Depends(http_bearer)
+    db: DbSession, credentials: HTTPAuthorizationCredentials | None = Depends(http_bearer)
 ) -> Session:
     """Dependency: gets and validates the current stateful session from database."""
     if not credentials or not credentials.credentials:
@@ -77,8 +76,7 @@ CurrentSession = Annotated[Session, Depends(get_current_session)]
 
 
 async def get_current_employee(
-    db: DbSession,
-    session: Session = Depends(get_current_session)
+    db: DbSession, session: Session = Depends(get_current_session)
 ) -> Employee:
     """Dependency: gets the authenticated Employee aggregate for the current session."""
     employee_repo = SQLAlchemyEmployeeRepository(db)

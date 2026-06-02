@@ -3,12 +3,12 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 
 from app.payment.domain.enums import PaymentMethod, PaymentStatus
 from app.payment.domain.payment import Payment
 from app.shared.money import Money
-
 
 TENANT_IDS = st.sampled_from(["franquia_001", "franquia_002", "franquia_003"])
 AMOUNTS = st.decimals(min_value=Decimal("0.01"), max_value=Decimal("10000.00"), places=2)
@@ -131,9 +131,7 @@ def test_payment_terminal_state_invariant_property(
 
 @pytest.mark.hypothesis
 @given(amount=AMOUNTS, reason=FAIL_REASONS)
-def test_payment_failed_mutual_exclusion_property(
-    amount: Decimal, reason: str
-) -> None:
+def test_payment_failed_mutual_exclusion_property(amount: Decimal, reason: str) -> None:
     # Arrange
     payment = _make_payment(amount_val=amount)
     payment.fail(reason)
@@ -146,9 +144,7 @@ def test_payment_failed_mutual_exclusion_property(
 
 @pytest.mark.hypothesis
 @given(amount=AMOUNTS, ref=TXN_REFS)
-def test_payment_confirmed_mutual_exclusion_property(
-    amount: Decimal, ref: str
-) -> None:
+def test_payment_confirmed_mutual_exclusion_property(amount: Decimal, ref: str) -> None:
     # Arrange
     payment = _make_payment(amount_val=amount)
     payment.confirm(ref)
@@ -165,7 +161,9 @@ def test_payment_unique_instances_independent_property(
     amount_1: Decimal, amount_2: Decimal, ref: str
 ) -> None:
     # Arrange — two independent payments
-    p1 = _make_payment(payment_id=1, order_id=1, amount_val=amount_1, method=PaymentMethod.CREDIT_CARD)
+    p1 = _make_payment(
+        payment_id=1, order_id=1, amount_val=amount_1, method=PaymentMethod.CREDIT_CARD
+    )
     p2 = _make_payment(payment_id=2, order_id=2, amount_val=amount_2, method=PaymentMethod.PIX)
 
     # Act — different transitions on each

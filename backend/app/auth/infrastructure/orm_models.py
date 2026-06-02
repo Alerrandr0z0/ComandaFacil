@@ -11,6 +11,7 @@ from app.shared.base_orm import Base
 
 class TenantORM(Base):
     """SQLAlchemy model for tenants table."""
+
     __tablename__ = "tenants"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -29,6 +30,7 @@ class TenantORM(Base):
 
 class EmployeeORM(Base):
     """SQLAlchemy model for employees table."""
+
     __tablename__ = "employees"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -47,11 +49,16 @@ class EmployeeORM(Base):
 
 class UserTenantRoleORM(Base):
     """SQLAlchemy model for user_tenant_roles table."""
+
     __tablename__ = "user_tenant_roles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
-    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False
+    )
     role_type: Mapped[str] = mapped_column(String(50), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     assigned_at: Mapped[datetime.datetime] = mapped_column(
@@ -68,11 +75,16 @@ class UserTenantRoleORM(Base):
 
 class SessionORM(Base):
     """SQLAlchemy model for sessions table."""
+
     __tablename__ = "sessions"
 
     session_id: Mapped[str] = mapped_column(String(255), primary_key=True)
-    employee_id: Mapped[int] = mapped_column(ForeignKey("employees.id", ondelete="CASCADE"), nullable=False)
-    tenant_id: Mapped[int] = mapped_column(ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False)
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False
+    )
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
     expires_at: Mapped[datetime.datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     def __repr__(self) -> str:

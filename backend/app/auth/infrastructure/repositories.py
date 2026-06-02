@@ -28,10 +28,7 @@ class SQLAlchemyTenantRepository(TenantRepository):
         if not orm:
             return None
         return Tenant(
-            id=orm.id,
-            name=orm.name,
-            plan_type=PlanType(orm.plan_type),
-            is_active=orm.is_active
+            id=orm.id, name=orm.name, plan_type=PlanType(orm.plan_type), is_active=orm.is_active
         )
 
     async def save(self, tenant: Tenant) -> None:
@@ -47,7 +44,7 @@ class SQLAlchemyTenantRepository(TenantRepository):
                 id=tenant.id,
                 name=tenant.name,
                 plan_type=tenant.plan_type.value,
-                is_active=tenant.is_active
+                is_active=tenant.is_active,
             )
             self._session.add(orm)
         await self._session.flush()
@@ -60,7 +57,9 @@ class SQLAlchemyEmployeeRepository(EmployeeRepository):
         self._session = session
 
     async def find_by_id(self, id: int) -> Employee | None:
-        stmt = select(EmployeeORM).where(EmployeeORM.id == id).options(selectinload(EmployeeORM.roles))
+        stmt = (
+            select(EmployeeORM).where(EmployeeORM.id == id).options(selectinload(EmployeeORM.roles))
+        )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
         if not orm:
@@ -68,7 +67,11 @@ class SQLAlchemyEmployeeRepository(EmployeeRepository):
         return self._map_to_domain(orm)
 
     async def find_by_email(self, email: Email) -> Employee | None:
-        stmt = select(EmployeeORM).where(EmployeeORM.email == str(email)).options(selectinload(EmployeeORM.roles))
+        stmt = (
+            select(EmployeeORM)
+            .where(EmployeeORM.email == str(email))
+            .options(selectinload(EmployeeORM.roles))
+        )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
         if not orm:
@@ -76,7 +79,11 @@ class SQLAlchemyEmployeeRepository(EmployeeRepository):
         return self._map_to_domain(orm)
 
     async def save(self, employee: Employee) -> None:
-        stmt = select(EmployeeORM).where(EmployeeORM.id == employee.id).options(selectinload(EmployeeORM.roles))
+        stmt = (
+            select(EmployeeORM)
+            .where(EmployeeORM.id == employee.id)
+            .options(selectinload(EmployeeORM.roles))
+        )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
 
@@ -92,7 +99,7 @@ class SQLAlchemyEmployeeRepository(EmployeeRepository):
                 id=employee.id,
                 name=employee.name,
                 email=str(employee.email),
-                password_hash=employee.password_hash
+                password_hash=employee.password_hash,
             )
             self._session.add(orm)
 
@@ -103,7 +110,7 @@ class SQLAlchemyEmployeeRepository(EmployeeRepository):
                 tenant_id=role.tenant_id,
                 employee_id=employee.id,
                 role_type=role.role_type.value,
-                is_active=role.is_active
+                is_active=role.is_active,
             )
             orm.roles.append(role_orm)
 
@@ -111,10 +118,7 @@ class SQLAlchemyEmployeeRepository(EmployeeRepository):
 
     def _map_to_domain(self, orm: EmployeeORM) -> Employee:
         employee = Employee(
-            id=orm.id,
-            name=orm.name,
-            email=Email(orm.email),
-            password_hash=orm.password_hash
+            id=orm.id, name=orm.name, email=Email(orm.email), password_hash=orm.password_hash
         )
         # Map roles list
         for r_orm in orm.roles:
@@ -123,7 +127,7 @@ class SQLAlchemyEmployeeRepository(EmployeeRepository):
                 tenant_id=r_orm.tenant_id,
                 employee_id=r_orm.employee_id,
                 role_type=RoleType(r_orm.role_type),
-                is_active=r_orm.is_active
+                is_active=r_orm.is_active,
             )
             # Use private list extension or standard append since aggregate handles it
             employee.roles.append(role)
@@ -146,7 +150,7 @@ class SQLAlchemySessionRepository(SessionRepository):
             session_id=orm.session_id,
             employee_id=orm.employee_id,
             tenant_id=orm.tenant_id,
-            expires_at=orm.expires_at
+            expires_at=orm.expires_at,
         )
 
     async def save(self, session: Session) -> None:
@@ -162,7 +166,7 @@ class SQLAlchemySessionRepository(SessionRepository):
                 session_id=session.session_id,
                 employee_id=session.employee_id,
                 tenant_id=session.tenant_id,
-                expires_at=session.expires_at
+                expires_at=session.expires_at,
             )
             self._session.add(orm)
         await self._session.flush()

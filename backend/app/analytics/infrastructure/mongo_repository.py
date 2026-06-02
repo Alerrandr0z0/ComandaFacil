@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import TYPE_CHECKING, Any
 
-from motor.motor_asyncio import AsyncIOMotorDatabase
+if TYPE_CHECKING:
+    from motor.motor_asyncio import AsyncIOMotorDatabase
 
 from app.analytics.domain.enums import AnalyticsPeriod
 from app.analytics.domain.value_objects import (
@@ -17,24 +18,21 @@ from app.analytics.domain.value_objects import (
 
 
 class MongoAnalyticsRepository:
-    def __init__(self, db: AsyncIOMotorDatabase) -> None:
+    def __init__(self, db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
         self._db = db
 
     async def get_dashboard(
         self,
         tenant_id: str,
-        period: AnalyticsPeriod = AnalyticsPeriod.DAY,
-        date_range: Optional[DateRange] = None,
+        period: AnalyticsPeriod = AnalyticsPeriod.DAY,  # noqa: ARG002
+        date_range: DateRange | None = None,  # noqa: ARG002
     ) -> DashboardData:
         orders_coll = self._db["orders_read"]
-        payments_coll = self._db["payments_read"]
         stock_coll = self._db["stock_read"]
         kitchen_coll = self._db["kitchen_read"]
 
-        now = datetime.now(timezone.utc)
-
-        pipe: list[dict] = [
-            {"$match": {"tenant_id": tenant_id, "created_at": {"$gte": now.replace(hour=0, minute=0, second=0, microsecond=0)}}},
+        pipe: list[dict[str, Any]] = [
+            {"$match": {"tenant_id": tenant_id, "created_at": {"$gte": datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)}}},
             {
                 "$group": {
                     "_id": None,
@@ -46,20 +44,14 @@ class MongoAnalyticsRepository:
         ]
         order_stats = await orders_coll.aggregate(pipe).to_list(None)
 
-        low_stock = await stock_coll.count_documents(
-            {"tenant_id": tenant_id, "is_low_stock": True}
-        )
+        low_stock = await stock_coll.count_documents({"tenant_id": tenant_id, "is_low_stock": True})
 
-        prep_pipe: list[dict] = [
+        prep_pipe: list[dict[str, Any]] = [
             {"$match": {"tenant_id": tenant_id, "completed_at": {"$ne": None}}},
             {
                 "$group": {
                     "_id": None,
-                    "avg_prep_time": {
-                        "$avg": {
-                            "$subtract": ["$completed_at", "$started_at"]
-                        }
-                    },
+                    "avg_prep_time": {"$avg": {"$subtract": ["$completed_at", "$started_at"]}},
                 }
             },
         ]
@@ -85,16 +77,15 @@ class MongoAnalyticsRepository:
         self,
         tenant_id: str,
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
-        date_range: Optional[DateRange] = None,
+        date_range: DateRange | None = None,
     ) -> SalesReportData:
         orders_coll = self._db["orders_read"]
-        now = datetime.now(timezone.utc)
 
-        match: dict = {"tenant_id": tenant_id}
+        match: dict[str, Any] = {"tenant_id": tenant_id}
         if date_range:
             match["created_at"] = {"$gte": date_range.start, "$lte": date_range.end}
 
-        pipe: list[dict] = [
+        pipe: list[dict[str, Any]] = [
             {"$match": match},
             {
                 "$group": {
@@ -107,7 +98,7 @@ class MongoAnalyticsRepository:
         ]
         stats = await orders_coll.aggregate(pipe).to_list(None)
 
-        cat_pipe: list[dict] = [
+        cat_pipe: list[dict[str, Any]] = [
             {"$match": match},
             {"$unwind": "$items"},
             {
@@ -135,16 +126,15 @@ class MongoAnalyticsRepository:
         self,
         tenant_id: str,
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
-        date_range: Optional[DateRange] = None,
+        date_range: DateRange | None = None,
     ) -> OrderInsights:
         orders_coll = self._db["orders_read"]
-        now = datetime.now(timezone.utc)
 
-        match: dict = {"tenant_id": tenant_id}
+        match: dict[str, Any] = {"tenant_id": tenant_id}
         if date_range:
             match["created_at"] = {"$gte": date_range.start, "$lte": date_range.end}
 
-        pipe: list[dict] = [
+        pipe: list[dict[str, Any]] = [
             {"$match": match},
             {
                 "$group": {
@@ -172,25 +162,20 @@ class MongoAnalyticsRepository:
         self,
         tenant_id: str,
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
-        date_range: Optional[DateRange] = None,
+        date_range: DateRange | None = None,
     ) -> KitchenPerformance:
         kitchen_coll = self._db["kitchen_read"]
-        now = datetime.now(timezone.utc)
 
-        match: dict = {"tenant_id": tenant_id}
+        match: dict[str, Any] = {"tenant_id": tenant_id}
         if date_range:
             match["created_at"] = {"$gte": date_range.start, "$lte": date_range.end}
 
-        pipe: list[dict] = [
+        pipe: list[dict[str, Any]] = [
             {"$match": match},
             {
                 "$group": {
                     "_id": None,
-                    "avg_prep_time": {
-                        "$avg": {
-                            "$subtract": ["$completed_at", "$started_at"]
-                        }
-                    },
+                    "avg_prep_time": {"$avg": {"$subtract": ["$completed_at", "$started_at"]}},
                     "total_prepared": {"$sum": 1},
                     "completed": {"$sum": {"$cond": [{"$eq": ["$state", "DONE"]}, 1, 0]}},
                 }

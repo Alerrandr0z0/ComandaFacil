@@ -17,6 +17,7 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class CreateEmployeeCommand:
     """Command data to create a new Employee."""
+
     id: int
     name: str
     email: str
@@ -40,10 +41,7 @@ class CreateEmployeeHandler:
             raise DomainException("Email already registered", status_code=409)
 
         employee = Employee.create(
-            id=command.id,
-            name=command.name,
-            email=email_vo,
-            password=command.password
+            id=command.id, name=command.name, email=email_vo, password=command.password
         )
         await self._employee_repo.save(employee)
         return employee
@@ -55,6 +53,7 @@ class CreateEmployeeHandler:
 @dataclass(frozen=True)
 class AssignRoleCommand:
     """Command data to assign a role to an Employee within a Tenant franchise."""
+
     employee_id: int
     tenant_id: int
     role_type: RoleType
@@ -90,6 +89,7 @@ class AssignRoleHandler:
 @dataclass(frozen=True)
 class LoginCommand:
     """Command data to perform user login."""
+
     email: str
     password: str
     tenant_id: int
@@ -105,7 +105,7 @@ class LoginHandler:
         self,
         employee_repo: EmployeeRepository,
         tenant_repo: TenantRepository,
-        session_repo: SessionRepository
+        session_repo: SessionRepository,
     ) -> None:
         self._employee_repo: Final[EmployeeRepository] = employee_repo
         self._tenant_repo: Final[TenantRepository] = tenant_repo
@@ -138,7 +138,7 @@ class LoginHandler:
             session_id=session_id,
             employee_id=employee.id,
             tenant_id=tenant.id,
-            expires_at=expires_at
+            expires_at=expires_at,
         )
 
         await self._session_repo.save(session)
@@ -151,6 +151,7 @@ class LoginHandler:
 @dataclass(frozen=True)
 class LogoutCommand:
     """Command data to perform user logout."""
+
     session_id: str
 
     def __repr__(self) -> str:

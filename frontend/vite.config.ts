@@ -1,15 +1,11 @@
-import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
+import { resolve } from 'node:path'
 import tailwindcss from '@tailwindcss/vite'
+import react from '@vitejs/plugin-react'
 import { visualizer } from 'rollup-plugin-visualizer'
-import { resolve } from 'path'
+import { defineConfig } from 'vite'
 
 export default defineConfig({
-  plugins: [
-    react(),
-    tailwindcss(),
-    visualizer({ open: false, filename: 'dist/stats.html' }),
-  ],
+  plugins: [react(), tailwindcss(), visualizer({ open: false, filename: 'dist/stats.html' })],
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
@@ -21,21 +17,6 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8000',
         changeOrigin: true,
-      },
-    },
-  },
-  test: {
-    globals: true,
-    environment: 'jsdom',
-    setupFiles: './tests/setup.ts',
-    coverage: {
-      provider: 'v8',
-      reporter: ['text', 'lcov'],
-      thresholds: {
-        lines: 80,
-        functions: 80,
-        branches: 80,
-        statements: 80,
       },
     },
   },

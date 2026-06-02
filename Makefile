@@ -15,7 +15,8 @@
         migrate migrate-new migrate-down \
         types-gen \
         hooks \
-        e2e
+        e2e \
+        graph-gen graph-show
 
 # --- Default ---
 help:
@@ -58,6 +59,8 @@ help:
 	@echo ""
 	@echo "Geração:"
 	@echo "  types-gen         Gera tipos TypeScript a partir do schema OpenAPI do FastAPI"
+	@echo "  graph-gen         Gera o Grafo de Conhecimento com Graphify"
+	@echo "  graph-show        Abre o visualizador do Grafo no navegador"
 
 # ─── Setup ────────────────────────────────────────────────────────────────────
 
@@ -69,7 +72,7 @@ setup-back:
 	cd backend && uv run pre-commit install
 
 setup-front:
-	cd frontend && npm install
+	cd frontend && npm install --legacy-peer-deps
 
 # ─── Infraestrutura ───────────────────────────────────────────────────────────
 
@@ -185,14 +188,19 @@ mutation-back:
 
 mutation-incr:
 	@if [ -z "$(PATHS)" ]; then \
-		echo "Uso: make mutation-incr PATHS='app/order/...' [TESTS='tests/unit/order/...']"; \
+		echo "Uso: make mutation-incr PATHS='app/auth/...' [TESTS='tests/unit/auth/']"; \
 		exit 1; \
 	fi
 	cd backend && rm -rf mutants .mutmut-cache
-	cd backend && uv run mutmut run \
-		--paths-to-mutate $(PATHS) \
-		$(if $(TESTS),--tests-dir $(TESTS),) \
-		--max-children 4
+	cd backend && \
+		_BACKUP=$$(mktemp) && \
+		cp pyproject.toml $$_BACKUP && \
+		sed -i "s|^paths_to_mutate = .*|paths_to_mutate = [\"$(PATHS)\"]|" pyproject.toml && \
+		$(if $(TESTS),sed -i "s|^tests_dir = .*|tests_dir = [\"$(TESTS)\"]|" pyproject.toml,) && \
+		uv run mutmut run --max-children 4; \
+		_EXIT=$$?; \
+		mv $$_BACKUP pyproject.toml; \
+		exit $$_EXIT
 	-cd backend && uv run mutmut results --no-pager 2>/dev/null | tail -10
 
 mutation-score:
@@ -223,3 +231,15 @@ types-gen:
 	cd frontend && npx openapi-typescript http://localhost:8000/openapi.json \
 		-o src/shared/types/api.ts
 	@echo "✅ src/shared/types/api.ts atualizado!"
+
+# ─── Graphify (Grafo de Conhecimento) ─────────────────────────────────────────
+
+graph-gen:
+	@echo "Gerando Grafo de Conhecimento do projeto..."
+	graphify .
+	@echo "✅ Grafo gerado com sucesso em graphify-out/"
+
+graph-show:
+	@echo "Abrindo o visualizador do Grafo no navegador..."
+	xdg-open graphify-out/graph.html || open graphify-out/graph.html
+
