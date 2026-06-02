@@ -85,3 +85,9 @@ api/       → thin FastAPI routes, delegates to application
 
 ## CI Pipeline (`.github/workflows/ci.yml`)
 Runs on push/PR to `main`. Backend: ruff lint + format check → pyright → complexipy → bandit → pytest. Frontend: biome lint → tsc → vitest.
+
+## Relatório Técnico
+- `RELATORIO_TECNICO.docx` — gerado via Pandoc + Mermaid CLI (mmdc + Puppeteer Chromium)
+- `RELATORIO_TECNICO_IMAGENS.md` — markdown fonte com PNG embutidos
+- `diagramas/` — arquivos .mmd, .svg, .png dos diagramas
+- Comando para regenerar: `pandoc RELATORIO_TECNICO_IMAGENS.md -o RELATORIO_TECNICO.docx --from=gfm --to=docx --resource-path=.`
