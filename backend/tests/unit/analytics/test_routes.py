@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-from decimal import Decimal
 from typing import Any
 
 import pytest
+from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
-
-from app.analytics.domain.value_objects import DashboardData
-from app.dependencies import mongo_db
-from app.main import app
 
 
 class FakeCursor:
@@ -26,7 +22,7 @@ class FakeMongoCollection:
     def aggregate(self, pipeline: list[dict]) -> FakeCursor:
         return FakeCursor(self._data)
 
-    async def count_documents(self, filter: dict) -> int:  # noqa: A002
+    async def count_documents(self, filter: dict) -> int:
         return 5
 
 
@@ -54,17 +50,25 @@ def fake_mongo() -> FakeMongoDB:
 
 @pytest.fixture
 async def api_client(fake_mongo: FakeMongoDB) -> AsyncClient:
+    from app.analytics.api.routes import router
+    from app.dependencies import get_current_tenant_id, mongo_db
+
+    test_app = FastAPI()
+    test_app.include_router(router, prefix="/api/v1")
+
     async def override_mongo() -> FakeMongoDB:
         return fake_mongo
 
-    app.dependency_overrides[mongo_db] = override_mongo
+    def override_tenant_id() -> str:
+        return "t1"
+
+    test_app.dependency_overrides[mongo_db] = override_mongo
+    test_app.dependency_overrides[get_current_tenant_id] = override_tenant_id
     async with AsyncClient(
-        transport=ASGITransport(app=app),
+        transport=ASGITransport(app=test_app),
         base_url="http://test",
-        headers={"X-Tenant-ID": "t1"},
     ) as ac:
         yield ac
-    app.dependency_overrides.clear()
 
 
 @pytest.mark.unit
@@ -88,7 +92,7 @@ async def test_get_dashboard_when_no_data_then_returns_zeros(
     fake_mongo: FakeMongoDB,
 ) -> None:
     # Arrange
-    fake_mongo._dashboard_data = []  # noqa: SLF001
+    fake_mongo._dashboard_data = []
     fake_mongo._kitchen_data = []
 
     # Act
