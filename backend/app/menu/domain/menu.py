@@ -57,11 +57,13 @@ class Menu:
     def __init__(
         self,
         id: int,
+        tenant_id: str,
         name: str,
         description: str = "",
         is_active: bool = True,
     ) -> None:
         self.id: Final[int] = id
+        self.tenant_id: Final[str] = tenant_id
         self.name: str = name
         self.description: str = description
         self.is_active: bool = is_active
@@ -110,13 +112,13 @@ class Menu:
 
 class MenuRepository(ABC):
     @abstractmethod
-    async def find_by_id(self, id: int) -> Menu | None: ...
+    async def find_by_id(self, id: int, tenant_id: str) -> Menu | None: ...
 
     @abstractmethod
-    async def find_all(self) -> list[Menu]: ...
+    async def find_all(self, tenant_id: str) -> list[Menu]: ...
 
     @abstractmethod
     async def save(self, menu: Menu) -> None: ...
 
     @abstractmethod
-    async def delete(self, id: int) -> None: ...
+    async def delete(self, id: int, tenant_id: str) -> None: ...

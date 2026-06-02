@@ -15,6 +15,7 @@ class MenuReadModelSync:
     async def sync(self, menu: Menu) -> None:
         doc = {
             "menu_id": menu.id,
+            "tenant_id": menu.tenant_id,
             "name": menu.name,
             "description": menu.description,
             "is_active": menu.is_active,

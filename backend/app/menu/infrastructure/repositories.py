@@ -19,22 +19,34 @@ class SQLAlchemyMenuRepository(MenuRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def find_by_id(self, id: int) -> Menu | None:
-        stmt = select(MenuORM).where(MenuORM.id == id).options(selectinload(MenuORM.items))
+    async def find_by_id(self, id: int, tenant_id: str) -> Menu | None:
+        stmt = (
+            select(MenuORM)
+            .where(MenuORM.id == id, MenuORM.tenant_id == tenant_id)
+            .options(selectinload(MenuORM.items))
+        )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
         if not orm:
             return None
         return self._map_to_domain(orm)
 
-    async def find_all(self) -> list[Menu]:
-        stmt = select(MenuORM).options(selectinload(MenuORM.items))
+    async def find_all(self, tenant_id: str) -> list[Menu]:
+        stmt = (
+            select(MenuORM)
+            .where(MenuORM.tenant_id == tenant_id)
+            .options(selectinload(MenuORM.items))
+        )
         result = await self._session.execute(stmt)
         orms = result.scalars().all()
         return [self._map_to_domain(o) for o in orms]
 
     async def save(self, menu: Menu) -> None:
-        stmt = select(MenuORM).where(MenuORM.id == menu.id).options(selectinload(MenuORM.items))
+        stmt = (
+            select(MenuORM)
+            .where(MenuORM.id == menu.id, MenuORM.tenant_id == menu.tenant_id)
+            .options(selectinload(MenuORM.items))
+        )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
 
@@ -46,6 +58,7 @@ class SQLAlchemyMenuRepository(MenuRepository):
         else:
             orm = MenuORM(
                 id=menu.id,
+                tenant_id=menu.tenant_id,
                 name=menu.name,
                 description=menu.description,
                 is_active=menu.is_active,
@@ -66,8 +79,8 @@ class SQLAlchemyMenuRepository(MenuRepository):
 
         await self._session.flush()
 
-    async def delete(self, id: int) -> None:
-        stmt = select(MenuORM).where(MenuORM.id == id)
+    async def delete(self, id: int, tenant_id: str) -> None:
+        stmt = select(MenuORM).where(MenuORM.id == id, MenuORM.tenant_id == tenant_id)
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
         if orm:
@@ -77,6 +90,7 @@ class SQLAlchemyMenuRepository(MenuRepository):
     def _map_to_domain(self, orm: MenuORM) -> Menu:
         menu = Menu(
             id=orm.id,
+            tenant_id=orm.tenant_id,
             name=orm.name,
             description=orm.description,
             is_active=orm.is_active,
@@ -98,10 +112,10 @@ class SQLAlchemyPriceListRepository(PriceListRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def find_by_id(self, id: int) -> PriceList | None:
+    async def find_by_id(self, id: int, tenant_id: str) -> PriceList | None:
         stmt = (
             select(PriceListORM)
-            .where(PriceListORM.id == id)
+            .where(PriceListORM.id == id, PriceListORM.tenant_id == tenant_id)
             .options(selectinload(PriceListORM.items))
         )
         result = await self._session.execute(stmt)
@@ -110,18 +124,22 @@ class SQLAlchemyPriceListRepository(PriceListRepository):
             return None
         return self._map_to_domain(orm)
 
-    async def find_active(self) -> list[PriceList]:
+    async def find_active(self, tenant_id: str) -> list[PriceList]:
         stmt = (
             select(PriceListORM)
-            .where(PriceListORM.is_active.is_(True))
+            .where(PriceListORM.is_active.is_(True), PriceListORM.tenant_id == tenant_id)
             .options(selectinload(PriceListORM.items))
         )
         result = await self._session.execute(stmt)
         orms = result.scalars().all()
         return [self._map_to_domain(o) for o in orms]
 
-    async def find_all(self) -> list[PriceList]:
-        stmt = select(PriceListORM).options(selectinload(PriceListORM.items))
+    async def find_all(self, tenant_id: str) -> list[PriceList]:
+        stmt = (
+            select(PriceListORM)
+            .where(PriceListORM.tenant_id == tenant_id)
+            .options(selectinload(PriceListORM.items))
+        )
         result = await self._session.execute(stmt)
         orms = result.scalars().all()
         return [self._map_to_domain(o) for o in orms]
@@ -129,7 +147,7 @@ class SQLAlchemyPriceListRepository(PriceListRepository):
     async def save(self, price_list: PriceList) -> None:
         stmt = (
             select(PriceListORM)
-            .where(PriceListORM.id == price_list.id)
+            .where(PriceListORM.id == price_list.id, PriceListORM.tenant_id == price_list.tenant_id)
             .options(selectinload(PriceListORM.items))
         )
         result = await self._session.execute(stmt)
@@ -145,6 +163,7 @@ class SQLAlchemyPriceListRepository(PriceListRepository):
         else:
             orm = PriceListORM(
                 id=price_list.id,
+                tenant_id=price_list.tenant_id,
                 name=price_list.name,
                 description=price_list.description,
                 is_active=price_list.is_active,
@@ -164,8 +183,8 @@ class SQLAlchemyPriceListRepository(PriceListRepository):
 
         await self._session.flush()
 
-    async def delete(self, id: int) -> None:
-        stmt = select(PriceListORM).where(PriceListORM.id == id)
+    async def delete(self, id: int, tenant_id: str) -> None:
+        stmt = select(PriceListORM).where(PriceListORM.id == id, PriceListORM.tenant_id == tenant_id)
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
         if orm:
@@ -175,6 +194,7 @@ class SQLAlchemyPriceListRepository(PriceListRepository):
     def _map_to_domain(self, orm: PriceListORM) -> PriceList:
         pl = PriceList(
             id=orm.id,
+            tenant_id=orm.tenant_id,
             name=orm.name,
             description=orm.description,
             is_active=orm.is_active,

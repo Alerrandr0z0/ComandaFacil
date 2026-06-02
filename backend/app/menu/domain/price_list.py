@@ -66,6 +66,7 @@ class PriceList:
     def __init__(
         self,
         id: int,
+        tenant_id: str,
         name: str,
         description: str = "",
         is_active: bool = True,
@@ -73,6 +74,7 @@ class PriceList:
         valid_until: datetime.datetime | None = None,
     ) -> None:
         self.id: Final[int] = id
+        self.tenant_id: Final[str] = tenant_id
         self.name: str = name
         self.description: str = description
         self.is_active: bool = is_active
@@ -127,16 +129,16 @@ class PriceList:
 
 class PriceListRepository(ABC):
     @abstractmethod
-    async def find_by_id(self, id: int) -> PriceList | None: ...
+    async def find_by_id(self, id: int, tenant_id: str) -> PriceList | None: ...
 
     @abstractmethod
-    async def find_active(self) -> list[PriceList]: ...
+    async def find_active(self, tenant_id: str) -> list[PriceList]: ...
 
     @abstractmethod
-    async def find_all(self) -> list[PriceList]: ...
+    async def find_all(self, tenant_id: str) -> list[PriceList]: ...
 
     @abstractmethod
     async def save(self, price_list: PriceList) -> None: ...
 
     @abstractmethod
-    async def delete(self, id: int) -> None: ...
+    async def delete(self, id: int, tenant_id: str) -> None: ...

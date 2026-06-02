@@ -1,26 +1,29 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Final
+from typing import TYPE_CHECKING, Any, Final
 
 if TYPE_CHECKING:
-    from app.menu.domain.menu import Menu, MenuRepository
+    from app.menu.infrastructure.mongo_read_repository import (
+        MongoMenuReadRepository,
+    )
 
 
 @dataclass(frozen=True)
 class GetMenuQuery:
     menu_id: int
+    tenant_id: str
 
     def __repr__(self) -> str:
-        return f"GetMenuQuery(menu_id={self.menu_id})"
+        return f"GetMenuQuery(menu_id={self.menu_id}, tenant_id={self.tenant_id!r})"
 
 
 class GetMenuHandler:
-    def __init__(self, menu_repo: MenuRepository) -> None:
-        self._menu_repo: Final[MenuRepository] = menu_repo
+    def __init__(self, read_repo: MongoMenuReadRepository) -> None:
+        self._read_repo: Final[MongoMenuReadRepository] = read_repo
 
-    async def handle(self, query: GetMenuQuery) -> Menu | None:
-        return await self._menu_repo.find_by_id(query.menu_id)
+    async def handle(self, query: GetMenuQuery) -> dict[str, Any] | None:
+        return await self._read_repo.find_by_id(query.menu_id, query.tenant_id)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"
@@ -28,16 +31,18 @@ class GetMenuHandler:
 
 @dataclass(frozen=True)
 class ListMenusQuery:
+    tenant_id: str
+
     def __repr__(self) -> str:
-        return "ListMenusQuery()"
+        return f"ListMenusQuery(tenant_id={self.tenant_id!r})"
 
 
 class ListMenusHandler:
-    def __init__(self, menu_repo: MenuRepository) -> None:
-        self._menu_repo: Final[MenuRepository] = menu_repo
+    def __init__(self, read_repo: MongoMenuReadRepository) -> None:
+        self._read_repo: Final[MongoMenuReadRepository] = read_repo
 
-    async def handle(self, _query: ListMenusQuery) -> list[Menu]:
-        return await self._menu_repo.find_all()
+    async def handle(self, query: ListMenusQuery) -> list[dict[str, Any]]:
+        return await self._read_repo.find_all(query.tenant_id)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"
