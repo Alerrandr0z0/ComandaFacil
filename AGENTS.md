@@ -69,6 +69,25 @@ api/       → thin FastAPI routes, delegates to application
 - Mutmut v3 uses `tests_dir` and `paths_to_mutate` in `pyproject.toml` (no CLI flags). `also_copy` lists files outside mutation scope needed by tests.
 - Never mock what you don't own; domain entities are never mocked
 
+## Frontend (`frontend/`)
+
+**Sobre `openapi-typescript`**: peer dep `typescript@^5.x` conflita com nosso `^6.0.0`. Resolvido via `overrides` em `package.json` — mantém TS 6 sem bloqueios no `npm ci`.
+
+### Rotas
+| Path | Página | Auth |
+|------|--------|:----:|
+| `/login` | Login | ❌ |
+| `/orders` | Comandas (TableGrid + OrderDraft + CheckoutFlow) | ✅ |
+| `/kitchen` | KDS (Kanban WebSocket) | ✅ |
+| `/stock` | Estoque (StockManager) | ✅ |
+| `/analytics` | Dashboard (Recharts) | ✅ |
+
+### Padrões
+- React Query para server state + Context para auth/tenant
+- Axios com interceptors (injecta `X-Tenant-ID` + `Authorization`)
+- WebSocket raw na KDS
+- Tailwind v4 dark custom (gray-950 + brand-500 + glassmorphism)
+
 ## Conventions
 
 - **Backend:** Ruff (double quotes, spaces), Pyright strict, `__repr__` on all classes
@@ -86,8 +105,19 @@ api/       → thin FastAPI routes, delegates to application
 ## CI Pipeline (`.github/workflows/ci.yml`)
 Runs on push/PR to `main`. Backend: ruff lint + format check → pyright → complexipy → bandit → pytest. Frontend: biome lint → tsc → vitest.
 
+## Problemas Conhecidos no CI
+
+| Problema | Causa | Status |
+|----------|-------|--------|
+| `openapi-typescript` falha no `npm ci` | peer dep `typescript@^5.x` vs nosso `^6.0.0` | Fix: `overrides` em `package.json` |
+| `ruff format --check` falha | Formatação não aplicada localmente | Rodar `ruff format .` antes do push |
+
 ## Relatório Técnico
 - `RELATORIO_TECNICO.docx` — gerado via Pandoc + Mermaid CLI (mmdc + Puppeteer Chromium)
 - `RELATORIO_TECNICO_IMAGENS.md` — markdown fonte com PNG embutidos
 - `diagramas/` — arquivos .mmd, .svg, .png dos diagramas
 - Comando para regenerar: `pandoc RELATORIO_TECNICO_IMAGENS.md -o RELATORIO_TECNICO.docx --from=gfm --to=docx --resource-path=.`
+
+## Logging
+
+`backend/app/shared/logging.py` — `TenantAwareJsonFormatter` + `setup_logging()`. Logs em JSON p/ stdout (não mais arquivos por tenant). ADR 002 atualizado (cloud-native).
