@@ -13,20 +13,18 @@ from app.settings import Settings
 # ─── PostgreSQL ────────────────────────────────────────────────────────────────
 
 _engine: AsyncEngine | None = None
-_session_factory: async_sessionmaker[AsyncSession] | None = None
+session_factory: async_sessionmaker[AsyncSession] | None = None
 
 
 async def init_postgres(settings: Settings) -> None:
-    global _engine, _session_factory
+    global _engine, session_factory
     _engine = create_async_engine(
         settings.database_url,
         echo=settings.app_debug,
         pool_size=10,
         max_overflow=20,
     )
-    _session_factory = async_sessionmaker(
-        _engine, expire_on_commit=False, class_=AsyncSession
-    )
+    session_factory = async_sessionmaker(_engine, expire_on_commit=False, class_=AsyncSession)
 
 
 async def close_postgres() -> None:
@@ -37,9 +35,9 @@ async def close_postgres() -> None:
 
 
 async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
-    if _session_factory is None:
+    if session_factory is None:
         raise RuntimeError("PostgreSQL not initialized. Call init_postgres() first.")
-    async with _session_factory() as session:
+    async with session_factory() as session:
         try:
             yield session
             await session.commit()
