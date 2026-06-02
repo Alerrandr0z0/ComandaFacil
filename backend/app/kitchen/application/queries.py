@@ -24,10 +24,6 @@ class GetActiveKitchenItemsHandler:
     def __init__(self, read_repo: MongoKitchenReadRepository) -> None:
         self._read_repo: Final[MongoKitchenReadRepository] = read_repo
 
-    async def handle(
-        self, query: GetActiveKitchenItemsQuery
-    ) -> list[dict[str, Any]]:
+    async def handle(self, query: GetActiveKitchenItemsQuery) -> list[dict[str, Any]]:
         """Fetches all active kitchen items for a station from the Mongo read model."""
-        return await self._read_repo.find_active_by_station(
-            query.station_type, query.tenant_id
-        )
+        return await self._read_repo.find_active_by_station(query.station_type, query.tenant_id)

@@ -64,9 +64,7 @@ class AddStockHandler:
         self._movement_repo: Final[StockMovementRepository] = movement_repo
 
     async def handle(self, command: AddStockCommand) -> StockItem:
-        item = await self._item_repo.find_by_id(
-            command.stock_item_id, command.tenant_id
-        )
+        item = await self._item_repo.find_by_id(command.stock_item_id, command.tenant_id)
         if not item:
             raise NotFoundError("StockItem", command.stock_item_id)
 
@@ -107,9 +105,7 @@ class DeductStockHandler:
         self._movement_repo: Final[StockMovementRepository] = movement_repo
 
     async def handle(self, command: DeductStockCommand) -> StockItem:
-        item = await self._item_repo.find_by_id(
-            command.stock_item_id, command.tenant_id
-        )
+        item = await self._item_repo.find_by_id(command.stock_item_id, command.tenant_id)
         if not item:
             raise NotFoundError("StockItem", command.stock_item_id)
 
@@ -148,9 +144,7 @@ class AdjustStockHandler:
         self._movement_repo: Final[StockMovementRepository] = movement_repo
 
     async def handle(self, command: AdjustStockCommand) -> StockItem:
-        item = await self._item_repo.find_by_id(
-            command.stock_item_id, command.tenant_id
-        )
+        item = await self._item_repo.find_by_id(command.stock_item_id, command.tenant_id)
         if not item:
             raise NotFoundError("StockItem", command.stock_item_id)
 
@@ -182,9 +176,7 @@ class SetMinStockLevelHandler:
         self._repo: Final[StockItemRepository] = repo
 
     async def handle(self, command: SetMinStockLevelCommand) -> StockItem:
-        item = await self._repo.find_by_id(
-            command.stock_item_id, command.tenant_id
-        )
+        item = await self._repo.find_by_id(command.stock_item_id, command.tenant_id)
         if not item:
             raise NotFoundError("StockItem", command.stock_item_id)
 

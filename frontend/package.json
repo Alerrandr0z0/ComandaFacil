@@ -22,10 +22,13 @@
     "@tanstack/react-query": "^5.56.0",
     "@tanstack/react-query-devtools": "^5.56.0",
     "axios": "^1.7.0",
+    "lucide-react": "^1.17.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.53.0",
+    "react-is": "^19.2.7",
     "react-router-dom": "^7.0.0",
+    "recharts": "^3.8.1",
     "zod": "^4.4.0"
   },
   "devDependencies": {

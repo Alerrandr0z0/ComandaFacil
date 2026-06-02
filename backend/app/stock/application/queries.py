@@ -20,9 +20,7 @@ class GetStockItemHandler:
         self._read_repo: Final[MongoStockReadRepository] = read_repo
 
     async def handle(self, query: GetStockItemQuery) -> dict[str, Any] | None:
-        return await self._read_repo.find_by_id(
-            query.stock_item_id, query.tenant_id
-        )
+        return await self._read_repo.find_by_id(query.stock_item_id, query.tenant_id)
 
 
 @dataclass(frozen=True)

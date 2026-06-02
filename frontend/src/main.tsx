@@ -5,6 +5,8 @@ import { createRoot } from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App'
 import './index.css'
+import { AuthProvider } from '@/features/auth/auth_context'
+import { TenantProvider } from '@/shared/hooks/useTenant'
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -22,7 +24,11 @@ createRoot(rootElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <App />
+        <TenantProvider>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </TenantProvider>
       </BrowserRouter>
       <ReactQueryDevtools initialIsOpen={false} />
     </QueryClientProvider>

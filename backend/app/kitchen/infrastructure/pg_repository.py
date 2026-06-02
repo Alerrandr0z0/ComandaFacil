@@ -35,7 +35,9 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
             return None
         return self._map_to_domain(orm)
 
-    async def find_by_correlation(self, correlation_id: int, tenant_id: str) -> KitchenOrder_Item | None:
+    async def find_by_correlation(
+        self, correlation_id: int, tenant_id: str
+    ) -> KitchenOrder_Item | None:
         stmt = select(KitchenOrderItemORM).where(
             KitchenOrderItemORM.correlation_id == correlation_id,
             KitchenOrderItemORM.tenant_id == tenant_id,

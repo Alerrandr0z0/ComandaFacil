@@ -46,9 +46,7 @@ class _MockCollection:
         self._filter: dict[str, Any] = {}
         self._projection: dict[str, Any] = {}
 
-    async def replace_one(
-        self, filter: dict[str, Any], doc: dict[str, Any], **kwargs: Any
-    ) -> None:
+    async def replace_one(self, filter: dict[str, Any], doc: dict[str, Any], **kwargs: Any) -> None:
         key = _doc_key(filter)
         if key:
             self._store.setdefault(self._name, {})[key] = doc

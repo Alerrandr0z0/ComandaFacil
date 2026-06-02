@@ -39,9 +39,7 @@ class StockItem:
         if quantity <= 0:
             raise ValueError(f"Quantity to deduct must be positive, got: {quantity}")
         if self.current_quantity.amount < quantity:
-            raise InsufficientStockError(
-                self.name, self.current_quantity.amount, quantity
-            )
+            raise InsufficientStockError(self.name, self.current_quantity.amount, quantity)
         new_amount = self.current_quantity.amount - quantity
         self.current_quantity = MeasuredQuantity(new_amount, self.current_quantity.unit)
 

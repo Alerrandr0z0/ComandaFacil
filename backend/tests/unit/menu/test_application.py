@@ -51,7 +51,9 @@ def menu_repo() -> InMemoryMenuRepository:
 async def test_create_menu_success(menu_repo: InMemoryMenuRepository) -> None:
     # Arrange
     handler = CreateMenuHandler(menu_repo)
-    command = CreateMenuCommand(id=1, tenant_id="test", name="Almoço", description="Cardápio do almoço")
+    command = CreateMenuCommand(
+        id=1, tenant_id="test", name="Almoço", description="Cardápio do almoço"
+    )
 
     # Act
     menu = await handler.handle(command)
@@ -164,7 +166,6 @@ async def test_toggle_menu_activate(menu_repo: InMemoryMenuRepository) -> None:
     await menu_repo.save(menu)
     handler = ToggleMenuHandler(menu_repo)
     command = ToggleMenuCommand(menu_id=1, tenant_id="test", activate=True)
-
 
     # Act
     result = await handler.handle(command)

@@ -184,7 +184,9 @@ class SQLAlchemyPriceListRepository(PriceListRepository):
         await self._session.flush()
 
     async def delete(self, id: int, tenant_id: str) -> None:
-        stmt = select(PriceListORM).where(PriceListORM.id == id, PriceListORM.tenant_id == tenant_id)
+        stmt = select(PriceListORM).where(
+            PriceListORM.id == id, PriceListORM.tenant_id == tenant_id
+        )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
         if orm:

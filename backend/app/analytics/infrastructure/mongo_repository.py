@@ -32,7 +32,14 @@ class MongoAnalyticsRepository:
         kitchen_coll = self._db["kitchen_read"]
 
         pipe: list[dict[str, Any]] = [
-            {"$match": {"tenant_id": tenant_id, "created_at": {"$gte": datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)}}},
+            {
+                "$match": {
+                    "tenant_id": tenant_id,
+                    "created_at": {
+                        "$gte": datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+                    },
+                }
+            },
             {
                 "$group": {
                     "_id": None,

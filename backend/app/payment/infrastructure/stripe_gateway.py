@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import TYPE_CHECKING
 
 import httpx
@@ -49,7 +50,7 @@ class StripeGateway:
             }
             response = await self._client.post("/v1/payment_intents", data=data)
 
-            if response.status_code == 200:
+            if response.status_code == HTTPStatus.OK:
                 res_json = response.json()
                 if res_json.get("status") == "succeeded":
                     return GatewayResponse(
@@ -89,7 +90,7 @@ class StripeGateway:
             }
             response = await self._client.post("/v1/refunds", data=data)
 
-            if response.status_code == 200:
+            if response.status_code == HTTPStatus.OK:
                 res_json = response.json()
                 return GatewayResponse(
                     success=True,

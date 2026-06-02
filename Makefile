@@ -95,7 +95,7 @@ dev:
 	@make -j2 dev-back dev-front
 
 dev-back:
-	cd backend && uv run fastapi dev app/main.py
+	cd backend && uv run uvicorn app.main:app --reload --reload-dir app
 
 dev-front:
 	cd frontend && npm run dev

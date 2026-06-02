@@ -16,7 +16,9 @@ class KitchenOrderItemRepository(ABC):
         """Finds a KitchenOrder_Item by its unique ID scoped to a tenant."""
 
     @abstractmethod
-    async def find_by_correlation(self, correlation_id: int, tenant_id: str) -> KitchenOrder_Item | None:
+    async def find_by_correlation(
+        self, correlation_id: int, tenant_id: str
+    ) -> KitchenOrder_Item | None:
         """Finds a KitchenOrder_Item by its original OrderFormItem correlation ID scoped to a tenant."""
 
     @abstractmethod

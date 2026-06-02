@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 from typing import Any
@@ -230,7 +229,9 @@ async def test_get_kitchen_when_no_data_then_returns_zeros(
     api_client: AsyncClient,
     fake_mongo: FakeMongoDB,
 ) -> None:
-    fake_mongo.set_data("orders_read", [{"total_sales": 2000.0, "orders_count": 50, "avg_ticket": 40.0}])
+    fake_mongo.set_data(
+        "orders_read", [{"total_sales": 2000.0, "orders_count": 50, "avg_ticket": 40.0}]
+    )
     fake_mongo.set_data("kitchen_read", [])
 
     response = await api_client.get("/api/v1/analytics/kitchen")

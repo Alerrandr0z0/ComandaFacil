@@ -50,7 +50,9 @@ async def mark_item_ready(
     """Transitions a kitchen order item to the READY state, scoped to tenant."""
     repo = SQLAlchemyKitchenOrderItemRepository(session)
     handler = MarkKitchenItemReadyHandler(repo)
-    updated_item = await handler.handle(MarkKitchenItemReadyCommand(item_id=id, tenant_id=tenant_id))
+    updated_item = await handler.handle(
+        MarkKitchenItemReadyCommand(item_id=id, tenant_id=tenant_id)
+    )
     background_tasks.add_task(KitchenReadModelSync(mongo).sync, updated_item)
     return {"status": "success", "state": updated_item.state.name}
 

@@ -130,7 +130,13 @@ async def test_list_stock_items_endpoint(
     for sid, name, cat in [(10, "Arroz", "RAW_MATERIAL"), (11, "Feijão", "RAW_MATERIAL")]:
         resp = await api_client.post(
             "/api/v1/stock/items",
-            json={"id": sid, "name": name, "category": cat, "current_quantity": 100.0, "unit": "kg"},
+            json={
+                "id": sid,
+                "name": name,
+                "category": cat,
+                "current_quantity": 100.0,
+                "unit": "kg",
+            },
         )
         assert resp.status_code == 201
 
@@ -152,12 +158,26 @@ async def test_list_stock_items_low_stock_filter(
     # Arrange — create via API so BackgroundTasks populate Mongo read model
     resp = await api_client.post(
         "/api/v1/stock/items",
-        json={"id": 20, "name": "Leite", "category": "RAW_MATERIAL", "current_quantity": 2.0, "unit": "l", "min_stock_level": 10.0},
+        json={
+            "id": 20,
+            "name": "Leite",
+            "category": "RAW_MATERIAL",
+            "current_quantity": 2.0,
+            "unit": "l",
+            "min_stock_level": 10.0,
+        },
     )
     assert resp.status_code == 201
     resp = await api_client.post(
         "/api/v1/stock/items",
-        json={"id": 21, "name": "Café", "category": "RAW_MATERIAL", "current_quantity": 15.0, "unit": "kg", "min_stock_level": 5.0},
+        json={
+            "id": 21,
+            "name": "Café",
+            "category": "RAW_MATERIAL",
+            "current_quantity": 15.0,
+            "unit": "kg",
+            "min_stock_level": 5.0,
+        },
     )
     assert resp.status_code == 201
 
@@ -173,11 +193,19 @@ async def test_list_stock_items_low_stock_filter(
 
 
 @pytest.mark.asyncio
-async def test_get_stock_item_endpoint(api_client: AsyncClient, sqlite_session: AsyncSession) -> None:
+async def test_get_stock_item_endpoint(
+    api_client: AsyncClient, sqlite_session: AsyncSession
+) -> None:
     # Arrange — create via API so BackgroundTasks populate Mongo read model
     resp = await api_client.post(
         "/api/v1/stock/items",
-        json={"id": 30, "name": "Sal", "category": "RAW_MATERIAL", "current_quantity": 25.0, "unit": "kg"},
+        json={
+            "id": 30,
+            "name": "Sal",
+            "category": "RAW_MATERIAL",
+            "current_quantity": 25.0,
+            "unit": "kg",
+        },
     )
     assert resp.status_code == 201
 
@@ -348,7 +376,9 @@ async def test_get_stock_movements_endpoint(
     await repo.save(item)
     await sqlite_session.commit()
 
-    await api_client.post("/api/v1/stock/items/80/add", json={"quantity": 12.0, "reason": "Reposição"})
+    await api_client.post(
+        "/api/v1/stock/items/80/add", json={"quantity": 12.0, "reason": "Reposição"}
+    )
 
     # Act
     response = await api_client.get("/api/v1/stock/items/80/movements")

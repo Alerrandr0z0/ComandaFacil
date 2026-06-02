@@ -43,7 +43,9 @@ async def test_menu_repository_lifecycle(db_session: AsyncSession) -> None:
     repo = SQLAlchemyMenuRepository(db_session)
 
     # 1. Save new menu
-    menu = Menu(id=1, tenant_id="test", name="Almoço", description="Cardápio de almoço", is_active=True)
+    menu = Menu(
+        id=1, tenant_id="test", name="Almoço", description="Cardápio de almoço", is_active=True
+    )
     item = MenuItem(
         id=10,
         name="Feijoada",

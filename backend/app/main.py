@@ -1,3 +1,4 @@
+import re
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
@@ -60,6 +61,13 @@ async def tenant_middleware(
 ) -> Response:
     """Inject tenant_id from X-Tenant-ID header into ContextVar."""
     tenant_id = request.headers.get("X-Tenant-ID", "")
+    if tenant_id and not re.match(r"^[a-zA-Z0-9_-]+$", tenant_id):
+        return JSONResponse(
+            status_code=400,
+            content={
+                "detail": "Invalid X-Tenant-ID header format. Only alphanumeric characters, hyphens, and underscores are allowed."
+            },
+        )
     token = tenant_context_var.set(tenant_id)
     try:
         response = await call_next(request)

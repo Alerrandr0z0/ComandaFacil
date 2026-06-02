@@ -31,10 +31,7 @@ class InMemoryStockItemRepository:
         return [i for i in self._items.values() if i.tenant_id == tenant_id]
 
     async def find_low_stock(self, tenant_id: str) -> list[StockItem]:
-        return [
-            i for i in self._items.values()
-            if i.tenant_id == tenant_id and i.is_low_stock
-        ]
+        return [i for i in self._items.values() if i.tenant_id == tenant_id and i.is_low_stock]
 
     async def save(self, item: StockItem) -> None:
         self._items[item.id] = item
@@ -51,12 +48,8 @@ class InMemoryStockMovementRepository:
         self._movements: list[StockMovement] = []
         self._next_id: int = 1
 
-    async def find_by_stock_item(
-        self, stock_item_id: int, tenant_id: str
-    ) -> list[StockMovement]:
-        return [
-            m for m in self._movements if m.stock_item_id == stock_item_id
-        ]
+    async def find_by_stock_item(self, stock_item_id: int, tenant_id: str) -> list[StockMovement]:
+        return [m for m in self._movements if m.stock_item_id == stock_item_id]
 
     async def save(self, movement: StockMovement) -> None:
         object.__setattr__(movement, "id", self._next_id)
@@ -233,9 +226,7 @@ async def test_deduct_stock_when_insufficient_then_raises(
     # Act & Assert
     with pytest.raises(InsufficientStockError):
         await handler.handle(
-            DeductStockCommand(
-                stock_item_id=1, tenant_id="franquia_001", quantity=100.0
-            )
+            DeductStockCommand(stock_item_id=1, tenant_id="franquia_001", quantity=100.0)
         )
 
 
@@ -253,8 +244,7 @@ async def test_adjust_stock_when_valid_then_sets_and_records(
 
     handler = AdjustStockHandler(item_repo, movement_repo)
     command = AdjustStockCommand(
-        stock_item_id=1, tenant_id="franquia_001",
-        new_quantity=8.0, reason="Contagem física"
+        stock_item_id=1, tenant_id="franquia_001", new_quantity=8.0, reason="Contagem física"
     )
 
     # Act
@@ -286,9 +276,7 @@ async def test_set_min_stock_level_when_item_exists_then_updates(
 
     # Act
     item = await handler.handle(
-        SetMinStockLevelCommand(
-            stock_item_id=1, tenant_id="franquia_001", min_stock_level=5.0
-        )
+        SetMinStockLevelCommand(stock_item_id=1, tenant_id="franquia_001", min_stock_level=5.0)
     )
 
     # Assert
@@ -309,9 +297,7 @@ async def test_get_stock_item_when_exists_then_returns(
     handler = GetStockItemHandler(item_repo)
 
     # Act
-    item = await handler.handle(
-        GetStockItemQuery(stock_item_id=1, tenant_id="franquia_001")
-    )
+    item = await handler.handle(GetStockItemQuery(stock_item_id=1, tenant_id="franquia_001"))
 
     # Assert
     assert item.id == 1
@@ -328,9 +314,7 @@ async def test_get_stock_item_when_not_found_then_returns_none(
     handler = GetStockItemHandler(item_repo)
 
     # Act
-    result = await handler.handle(
-        GetStockItemQuery(stock_item_id=999, tenant_id="franquia_001")
-    )
+    result = await handler.handle(GetStockItemQuery(stock_item_id=999, tenant_id="franquia_001"))
 
     # Assert
     assert result is None
@@ -342,12 +326,13 @@ async def test_list_stock_items_when_multiple_then_returns_all(
 ) -> None:
     # Arrange
     items = [
-        StockItem(1, "t1", "Arroz", "RAW_MATERIAL",
-                  MeasuredQuantity(10.0, MeasurementUnit.KILOGRAM)),
-        StockItem(2, "t1", "Feijão", "RAW_MATERIAL",
-                  MeasuredQuantity(5.0, MeasurementUnit.KILOGRAM)),
-        StockItem(3, "t1", "Coca", "BEVERAGE",
-                  MeasuredQuantity(20.0, MeasurementUnit.UNIT)),
+        StockItem(
+            1, "t1", "Arroz", "RAW_MATERIAL", MeasuredQuantity(10.0, MeasurementUnit.KILOGRAM)
+        ),
+        StockItem(
+            2, "t1", "Feijão", "RAW_MATERIAL", MeasuredQuantity(5.0, MeasurementUnit.KILOGRAM)
+        ),
+        StockItem(3, "t1", "Coca", "BEVERAGE", MeasuredQuantity(20.0, MeasurementUnit.UNIT)),
     ]
     for item in items:
         item_repo.add_item(item)
@@ -372,12 +357,22 @@ async def test_list_stock_items_when_low_stock_filter_then_returns_only_low(
 ) -> None:
     # Arrange
     items = [
-        StockItem(1, "t1", "Arroz", "RAW_MATERIAL",
-                  MeasuredQuantity(10.0, MeasurementUnit.KILOGRAM),
-                  min_stock_level=15.0),  # LOW
-        StockItem(2, "t1", "Feijão", "RAW_MATERIAL",
-                  MeasuredQuantity(20.0, MeasurementUnit.KILOGRAM),
-                  min_stock_level=5.0),  # OK
+        StockItem(
+            1,
+            "t1",
+            "Arroz",
+            "RAW_MATERIAL",
+            MeasuredQuantity(10.0, MeasurementUnit.KILOGRAM),
+            min_stock_level=15.0,
+        ),  # LOW
+        StockItem(
+            2,
+            "t1",
+            "Feijão",
+            "RAW_MATERIAL",
+            MeasuredQuantity(20.0, MeasurementUnit.KILOGRAM),
+            min_stock_level=5.0,
+        ),  # OK
     ]
     for item in items:
         item_repo.add_item(item)
@@ -390,9 +385,7 @@ async def test_list_stock_items_when_low_stock_filter_then_returns_only_low(
     handler = ListStockItemsHandler(item_repo)
 
     # Act
-    items = await handler.handle(
-        ListStockItemsQuery(tenant_id="t1", low_stock_only=True)
-    )
+    items = await handler.handle(ListStockItemsQuery(tenant_id="t1", low_stock_only=True))
 
     # Assert
     assert len(items) == 1
@@ -412,7 +405,10 @@ async def test_stock_service_add_and_deduct(
 
     service = StockService(item_repo, movement_repo)
     item = StockItem(
-        1, "t1", "Teste", "OTHER",
+        1,
+        "t1",
+        "Teste",
+        "OTHER",
         MeasuredQuantity(10.0, MeasurementUnit.UNIT),
     )
     item_repo.add_item(item)

@@ -23,9 +23,8 @@ class SQLAlchemyStockItemRepository:
         self._session = session
 
     async def find_by_id(self, id: int, tenant_id: str) -> StockItem | None:
-        stmt = (
-            select(StockItemORM)
-            .where(StockItemORM.id == id, StockItemORM.tenant_id == tenant_id)
+        stmt = select(StockItemORM).where(
+            StockItemORM.id == id, StockItemORM.tenant_id == tenant_id
         )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
@@ -34,9 +33,8 @@ class SQLAlchemyStockItemRepository:
         return self._map_to_domain(orm)
 
     async def find_by_name(self, name: str, tenant_id: str) -> StockItem | None:
-        stmt = (
-            select(StockItemORM)
-            .where(StockItemORM.name == name, StockItemORM.tenant_id == tenant_id)
+        stmt = select(StockItemORM).where(
+            StockItemORM.name == name, StockItemORM.tenant_id == tenant_id
         )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
@@ -95,9 +93,8 @@ class SQLAlchemyStockItemRepository:
         await self._session.flush()
 
     async def delete(self, id: int, tenant_id: str) -> None:
-        stmt = (
-            select(StockItemORM)
-            .where(StockItemORM.id == id, StockItemORM.tenant_id == tenant_id)
+        stmt = select(StockItemORM).where(
+            StockItemORM.id == id, StockItemORM.tenant_id == tenant_id
         )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
@@ -127,9 +124,7 @@ class SQLAlchemyStockMovementRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def find_by_stock_item(
-        self, stock_item_id: int, tenant_id: str
-    ) -> list[StockMovement]:
+    async def find_by_stock_item(self, stock_item_id: int, tenant_id: str) -> list[StockMovement]:
         stmt = (
             select(StockMovementORM)
             .join(

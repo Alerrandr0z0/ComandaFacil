@@ -5,6 +5,7 @@ Revises: 92630e2a4cc4
 Create Date: 2026-06-02 14:30:00.000000+00:00
 
 """
+
 from collections.abc import Sequence
 
 import sqlalchemy as sa
@@ -43,9 +44,7 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        op.f("ix_stock_items_tenant_id"), "stock_items", ["tenant_id"], unique=False
-    )
+    op.create_index(op.f("ix_stock_items_tenant_id"), "stock_items", ["tenant_id"], unique=False)
     op.create_index(
         op.f("ix_stock_items_name_tenant"),
         "stock_items",
@@ -68,9 +67,7 @@ def upgrade() -> None:
             server_default=sa.func.now(),
             nullable=False,
         ),
-        sa.ForeignKeyConstraint(
-            ["stock_item_id"], ["stock_items.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["stock_item_id"], ["stock_items.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
     op.create_index(
@@ -82,12 +79,8 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
-    op.drop_index(
-        op.f("ix_stock_movements_stock_item_id"), table_name="stock_movements"
-    )
+    op.drop_index(op.f("ix_stock_movements_stock_item_id"), table_name="stock_movements")
     op.drop_table("stock_movements")
-    op.drop_index(
-        op.f("ix_stock_items_name_tenant"), table_name="stock_items"
-    )
+    op.drop_index(op.f("ix_stock_items_name_tenant"), table_name="stock_items")
     op.drop_index(op.f("ix_stock_items_tenant_id"), table_name="stock_items")
     op.drop_table("stock_items")

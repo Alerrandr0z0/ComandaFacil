@@ -263,8 +263,13 @@ async def test_payment_service_facade_refund(
 ) -> None:
     # Arrange
     service = PaymentService(repo, success_gateway)
-    payment = Payment(id=60, order_id=30, tenant_id="franquia_001",
-                      amount=Money.from_float(150.0), method=PaymentMethod.CREDIT_CARD)
+    payment = Payment(
+        id=60,
+        order_id=30,
+        tenant_id="franquia_001",
+        amount=Money.from_float(150.0),
+        method=PaymentMethod.CREDIT_CARD,
+    )
     payment.confirm("pi_orig_002")
     await repo.save(payment)
 
@@ -282,8 +287,13 @@ async def test_refund_payment_handler_cash_skips_gateway(
 ) -> None:
     # Arrange
     handler = RefundPaymentHandler(repo, success_gateway)
-    payment = Payment(id=40, order_id=20, tenant_id="franquia_001",
-                      amount=Money.from_float(60.0), method=PaymentMethod.CASH)
+    payment = Payment(
+        id=40,
+        order_id=20,
+        tenant_id="franquia_001",
+        amount=Money.from_float(60.0),
+        method=PaymentMethod.CASH,
+    )
     payment.confirm("ch_cash_9999")
     await repo.save(payment)
     command = RefundPaymentCommand(order_id=20, tenant_id="franquia_001")
@@ -306,8 +316,13 @@ async def test_refund_payment_handler_gateway_failure_raises_error(
         success=False, gateway_ref=None, error_message="Stripe error: insufficient balance"
     )
     handler = RefundPaymentHandler(repo, fail_refund_gateway)
-    payment = Payment(id=50, order_id=25, tenant_id="franquia_001",
-                      amount=Money.from_float(200.0), method=PaymentMethod.CREDIT_CARD)
+    payment = Payment(
+        id=50,
+        order_id=25,
+        tenant_id="franquia_001",
+        amount=Money.from_float(200.0),
+        method=PaymentMethod.CREDIT_CARD,
+    )
     payment.confirm("pi_fail_001")
     await repo.save(payment)
     command = RefundPaymentCommand(order_id=25, tenant_id="franquia_001")
@@ -323,8 +338,13 @@ async def test_request_payment_handler_duplicate_refunded_returns_existing(
 ) -> None:
     # Arrange
     handler = RequestPaymentHandler(repo, success_gateway)
-    existing = Payment(id=70, order_id=35, tenant_id="franquia_001",
-                       amount=Money.from_float(30.0), method=PaymentMethod.CASH)
+    existing = Payment(
+        id=70,
+        order_id=35,
+        tenant_id="franquia_001",
+        amount=Money.from_float(30.0),
+        method=PaymentMethod.CASH,
+    )
     existing.confirm("ch_cash_7000")
     existing.refund()
     await repo.save(existing)
@@ -350,9 +370,7 @@ async def test_request_payment_handler_gateway_none_error_message(
 ) -> None:
     # Arrange
     no_msg_gateway = MockGateway(
-        charge_result=GatewayResponse(
-            success=False, gateway_ref=None, error_message=None
-        )
+        charge_result=GatewayResponse(success=False, gateway_ref=None, error_message=None)
     )
     handler = RequestPaymentHandler(repo, no_msg_gateway)
     command = RequestPaymentCommand(

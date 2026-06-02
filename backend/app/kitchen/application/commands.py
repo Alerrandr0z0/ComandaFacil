@@ -214,6 +214,8 @@ class KitchenService:
         cmd = CancelKitchenItemCommand(item_id=item_id, tenant_id=tenant_id)
         return await self._cancel_handler.handle(cmd)
 
-    async def cancelITem(self, kitchenItemId: int, session: int, tenant_id: str) -> KitchenOrder_Item:  # noqa: N802, N803, ARG002
+    async def cancelITem(  # noqa: N802
+        self, kitchenItemId: int, session: int, tenant_id: str  # noqa: N803, ARG002
+    ) -> KitchenOrder_Item:
         """Alternative signature matching Javadoc CamelCase exactly."""
         return await self.cancel_item(kitchenItemId, tenant_id)

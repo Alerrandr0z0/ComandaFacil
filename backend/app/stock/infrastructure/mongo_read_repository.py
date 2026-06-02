@@ -12,9 +12,7 @@ class MongoStockReadRepository:
     def __init__(self, db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
         self._collection = db["stock_read"]
 
-    async def find_by_id(
-        self, stock_item_id: int, tenant_id: str
-    ) -> dict[str, Any] | None:
+    async def find_by_id(self, stock_item_id: int, tenant_id: str) -> dict[str, Any] | None:
         doc = await self._collection.find_one(
             {"stock_item_id": stock_item_id, "tenant_id": tenant_id},
             {"_id": 0},

@@ -1,4 +1,3 @@
-
 from __future__ import annotations
 
 import datetime
@@ -171,7 +170,14 @@ class PassthroughTracker(AnalyticsRepository):
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
         date_range: DateRange | None = None,
     ) -> DashboardData:
-        self.captured.append({"method": "dashboard", "tenant_id": tenant_id, "period": period, "date_range": date_range})
+        self.captured.append(
+            {
+                "method": "dashboard",
+                "tenant_id": tenant_id,
+                "period": period,
+                "date_range": date_range,
+            }
+        )
         return _dashboard()
 
     async def get_sales_report(
@@ -180,7 +186,9 @@ class PassthroughTracker(AnalyticsRepository):
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
         date_range: DateRange | None = None,
     ) -> SalesReportData:
-        self.captured.append({"method": "sales", "tenant_id": tenant_id, "period": period, "date_range": date_range})
+        self.captured.append(
+            {"method": "sales", "tenant_id": tenant_id, "period": period, "date_range": date_range}
+        )
         return _sales_report()
 
     async def get_order_insights(
@@ -189,7 +197,9 @@ class PassthroughTracker(AnalyticsRepository):
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
         date_range: DateRange | None = None,
     ) -> OrderInsights:
-        self.captured.append({"method": "orders", "tenant_id": tenant_id, "period": period, "date_range": date_range})
+        self.captured.append(
+            {"method": "orders", "tenant_id": tenant_id, "period": period, "date_range": date_range}
+        )
         return _order_insights()
 
     async def get_kitchen_performance(
@@ -198,7 +208,14 @@ class PassthroughTracker(AnalyticsRepository):
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
         date_range: DateRange | None = None,
     ) -> KitchenPerformance:
-        self.captured.append({"method": "kitchen", "tenant_id": tenant_id, "period": period, "date_range": date_range})
+        self.captured.append(
+            {
+                "method": "kitchen",
+                "tenant_id": tenant_id,
+                "period": period,
+                "date_range": date_range,
+            }
+        )
         return _kitchen_performance()
 
 

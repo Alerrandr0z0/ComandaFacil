@@ -90,7 +90,9 @@ class SQLAlchemyOrderRepository(OrderRepository):
         await self._session.flush()
 
     async def delete(self, id: int, tenant_id: str) -> None:
-        stmt = select(OrderFormORM).where(OrderFormORM.id == id, OrderFormORM.tenant_id == tenant_id)
+        stmt = select(OrderFormORM).where(
+            OrderFormORM.id == id, OrderFormORM.tenant_id == tenant_id
+        )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
         if orm:

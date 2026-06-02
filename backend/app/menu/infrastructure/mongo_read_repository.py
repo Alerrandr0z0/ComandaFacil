@@ -12,9 +12,7 @@ class MongoMenuReadRepository:
     def __init__(self, db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
         self._collection = db["menu_read_models"]
 
-    async def find_by_id(
-        self, menu_id: int, tenant_id: str
-    ) -> dict[str, Any] | None:
+    async def find_by_id(self, menu_id: int, tenant_id: str) -> dict[str, Any] | None:
         doc = await self._collection.find_one(
             {"menu_id": menu_id, "tenant_id": tenant_id},
             {"_id": 0},

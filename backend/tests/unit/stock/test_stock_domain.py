@@ -36,7 +36,10 @@ def test_create_stock_item_when_valid_params_then_initializes() -> None:
 def test_add_stock_when_positive_quantity_then_increases() -> None:
     # Arrange
     item = StockItem(
-        1, "t1", "Tomate", "RAW_MATERIAL",
+        1,
+        "t1",
+        "Tomate",
+        "RAW_MATERIAL",
         MeasuredQuantity(5.0, MeasurementUnit.KILOGRAM),
     )
 
@@ -50,7 +53,10 @@ def test_add_stock_when_positive_quantity_then_increases() -> None:
 def test_add_stock_when_zero_or_negative_then_raises() -> None:
     # Arrange
     item = StockItem(
-        1, "t1", "Tomate", "RAW_MATERIAL",
+        1,
+        "t1",
+        "Tomate",
+        "RAW_MATERIAL",
         MeasuredQuantity(5.0, MeasurementUnit.KILOGRAM),
     )
 
@@ -65,7 +71,10 @@ def test_add_stock_when_zero_or_negative_then_raises() -> None:
 def test_deduct_stock_when_sufficient_then_decreases() -> None:
     # Arrange
     item = StockItem(
-        1, "t1", "Tomate", "RAW_MATERIAL",
+        1,
+        "t1",
+        "Tomate",
+        "RAW_MATERIAL",
         MeasuredQuantity(10.0, MeasurementUnit.KILOGRAM),
     )
 
@@ -79,7 +88,10 @@ def test_deduct_stock_when_sufficient_then_decreases() -> None:
 def test_deduct_stock_when_insufficient_then_raises() -> None:
     # Arrange
     item = StockItem(
-        1, "t1", "Tomate", "RAW_MATERIAL",
+        1,
+        "t1",
+        "Tomate",
+        "RAW_MATERIAL",
         MeasuredQuantity(2.0, MeasurementUnit.KILOGRAM),
     )
 
@@ -91,7 +103,10 @@ def test_deduct_stock_when_insufficient_then_raises() -> None:
 def test_deduct_stock_when_zero_or_negative_then_raises() -> None:
     # Arrange
     item = StockItem(
-        1, "t1", "Tomate", "RAW_MATERIAL",
+        1,
+        "t1",
+        "Tomate",
+        "RAW_MATERIAL",
         MeasuredQuantity(5.0, MeasurementUnit.KILOGRAM),
     )
 
@@ -106,7 +121,10 @@ def test_deduct_stock_when_zero_or_negative_then_raises() -> None:
 def test_adjust_stock_when_valid_then_sets_exact_quantity() -> None:
     # Arrange
     item = StockItem(
-        1, "t1", "Tomate", "RAW_MATERIAL",
+        1,
+        "t1",
+        "Tomate",
+        "RAW_MATERIAL",
         MeasuredQuantity(10.0, MeasurementUnit.KILOGRAM),
     )
 
@@ -120,7 +138,10 @@ def test_adjust_stock_when_valid_then_sets_exact_quantity() -> None:
 def test_adjust_stock_when_negative_then_raises() -> None:
     # Arrange
     item = StockItem(
-        1, "t1", "Tomate", "RAW_MATERIAL",
+        1,
+        "t1",
+        "Tomate",
+        "RAW_MATERIAL",
         MeasuredQuantity(5.0, MeasurementUnit.KILOGRAM),
     )
 
@@ -132,7 +153,10 @@ def test_adjust_stock_when_negative_then_raises() -> None:
 def test_set_min_stock_level_when_valid_then_updates() -> None:
     # Arrange
     item = StockItem(
-        1, "t1", "Tomate", "RAW_MATERIAL",
+        1,
+        "t1",
+        "Tomate",
+        "RAW_MATERIAL",
         MeasuredQuantity(10.0, MeasurementUnit.KILOGRAM),
     )
 
@@ -146,7 +170,10 @@ def test_set_min_stock_level_when_valid_then_updates() -> None:
 def test_set_min_stock_level_when_negative_then_raises() -> None:
     # Arrange
     item = StockItem(
-        1, "t1", "Tomate", "RAW_MATERIAL",
+        1,
+        "t1",
+        "Tomate",
+        "RAW_MATERIAL",
         MeasuredQuantity(10.0, MeasurementUnit.KILOGRAM),
     )
 
@@ -158,7 +185,10 @@ def test_set_min_stock_level_when_negative_then_raises() -> None:
 def test_is_low_stock_when_below_min_then_returns_true() -> None:
     # Arrange
     item = StockItem(
-        1, "t1", "Tomate", "RAW_MATERIAL",
+        1,
+        "t1",
+        "Tomate",
+        "RAW_MATERIAL",
         MeasuredQuantity(3.0, MeasurementUnit.KILOGRAM),
         min_stock_level=5.0,
     )
@@ -170,7 +200,10 @@ def test_is_low_stock_when_below_min_then_returns_true() -> None:
 def test_is_low_stock_when_above_min_then_returns_false() -> None:
     # Arrange
     item = StockItem(
-        1, "t1", "Tomate", "RAW_MATERIAL",
+        1,
+        "t1",
+        "Tomate",
+        "RAW_MATERIAL",
         MeasuredQuantity(7.0, MeasurementUnit.KILOGRAM),
         min_stock_level=5.0,
     )
@@ -182,7 +215,10 @@ def test_is_low_stock_when_above_min_then_returns_false() -> None:
 def test_activate_and_deactivate() -> None:
     # Arrange
     item = StockItem(
-        1, "t1", "Tomate", "RAW_MATERIAL",
+        1,
+        "t1",
+        "Tomate",
+        "RAW_MATERIAL",
         MeasuredQuantity(5.0, MeasurementUnit.KILOGRAM),
     )
     assert item.is_active is True

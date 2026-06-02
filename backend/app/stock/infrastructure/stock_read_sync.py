@@ -32,6 +32,4 @@ class StockReadModelSync:
         )
 
     async def remove(self, stock_item_id: int, tenant_id: str) -> None:
-        await self._collection.delete_one(
-            {"stock_item_id": stock_item_id, "tenant_id": tenant_id}
-        )
+        await self._collection.delete_one({"stock_item_id": stock_item_id, "tenant_id": tenant_id})

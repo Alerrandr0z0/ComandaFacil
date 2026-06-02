@@ -206,7 +206,7 @@ async def _notify_kitchen(
                 tenant_id=tenant_id,
             )
             await session.commit()
-            if mongo:
+            if mongo is not None:
                 await KitchenReadModelSync(mongo).sync(item)
         except Exception:  # noqa: S110
             pass

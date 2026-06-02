@@ -22,7 +22,9 @@ def mongo_container() -> Any:
 
 
 @pytest.fixture
-async def mongo_db(mongo_container: Any) -> AsyncGenerator[AsyncIOMotorDatabase[dict[str, Any]], None]:
+async def mongo_db(
+    mongo_container: Any,
+) -> AsyncGenerator[AsyncIOMotorDatabase[dict[str, Any]], None]:
     url = mongo_container.get_connection_url()
     client = AsyncIOMotorClient(url)
     db = client["test_analytics"]
@@ -32,7 +34,9 @@ async def mongo_db(mongo_container: Any) -> AsyncGenerator[AsyncIOMotorDatabase[
 
 
 @pytest.fixture
-async def seeded_db(mongo_db: AsyncIOMotorDatabase[dict[str, Any]]) -> AsyncIOMotorDatabase[dict[str, Any]]:
+async def seeded_db(
+    mongo_db: AsyncIOMotorDatabase[dict[str, Any]],
+) -> AsyncIOMotorDatabase[dict[str, Any]]:
     # Seed orders_read with 3 orders
     orders = [
         {

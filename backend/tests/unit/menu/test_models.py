@@ -45,7 +45,9 @@ def test_menu_item_update_availability() -> None:
 
 
 def test_menu_creation() -> None:
-    menu = Menu(id=1, tenant_id="test", name="Almoço", description="Cardápio do almoço", is_active=True)
+    menu = Menu(
+        id=1, tenant_id="test", name="Almoço", description="Cardápio do almoço", is_active=True
+    )
     assert menu.id == 1
     assert menu.name == "Almoço"
     assert menu.description == "Cardápio do almoço"
@@ -177,7 +179,9 @@ def test_price_list_creation() -> None:
     from app.menu.domain.price_list import PriceList
 
     now = datetime.datetime.now(datetime.UTC)
-    pl = PriceList(id=1, tenant_id="test", name="Happy Hour", description="Preços promocionais", valid_from=now)
+    pl = PriceList(
+        id=1, tenant_id="test", name="Happy Hour", description="Preços promocionais", valid_from=now
+    )
     assert pl.id == 1
     assert pl.name == "Happy Hour"
     assert pl.is_active is True
@@ -255,10 +259,14 @@ def test_price_list_is_valid_now() -> None:
     from app.menu.domain.price_list import PriceList
 
     now = datetime.datetime.now(datetime.UTC)
-    pl = PriceList(id=1, tenant_id="test", name="Happy Hour", valid_from=now - datetime.timedelta(hours=1))
+    pl = PriceList(
+        id=1, tenant_id="test", name="Happy Hour", valid_from=now - datetime.timedelta(hours=1)
+    )
     assert pl.is_valid_now() is True
 
-    future = PriceList(id=2, tenant_id="test", name="Futuro", valid_from=now + datetime.timedelta(days=30))
+    future = PriceList(
+        id=2, tenant_id="test", name="Futuro", valid_from=now + datetime.timedelta(days=30)
+    )
     assert future.is_valid_now() is False
 
     expired = PriceList(

@@ -23,9 +23,11 @@ naive_dt = st.datetimes(
     max_value=datetime.datetime(2099, 12, 31),
 )
 aware_dt = st.datetimes(timezones=st.timezones()).filter(
-    lambda dt: datetime.datetime(2000, 1, 1, tzinfo=datetime.UTC)
-    <= dt
-    <= datetime.datetime(2099, 12, 31, tzinfo=datetime.UTC)
+    lambda dt: (
+        datetime.datetime(2000, 1, 1, tzinfo=datetime.UTC)
+        <= dt
+        <= datetime.datetime(2099, 12, 31, tzinfo=datetime.UTC)
+    )
 )
 
 non_neg_decimals = st.decimals(
@@ -103,7 +105,9 @@ def test_date_range_when_end_before_start_then_raises() -> None:
 
 
 @given(naive_dt, naive_dt)
-def test_date_range_pbt_when_start_before_end_then_created(a: datetime.datetime, b: datetime.datetime) -> None:
+def test_date_range_pbt_when_start_before_end_then_created(
+    a: datetime.datetime, b: datetime.datetime
+) -> None:
     start = min(a, b)
     end = max(a, b)
     dr = DateRange(start=start, end=end)
@@ -118,7 +122,9 @@ def test_date_range_pbt_when_equal_then_created(dt: datetime.datetime) -> None:
 
 
 @given(naive_dt, naive_dt)
-def test_date_range_pbt_when_end_before_start_then_error(a: datetime.datetime, b: datetime.datetime) -> None:
+def test_date_range_pbt_when_end_before_start_then_error(
+    a: datetime.datetime, b: datetime.datetime
+) -> None:
     start = max(a, b)
     end = min(a, b)
     if end >= start:
@@ -251,12 +257,16 @@ def test_order_insights_hypothesis_when_valid_then_creates(
 
 
 def test_order_insights_when_peak_hour_boundary_low() -> None:
-    insights = OrderInsights(period=AnalyticsPeriod.DAY, total_orders=0, average_items_per_order=0.0, peak_hour=0)
+    insights = OrderInsights(
+        period=AnalyticsPeriod.DAY, total_orders=0, average_items_per_order=0.0, peak_hour=0
+    )
     assert insights.peak_hour == 0
 
 
 def test_order_insights_when_peak_hour_boundary_high() -> None:
-    insights = OrderInsights(period=AnalyticsPeriod.DAY, total_orders=0, average_items_per_order=0.0, peak_hour=23)
+    insights = OrderInsights(
+        period=AnalyticsPeriod.DAY, total_orders=0, average_items_per_order=0.0, peak_hour=23
+    )
     assert insights.peak_hour == 23
 
 

@@ -103,7 +103,9 @@ async def create_menu(
 ) -> MenuResponseSchema:
     repo = SQLAlchemyMenuRepository(db)
     handler = CreateMenuHandler(repo)
-    command = CreateMenuCommand(id=schema.id, tenant_id=tenant_id, name=schema.name, description=schema.description)
+    command = CreateMenuCommand(
+        id=schema.id, tenant_id=tenant_id, name=schema.name, description=schema.description
+    )
     menu = await handler.handle(command)
     await db.commit()
 
