@@ -2,12 +2,15 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dependencies import CurrentTenantId, DbSession
+from app.dependencies import CurrentTenantId, DbSession, MongoDB
 from app.payment.application.commands import PaymentService
+from app.payment.application.queries import GetPaymentByOrderHandler, GetPaymentByOrderQuery
 from app.payment.domain.enums import PaymentMethod
+from app.payment.infrastructure.mongo_read_repository import MongoPaymentReadRepository
+from app.payment.infrastructure.mongo_sync import PaymentReadModelSync
 from app.payment.infrastructure.pg_repository import SQLAlchemyPaymentRepository
 from app.payment.infrastructure.stripe_gateway import StripeGateway
 from app.settings import get_settings
@@ -60,6 +63,8 @@ class PaymentResponseSchema(BaseModel):
 async def request_payment(
     schema: PaymentRequestSchema,
     session: DbSession,
+    background_tasks: BackgroundTasks,
+    mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> PaymentResponseSchema:
     """Processes a new payment transaction (via Stripe or locally for cash) and persists state."""
@@ -88,6 +93,8 @@ async def request_payment(
         )
         await session.commit()
 
+        background_tasks.add_task(PaymentReadModelSync(mongo).sync, payment)
+
         return PaymentResponseSchema(
             id=payment.id,
             order_id=payment.order_id,
@@ -113,6 +120,8 @@ async def request_payment(
 async def refund_payment(
     schema: PaymentRefundSchema,
     session: DbSession,
+    background_tasks: BackgroundTasks,
+    mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> PaymentResponseSchema:
     """Processes a refund transaction through external Stripe gateway or locally for cash."""
@@ -125,6 +134,8 @@ async def refund_payment(
         service = PaymentService(repo, gateway)
         payment = await service.refund_payment(order_id=schema.order_id, tenant_id=tenant_id)
         await session.commit()
+
+        background_tasks.add_task(PaymentReadModelSync(mongo).sync, payment)
 
         return PaymentResponseSchema(
             id=payment.id,
@@ -150,12 +161,13 @@ async def refund_payment(
 )
 async def get_payment_by_order(
     order_id: int,
-    session: DbSession,
+    mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> PaymentResponseSchema:
-    """Fetches the payment transaction records for a specific order under the tenant."""
-    repo = SQLAlchemyPaymentRepository(session)
-    payment = await repo.find_by_order(order_id, tenant_id)
+    """Fetches the payment read model for a specific order under the tenant."""
+    repo = MongoPaymentReadRepository(mongo)
+    handler = GetPaymentByOrderHandler(repo)
+    payment = await handler.handle(GetPaymentByOrderQuery(order_id=order_id, tenant_id=tenant_id))
     if not payment:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -163,12 +175,12 @@ async def get_payment_by_order(
         )
 
     return PaymentResponseSchema(
-        id=payment.id,
-        order_id=payment.order_id,
-        tenant_id=payment.tenant_id,
-        amount=payment.amount.amount,
-        method=payment.method.value,
-        status=payment.status.value,
-        gateway_ref=payment.gateway_ref,
-        failure_reason=payment.failure_reason,
+        id=int(payment["payment_id"]),
+        order_id=int(payment["order_id"]),
+        tenant_id=str(payment["tenant_id"]),
+        amount=Decimal(payment["amount"]),
+        method=str(payment["method"]),
+        status=str(payment["status"]),
+        gateway_ref=str(payment["gateway_ref"]) if payment.get("gateway_ref") else None,
+        failure_reason=str(payment["failure_reason"]) if payment.get("failure_reason") else None,
     )
