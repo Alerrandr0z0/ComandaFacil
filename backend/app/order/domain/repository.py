@@ -11,8 +11,8 @@ class OrderRepository(ABC):
     """Abstract Repository interface for OrderForm aggregate root."""
 
     @abstractmethod
-    async def find_by_id(self, id: int) -> OrderForm | None:
-        """Finds an OrderForm by its unique ID."""
+    async def find_by_id(self, id: int, tenant_id: str) -> OrderForm | None:
+        """Finds an OrderForm by its unique ID scoped to a tenant."""
 
     @abstractmethod
     async def find_all_by_tenant(self, tenant_id: str) -> list[OrderForm]:
@@ -23,5 +23,5 @@ class OrderRepository(ABC):
         """Persists or updates an OrderForm aggregate root."""
 
     @abstractmethod
-    async def delete(self, id: int) -> None:
-        """Deletes an OrderForm by its ID."""
+    async def delete(self, id: int, tenant_id: str) -> None:
+        """Deletes an OrderForm by its ID scoped to a tenant."""

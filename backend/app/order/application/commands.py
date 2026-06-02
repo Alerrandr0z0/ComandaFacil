@@ -41,7 +41,7 @@ class CreateOrderHandler:
         self._order_repo: Final[OrderRepository] = order_repo
 
     async def handle(self, command: CreateOrderCommand) -> OrderForm:
-        existing = await self._order_repo.find_by_id(command.id)
+        existing = await self._order_repo.find_by_id(command.id, command.tenant_id)
         if existing:
             raise ConflictError(f"Comanda com id {command.id} já existe.")
 
@@ -95,6 +95,7 @@ class CreateOrderHandler:
 @dataclass(frozen=True)
 class AddOrderItemCommand:
     order_id: int
+    tenant_id: str
     item_id: int
     menu_item_id: int
     name_cpy: str
@@ -104,7 +105,7 @@ class AddOrderItemCommand:
     notes: str = ""
 
     def __repr__(self) -> str:
-        return f"AddOrderItemCommand(order_id={self.order_id}, item_id={self.item_id}, name={self.name_cpy!r})"
+        return f"AddOrderItemCommand(order_id={self.order_id}, tenant_id={self.tenant_id!r}, item_id={self.item_id}, name={self.name_cpy!r})"
 
 
 class AddOrderItemHandler:
@@ -112,7 +113,7 @@ class AddOrderItemHandler:
         self._order_repo: Final[OrderRepository] = order_repo
 
     async def handle(self, command: AddOrderItemCommand) -> OrderFormItem:
-        order = await self._order_repo.find_by_id(command.order_id)
+        order = await self._order_repo.find_by_id(command.order_id, command.tenant_id)
         if not order:
             raise NotFoundError("Comanda", command.order_id)
 
@@ -136,9 +137,10 @@ class AddOrderItemHandler:
 @dataclass(frozen=True)
 class RequestPaymentCommand:
     order_id: int
+    tenant_id: str
 
     def __repr__(self) -> str:
-        return f"RequestPaymentCommand(order_id={self.order_id})"
+        return f"RequestPaymentCommand(order_id={self.order_id}, tenant_id={self.tenant_id!r})"
 
 
 class RequestPaymentHandler:
@@ -146,7 +148,7 @@ class RequestPaymentHandler:
         self._order_repo: Final[OrderRepository] = order_repo
 
     async def handle(self, command: RequestPaymentCommand) -> OrderForm:
-        order = await self._order_repo.find_by_id(command.order_id)
+        order = await self._order_repo.find_by_id(command.order_id, command.tenant_id)
         if not order:
             raise NotFoundError("Comanda", command.order_id)
 
@@ -161,9 +163,10 @@ class RequestPaymentHandler:
 @dataclass(frozen=True)
 class ProcessPaymentCommand:
     order_id: int
+    tenant_id: str
 
     def __repr__(self) -> str:
-        return f"ProcessPaymentCommand(order_id={self.order_id})"
+        return f"ProcessPaymentCommand(order_id={self.order_id}, tenant_id={self.tenant_id!r})"
 
 
 class ProcessPaymentHandler:
@@ -171,7 +174,7 @@ class ProcessPaymentHandler:
         self._order_repo: Final[OrderRepository] = order_repo
 
     async def handle(self, command: ProcessPaymentCommand) -> OrderForm:
-        order = await self._order_repo.find_by_id(command.order_id)
+        order = await self._order_repo.find_by_id(command.order_id, command.tenant_id)
         if not order:
             raise NotFoundError("Comanda", command.order_id)
 
@@ -186,9 +189,10 @@ class ProcessPaymentHandler:
 @dataclass(frozen=True)
 class CancelOrderCommand:
     order_id: int
+    tenant_id: str
 
     def __repr__(self) -> str:
-        return f"CancelOrderCommand(order_id={self.order_id})"
+        return f"CancelOrderCommand(order_id={self.order_id}, tenant_id={self.tenant_id!r})"
 
 
 class CancelOrderHandler:
@@ -196,7 +200,7 @@ class CancelOrderHandler:
         self._order_repo: Final[OrderRepository] = order_repo
 
     async def handle(self, command: CancelOrderCommand) -> OrderForm:
-        order = await self._order_repo.find_by_id(command.order_id)
+        order = await self._order_repo.find_by_id(command.order_id, command.tenant_id)
         if not order:
             raise NotFoundError("Comanda", command.order_id)
 
@@ -211,9 +215,10 @@ class CancelOrderHandler:
 @dataclass(frozen=True)
 class DeliverOrderCommand:
     order_id: int
+    tenant_id: str
 
     def __repr__(self) -> str:
-        return f"DeliverOrderCommand(order_id={self.order_id})"
+        return f"DeliverOrderCommand(order_id={self.order_id}, tenant_id={self.tenant_id!r})"
 
 
 class DeliverOrderHandler:
@@ -224,7 +229,7 @@ class DeliverOrderHandler:
         self._mongo_repo: Final[OrderHistoryMongoRepository] = mongo_repo
 
     async def handle(self, command: DeliverOrderCommand) -> OrderForm:
-        order = await self._order_repo.find_by_id(command.order_id)
+        order = await self._order_repo.find_by_id(command.order_id, command.tenant_id)
         if not order:
             raise NotFoundError("Comanda", command.order_id)
 

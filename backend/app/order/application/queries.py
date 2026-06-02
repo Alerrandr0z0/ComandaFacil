@@ -12,9 +12,10 @@ if TYPE_CHECKING:
 @dataclass(frozen=True)
 class GetOrderQuery:
     order_id: int
+    tenant_id: str
 
     def __repr__(self) -> str:
-        return f"GetOrderQuery(order_id={self.order_id})"
+        return f"GetOrderQuery(order_id={self.order_id}, tenant_id={self.tenant_id!r})"
 
 
 class GetOrderHandler:
@@ -23,7 +24,7 @@ class GetOrderHandler:
 
     async def handle(self, query: GetOrderQuery) -> OrderForm | None:
         """Fetch active OrderForm details from relational write database."""
-        return await self._order_repo.find_by_id(query.order_id)
+        return await self._order_repo.find_by_id(query.order_id, query.tenant_id)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"

@@ -1,0 +1,43 @@
+from __future__ import annotations
+
+import datetime
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from app.order.domain.order_form import OrderForm
+
+
+class OrderReadModelSync:
+    """Syncs completed Order aggregate to MongoDB 'orders_read' collection for analytics."""
+
+    def __init__(self, mongo_db: Any) -> None:
+        self._collection = mongo_db["orders_read"]
+
+    async def sync(self, order: OrderForm) -> None:
+        total = float(order.total().amount)
+        created_at = datetime.datetime.now(datetime.UTC)
+
+        doc: dict[str, Any] = {
+            "order_id": order.id,
+            "tenant_id": order.tenant_id,
+            "total": total,
+            "items": [
+                {
+                    "id": item.id,
+                    "menu_item_id": item.menu_item_id,
+                    "name": item.name_cpy,
+                    "category": item.station_type_cpy,
+                    "price": float(item.price_cpy.amount),
+                    "quantity": item.quantity,
+                    "subtotal": float(item.calculate_subtotal().amount),
+                }
+                for item in order.items
+            ],
+            "created_at": created_at,
+        }
+
+        await self._collection.replace_one(
+            {"order_id": order.id, "tenant_id": order.tenant_id},
+            doc,
+            upsert=True,
+        )

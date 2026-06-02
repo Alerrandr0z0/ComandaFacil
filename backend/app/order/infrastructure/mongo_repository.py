@@ -76,9 +76,11 @@ class OrderHistoryMongoRepository:
             upsert=True,
         )
 
-    async def find_by_id(self, order_id: int) -> dict[str, Any] | None:
-        """Finds a completed order document by order_id."""
-        res = await self._collection.find_one({"order_id": order_id}, {"_id": 0})
+    async def find_by_id(self, order_id: int, tenant_id: str) -> dict[str, Any] | None:
+        """Finds a completed order document by order_id scoped to a tenant."""
+        res = await self._collection.find_one(
+            {"order_id": order_id, "tenant_id": tenant_id}, {"_id": 0}
+        )
         return res if res else None
 
     async def find_all_by_tenant(self, tenant_id: str) -> list[dict[str, Any]]:

@@ -9,6 +9,7 @@ from pydantic import BaseModel, ConfigDict, Field
 import app.shared.database
 from app.dependencies import CurrentTenantId, DbSession, MongoDB
 from app.kitchen.application.commands import KitchenService
+from app.kitchen.infrastructure.kitchen_read_sync import KitchenReadModelSync
 from app.kitchen.infrastructure.pg_repository import SQLAlchemyKitchenOrderItemRepository
 from app.order.application.commands import (
     AddOrderItemCommand,
@@ -32,6 +33,7 @@ from app.order.application.queries import (
 )
 from app.order.domain.fulfillment import Delivery, Table, Takeaway
 from app.order.infrastructure.mongo_repository import OrderHistoryMongoRepository
+from app.order.infrastructure.order_read_sync import OrderReadModelSync
 from app.order.infrastructure.pg_repository import SQLAlchemyOrderRepository
 from app.shared.database import get_async_session
 
@@ -167,10 +169,12 @@ async def create_order(
     status_code=status.HTTP_200_OK,
     summary="Get active Order Form by ID",
 )
-async def get_order(order_id: int, db: DbSession) -> OrderResponseSchema:
+async def get_order(
+    order_id: int, db: DbSession, tenant_id: CurrentTenantId
+) -> OrderResponseSchema:
     repo = SQLAlchemyOrderRepository(db)
     handler = GetOrderHandler(repo)
-    order = await handler.handle(GetOrderQuery(order_id=order_id))
+    order = await handler.handle(GetOrderQuery(order_id=order_id, tenant_id=tenant_id))
     if not order:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -184,6 +188,7 @@ async def _notify_kitchen(
     name_cpy: str,
     station_type_cpy: str,
     tenant_id: str,
+    mongo: MongoDB | None = None,
 ) -> None:
     """Helper background task to asynchronously send new order items to the kitchen."""
     # Gracefully return in test environments that do not initialize PostgreSQL
@@ -194,13 +199,15 @@ async def _notify_kitchen(
         repo = SQLAlchemyKitchenOrderItemRepository(session)
         service = KitchenService(repo)
         try:
-            await service.receive_item(
+            item = await service.receive_item(
                 correlation_id=correlation_id,
                 name_cpy=name_cpy,
                 station_type_cpy=station_type_cpy,
                 tenant_id=tenant_id,
             )
             await session.commit()
+            if mongo:
+                await KitchenReadModelSync(mongo).sync(item)
         except Exception:  # noqa: S110
             pass
 
@@ -216,12 +223,14 @@ async def add_order_item(
     schema: OrderItemAddSchema,
     db: DbSession,
     background_tasks: BackgroundTasks,
+    mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> OrderItemResponseSchema:
     repo = SQLAlchemyOrderRepository(db)
     handler = AddOrderItemHandler(repo)
     command = AddOrderItemCommand(
         order_id=order_id,
+        tenant_id=tenant_id,
         item_id=schema.id,
         menu_item_id=schema.menu_item_id,
         name_cpy=schema.name_cpy,
@@ -241,6 +250,7 @@ async def add_order_item(
             name_cpy=item.name_cpy,
             station_type_cpy=item.station_type_cpy,
             tenant_id=tenant_id,
+            mongo=mongo,
         )
 
         return OrderItemResponseSchema(
@@ -263,11 +273,13 @@ async def add_order_item(
     status_code=status.HTTP_200_OK,
     summary="Request payment (lock) for an active Order Form",
 )
-async def request_payment(order_id: int, db: DbSession) -> OrderResponseSchema:
+async def request_payment(
+    order_id: int, db: DbSession, tenant_id: CurrentTenantId
+) -> OrderResponseSchema:
     repo = SQLAlchemyOrderRepository(db)
     handler = RequestPaymentHandler(repo)
     try:
-        order = await handler.handle(RequestPaymentCommand(order_id=order_id))
+        order = await handler.handle(RequestPaymentCommand(order_id=order_id, tenant_id=tenant_id))
         await db.commit()
         return _order_to_response(order)
     except ValueError as e:
@@ -280,11 +292,13 @@ async def request_payment(order_id: int, db: DbSession) -> OrderResponseSchema:
     status_code=status.HTTP_200_OK,
     summary="Process payment for an active Order Form",
 )
-async def process_payment(order_id: int, db: DbSession) -> OrderResponseSchema:
+async def process_payment(
+    order_id: int, db: DbSession, tenant_id: CurrentTenantId
+) -> OrderResponseSchema:
     repo = SQLAlchemyOrderRepository(db)
     handler = ProcessPaymentHandler(repo)
     try:
-        order = await handler.handle(ProcessPaymentCommand(order_id=order_id))
+        order = await handler.handle(ProcessPaymentCommand(order_id=order_id, tenant_id=tenant_id))
         await db.commit()
         return _order_to_response(order)
     except ValueError as e:
@@ -297,11 +311,13 @@ async def process_payment(order_id: int, db: DbSession) -> OrderResponseSchema:
     status_code=status.HTTP_200_OK,
     summary="Cancel an active Order Form",
 )
-async def cancel_order(order_id: int, db: DbSession) -> OrderResponseSchema:
+async def cancel_order(
+    order_id: int, db: DbSession, tenant_id: CurrentTenantId
+) -> OrderResponseSchema:
     repo = SQLAlchemyOrderRepository(db)
     handler = CancelOrderHandler(repo)
     try:
-        order = await handler.handle(CancelOrderCommand(order_id=order_id))
+        order = await handler.handle(CancelOrderCommand(order_id=order_id, tenant_id=tenant_id))
         await db.commit()
         return _order_to_response(order)
     except ValueError as e:
@@ -318,13 +334,16 @@ async def deliver_order(
     order_id: int,
     db: DbSession,
     mongo: MongoDB,
+    background_tasks: BackgroundTasks,
+    tenant_id: CurrentTenantId,
 ) -> OrderResponseSchema:
     repo = SQLAlchemyOrderRepository(db)
     mongo_repo = OrderHistoryMongoRepository(mongo)
     handler = DeliverOrderHandler(repo, mongo_repo)
     try:
-        order = await handler.handle(DeliverOrderCommand(order_id=order_id))
+        order = await handler.handle(DeliverOrderCommand(order_id=order_id, tenant_id=tenant_id))
         await db.commit()
+        background_tasks.add_task(OrderReadModelSync(mongo).sync, order)
         return _order_to_response(order)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e

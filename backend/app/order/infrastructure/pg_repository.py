@@ -26,10 +26,10 @@ class SQLAlchemyOrderRepository(OrderRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def find_by_id(self, id: int) -> OrderForm | None:
+    async def find_by_id(self, id: int, tenant_id: str) -> OrderForm | None:
         stmt = (
             select(OrderFormORM)
-            .where(OrderFormORM.id == id)
+            .where(OrderFormORM.id == id, OrderFormORM.tenant_id == tenant_id)
             .options(selectinload(OrderFormORM.items))
         )
         result = await self._session.execute(stmt)
@@ -51,7 +51,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
     async def save(self, order: OrderForm) -> None:
         stmt = (
             select(OrderFormORM)
-            .where(OrderFormORM.id == order.id)
+            .where(OrderFormORM.id == order.id, OrderFormORM.tenant_id == order.tenant_id)
             .options(selectinload(OrderFormORM.items))
         )
         result = await self._session.execute(stmt)
@@ -89,8 +89,8 @@ class SQLAlchemyOrderRepository(OrderRepository):
 
         await self._session.flush()
 
-    async def delete(self, id: int) -> None:
-        stmt = select(OrderFormORM).where(OrderFormORM.id == id)
+    async def delete(self, id: int, tenant_id: str) -> None:
+        stmt = select(OrderFormORM).where(OrderFormORM.id == id, OrderFormORM.tenant_id == tenant_id)
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
         if orm:
