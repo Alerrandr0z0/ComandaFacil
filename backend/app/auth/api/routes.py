@@ -4,6 +4,8 @@ import datetime
 
 from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.auth.application.commands import (
     AssignRoleCommand,
@@ -16,6 +18,7 @@ from app.auth.application.commands import (
     LogoutHandler,
 )
 from app.auth.domain.employee import RoleType
+from app.auth.infrastructure.orm_models import EmployeeORM
 from app.auth.infrastructure.repositories import (
     SQLAlchemyEmployeeRepository,
     SQLAlchemySessionRepository,
@@ -80,6 +83,45 @@ class SessionResponseSchema(BaseModel):
 
 
 # ─── REST Endpoints ───────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/employees",
+    response_model=list[EmployeeResponseSchema],
+    status_code=status.HTTP_200_OK,
+    summary="Get all employees in the current tenant franchise",
+)
+async def list_employees(
+    db: DbSession,
+    tenant_id: str = Depends(get_current_tenant_id),
+) -> list[EmployeeResponseSchema]:
+    """Lists all registered employees and resolves their active role for the tenant."""
+    stmt = select(EmployeeORM).options(selectinload(EmployeeORM.roles))
+    result = await db.execute(stmt)
+    orms = result.scalars().all()
+
+    response = []
+    try:
+        t_id = int(tenant_id)
+    except ValueError:
+        t_id = None
+
+    for orm in orms:
+        active_role = None
+        if t_id is not None:
+            for r in orm.roles:
+                if r.tenant_id == t_id and r.is_active:
+                    active_role = r.role_type
+                    break
+        response.append(
+            EmployeeResponseSchema(
+                id=orm.id,
+                name=orm.name,
+                email=orm.email,
+                role=active_role,
+            )
+        )
+    return response
 
 
 @router.post(
