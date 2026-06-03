@@ -1,2 +1,0 @@
-paths_to_mutate = ["app/payment/"]
-tests_dir = ["tests/unit/payment/", "tests/integration/payment/"]
