@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from app.analytics.application.queries import (
     GetDashboardHandler,
@@ -16,12 +16,12 @@ from app.analytics.application.queries import (
 )
 from app.analytics.domain.enums import AnalyticsPeriod
 from app.analytics.infrastructure.mongo_repository import MongoAnalyticsRepository
-from app.dependencies import CurrentTenantId, MongoDB
+from app.dependencies import CurrentTenantId, MongoDB, require_permission
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 
-@router.get("/dashboard")
+@router.get("/dashboard", dependencies=[Depends(require_permission("VIEW_ANALYTICS"))])
 async def get_dashboard(
     tenant_id: CurrentTenantId,
     mongo: MongoDB,
@@ -39,7 +39,7 @@ async def get_dashboard(
     }
 
 
-@router.get("/sales")
+@router.get("/sales", dependencies=[Depends(require_permission("VIEW_ANALYTICS"))])
 async def get_sales_report(
     tenant_id: CurrentTenantId,
     mongo: MongoDB,
@@ -57,7 +57,7 @@ async def get_sales_report(
     }
 
 
-@router.get("/orders")
+@router.get("/orders", dependencies=[Depends(require_permission("VIEW_ANALYTICS"))])
 async def get_order_insights(
     tenant_id: CurrentTenantId,
     mongo: MongoDB,
@@ -74,7 +74,7 @@ async def get_order_insights(
     }
 
 
-@router.get("/kitchen")
+@router.get("/kitchen", dependencies=[Depends(require_permission("VIEW_ANALYTICS"))])
 async def get_kitchen_performance(
     tenant_id: CurrentTenantId,
     mongo: MongoDB,

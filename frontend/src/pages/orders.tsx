@@ -1,5 +1,6 @@
 import { BellRing, Coffee, Settings } from 'lucide-react'
 import { useState } from 'react'
+import { useAuth } from '@/features/auth/auth_context'
 import OrderDrawer from '@/features/order/components/order_drawer'
 import TableGrid from '@/features/order/components/table_grid'
 import { useKitchenAlerts } from '@/features/order/hooks/use_kitchen_alerts'
@@ -7,10 +8,13 @@ import { useOrderDrawer } from '@/features/order/hooks/use_order_drawer'
 import Layout from '@/shared/components/layout'
 
 export default function OrdersPage() {
+  const { employee } = useAuth()
   const drawer = useOrderDrawer()
   const { readyItems, dismissReadyItem } = useKitchenAlerts()
   const [isConfigOpen, setIsConfigOpen] = useState(false)
   const [tablesInput, setTablesInput] = useState(localStorage.getItem('cf_tables_count') || '12')
+
+  const isManager = employee?.role === 'MANAGER'
 
   const handleSaveTablesCount = (e: React.FormEvent) => {
     e.preventDefault()
@@ -37,19 +41,21 @@ export default function OrdersPage() {
           }`}
         >
           {/* Header toolbar */}
-          <div className="flex items-center justify-end mb-4 gap-2">
-            <button
-              type="button"
-              onClick={() => setIsConfigOpen(!isConfigOpen)}
-              className="rounded-xl bg-gray-900/30 border border-gray-850 hover:border-gray-700 px-3 py-2 text-xs font-bold text-gray-400 hover:text-white transition flex items-center gap-1.5"
-            >
-              <Settings className="h-3.5 w-3.5" />
-              <span>Configurar Salão</span>
-            </button>
-          </div>
+          {isManager && (
+            <div className="flex items-center justify-end mb-4 gap-2">
+              <button
+                type="button"
+                onClick={() => setIsConfigOpen(!isConfigOpen)}
+                className="rounded-xl bg-gray-900/30 border border-gray-850 hover:border-gray-700 px-3 py-2 text-xs font-bold text-gray-400 hover:text-white transition flex items-center gap-1.5"
+              >
+                <Settings className="h-3.5 w-3.5" />
+                <span>Configurar Salão</span>
+              </button>
+            </div>
+          )}
 
           {/* Salon Tables Configuration Modal */}
-          {isConfigOpen && (
+          {isConfigOpen && isManager && (
             <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
               <form
                 onSubmit={handleSaveTablesCount}

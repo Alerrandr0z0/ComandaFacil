@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dependencies import CurrentTenantId, DbSession, MongoDB
+from app.dependencies import CurrentTenantId, DbSession, MongoDB, require_permission
 from app.stock.application.commands import (
     AddStockCommand,
     AddStockHandler,
@@ -114,6 +114,7 @@ class StockMovementResponseSchema(BaseModel):
     response_model=StockItemResponseSchema,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new stock item",
+    dependencies=[Depends(require_permission("ADJUST_STOCK"))],
 )
 async def create_stock_item(
     schema: StockItemCreateSchema,
@@ -144,6 +145,7 @@ async def create_stock_item(
     response_model=list[StockItemResponseSchema],
     status_code=status.HTTP_200_OK,
     summary="List all stock items",
+    dependencies=[Depends(require_permission("ADJUST_STOCK"))],
 )
 async def list_stock_items(
     mongo: MongoDB,
@@ -163,6 +165,7 @@ async def list_stock_items(
     response_model=StockItemResponseSchema,
     status_code=status.HTTP_200_OK,
     summary="Get a stock item by ID",
+    dependencies=[Depends(require_permission("ADJUST_STOCK"))],
 )
 async def get_stock_item(
     item_id: int,
@@ -182,6 +185,7 @@ async def get_stock_item(
     response_model=StockItemResponseSchema,
     status_code=status.HTTP_200_OK,
     summary="Add stock to an item",
+    dependencies=[Depends(require_permission("ADJUST_STOCK"))],
 )
 async def add_stock(
     item_id: int,
@@ -214,6 +218,7 @@ async def add_stock(
     response_model=StockItemResponseSchema,
     status_code=status.HTTP_200_OK,
     summary="Deduct stock from an item",
+    dependencies=[Depends(require_permission("ADJUST_STOCK"))],
 )
 async def deduct_stock(
     item_id: int,
@@ -249,6 +254,7 @@ async def deduct_stock(
     response_model=StockItemResponseSchema,
     status_code=status.HTTP_200_OK,
     summary="Set minimum stock level",
+    dependencies=[Depends(require_permission("ADJUST_STOCK"))],
 )
 async def set_min_stock_level(
     item_id: int,
@@ -277,6 +283,7 @@ async def set_min_stock_level(
     response_model=StockItemResponseSchema,
     status_code=status.HTTP_200_OK,
     summary="Adjust stock to an absolute quantity",
+    dependencies=[Depends(require_permission("ADJUST_STOCK"))],
 )
 async def adjust_stock(
     item_id: int,
@@ -307,6 +314,7 @@ async def adjust_stock(
     response_model=list[StockMovementResponseSchema],
     status_code=status.HTTP_200_OK,
     summary="Get movement history for a stock item",
+    dependencies=[Depends(require_permission("ADJUST_STOCK"))],
 )
 async def get_stock_movements(
     item_id: int,

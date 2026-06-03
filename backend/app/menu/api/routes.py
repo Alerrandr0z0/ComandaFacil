@@ -2,10 +2,10 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
-from app.dependencies import CurrentTenantId, DbSession, MongoDB
+from app.dependencies import CurrentTenantId, DbSession, MongoDB, require_permission
 from app.menu.application.commands import (
     AddMenuItemCommand,
     AddMenuItemHandler,
@@ -93,6 +93,7 @@ class MenuToggleSchema(BaseModel):
     response_model=MenuResponseSchema,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new Menu",
+    dependencies=[Depends(require_permission("MANAGE_MENU"))],
 )
 async def create_menu(
     schema: MenuCreateSchema,
@@ -154,6 +155,7 @@ async def get_menu(
     response_model=MenuItemSchema,
     status_code=status.HTTP_201_CREATED,
     summary="Add an item to a Menu",
+    dependencies=[Depends(require_permission("MANAGE_MENU"))],
 )
 async def add_menu_item(
     menu_id: int,
@@ -196,6 +198,7 @@ async def add_menu_item(
     "/{menu_id}/items/{item_id}",
     status_code=status.HTTP_200_OK,
     summary="Remove an item from a Menu",
+    dependencies=[Depends(require_permission("MANAGE_MENU"))],
 )
 async def remove_menu_item(
     menu_id: int,
@@ -223,6 +226,7 @@ async def remove_menu_item(
     response_model=MenuResponseSchema,
     status_code=status.HTTP_200_OK,
     summary="Activate or deactivate a Menu",
+    dependencies=[Depends(require_permission("MANAGE_MENU"))],
 )
 async def toggle_menu(
     menu_id: int,
@@ -247,6 +251,7 @@ async def toggle_menu(
     "/{menu_id}",
     status_code=status.HTTP_200_OK,
     summary="Delete a Menu",
+    dependencies=[Depends(require_permission("MANAGE_MENU"))],
 )
 async def delete_menu(
     menu_id: int,

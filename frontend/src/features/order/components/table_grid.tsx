@@ -311,19 +311,21 @@ export default function TableGrid({
 }: TableGridProps) {
   const [tables, setTables] = useState<TableStatus[]>([])
   const [isOpening, setIsOpening] = useState<number | null>(null)
-  const [_refreshTrigger, setRefreshTrigger] = useState(0)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   // Load status of all tables
   useEffect(() => {
     const fetchTables = async () => {
       const count = parseInt(localStorage.getItem('cf_tables_count') || '12', 10)
-      const initialTables: TableStatus[] = Array.from({ length: count }, (_, i) => ({
-        tableNumber: i + 1,
-        order: null,
-        loading: true,
-        error: false,
-      }))
-      setTables(initialTables)
+      setTables((prev) => {
+        if (prev.length === count) return prev // Keep existing tables to avoid UI flicker
+        return Array.from({ length: count }, (_, i) => ({
+          tableNumber: i + 1,
+          order: null,
+          loading: true,
+          error: false,
+        }))
+      })
 
       try {
         const promises = Array.from({ length: count }, (_, i) => {
@@ -359,6 +361,14 @@ export default function TableGrid({
     }
 
     fetchTables()
+  }, [refreshTrigger])
+
+  // Setup automatic background polling interval (every 5 seconds)
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setRefreshTrigger((prev) => prev + 1)
+    }, 5000)
+    return () => clearInterval(interval)
   }, [])
 
   const handleOpenTable = async (tableNumber: number) => {
@@ -409,13 +419,6 @@ export default function TableGrid({
             Gerencie a ocupação das mesas e atenda comandas
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => setRefreshTrigger((prev) => prev + 1)}
-          className="rounded-xl bg-gray-900/30 border border-gray-850 hover:border-gray-700 px-4 py-2 text-xs font-bold text-gray-300 hover:text-white transition-all duration-300"
-        >
-          Atualizar Painel
-        </button>
       </div>
 
       <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
