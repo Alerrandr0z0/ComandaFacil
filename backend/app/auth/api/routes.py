@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, status
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
 from app.auth.application.commands import (
@@ -21,7 +21,7 @@ from app.auth.infrastructure.repositories import (
     SQLAlchemySessionRepository,
     SQLAlchemyTenantRepository,
 )
-from app.dependencies import CurrentEmployee, CurrentSession, DbSession
+from app.dependencies import CurrentEmployee, CurrentSession, DbSession, get_current_tenant_id
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -46,6 +46,7 @@ class EmployeeResponseSchema(BaseModel):
     id: int
     name: str
     email: str
+    role: str | None = None
 
     model_config = ConfigDict(from_attributes=True, frozen=True)
 
@@ -156,8 +157,24 @@ async def logout(current_session: CurrentSession, db: DbSession) -> dict[str, st
     status_code=status.HTTP_200_OK,
     summary="Get authenticated Employee profile",
 )
-async def get_me(current_employee: CurrentEmployee) -> EmployeeResponseSchema:
+async def get_me(
+    current_employee: CurrentEmployee,
+    tenant_id: str = Depends(get_current_tenant_id),
+) -> EmployeeResponseSchema:
     """Returns the profile of the currently logged-in employee."""
+    active_role = None
+    try:
+        t_id = int(tenant_id)
+        for role in current_employee.roles:
+            if role.tenant_id == t_id and role.is_active:
+                active_role = role.role_type.value
+                break
+    except ValueError:
+        pass
+
     return EmployeeResponseSchema(
-        id=current_employee.id, name=current_employee.name, email=str(current_employee.email)
+        id=current_employee.id,
+        name=current_employee.name,
+        email=str(current_employee.email),
+        role=active_role,
     )

@@ -11,16 +11,106 @@
   --color-brand-700: hsl(25, 85%, 32%);
   --color-brand-800: hsl(25, 90%, 24%);
   --color-brand-900: hsl(25, 95%, 16%);
+
+  --animate-slide-in-right: slide-in-right 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-fade-in: fade-in 0.2s ease-out forwards;
+  --animate-pulse-glow: pulse-glow 2s infinite ease-in-out;
+
+  @keyframes slide-in-right {
+    from {
+      transform: translateX(100%);
+    }
+    to {
+      transform: translateX(0);
+    }
+  }
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes pulse-glow {
+    0%,
+    100% {
+      opacity: 0.6;
+      box-shadow: 0 0 5px rgba(249, 115, 22, 0.2);
+    }
+    50% {
+      opacity: 1;
+      box-shadow: 0 0 15px rgba(249, 115, 22, 0.6);
+    }
+  }
 }
 
+/* Base Body Styles */
 body {
-  background-color: var(--color-gray-950);
+  background-color: #050508; /* Very deep dark */
   color: var(--color-gray-100);
+  font-family: "Inter", system-ui, sans-serif;
   min-height: 100vh;
+  overflow-x: hidden;
 }
 
 :focus-visible {
   outline-width: 2px;
   outline-offset: 2px;
   outline-color: var(--color-brand-400);
+}
+
+/* Glassmorphism Styles */
+.glass-card {
+  background: rgba(17, 17, 27, 0.45);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-card:hover {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(17, 17, 27, 0.6);
+}
+
+.glass-elevated {
+  background: rgba(24, 24, 37, 0.75);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+}
+
+.glass-input {
+  background: rgba(10, 10, 15, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transition: all 0.2s ease-in-out;
+}
+
+.glass-input:focus {
+  background: rgba(10, 10, 15, 0.8);
+  border-color: var(--color-brand-500);
+  box-shadow: 0 0 0 2px rgba(249, 115, 22, 0.15);
+  outline: none;
+}
+
+/* Custom premium scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.05);
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(249, 115, 22, 0.4);
 }

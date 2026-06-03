@@ -43,7 +43,10 @@ class CreateOrderHandler:
     async def handle(self, command: CreateOrderCommand) -> OrderForm:
         existing = await self._order_repo.find_by_id(command.id, command.tenant_id)
         if existing:
-            raise ConflictError(f"Comanda com id {command.id} já existe.")
+            if existing.state.name == "CLOSED":
+                await self._order_repo.delete(command.id, command.tenant_id)
+            else:
+                raise ConflictError(f"Comanda com id {command.id} já existe.")
 
         order = OrderForm(id=command.id, tenant_id=command.tenant_id)
 

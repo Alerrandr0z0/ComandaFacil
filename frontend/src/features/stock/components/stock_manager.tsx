@@ -6,6 +6,7 @@ import {
   Plus,
   PlusCircle,
   RotateCcw,
+  Search,
   Sliders,
   TrendingDown,
   X,
@@ -41,35 +42,50 @@ interface StockItemRowProps {
 
 function StockItemRow({ item, onOpenAction, onViewHistory }: StockItemRowProps) {
   return (
-    <tr className={`hover:bg-gray-900/20 transition ${item.is_low_stock ? 'bg-red-950/5' : ''}`}>
-      <td className="px-4 py-3">
-        <div className="font-bold text-white flex items-center gap-2">
+    <tr
+      className={`hover:bg-white/[0.02] transition-colors border-b border-gray-900/60 ${item.is_low_stock ? 'bg-rose-500/[0.02]' : ''}`}
+    >
+      <td className="px-5 py-4">
+        <div className="font-bold text-gray-100 flex items-center gap-2 text-xs">
           {item.name}
           {item.is_low_stock && (
             <span
-              className="rounded bg-red-950/60 border border-red-900/40 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wider text-red-400 flex items-center gap-1"
+              className="rounded-lg bg-rose-500/10 border border-rose-500/25 px-2 py-0.5 text-[8px] font-black uppercase tracking-wider text-rose-400 flex items-center gap-1 shadow-inner"
               title="Estoque abaixo do mínimo!"
             >
-              <AlertTriangle className="h-2.5 w-2.5" />
+              <AlertTriangle className="h-2.5 w-2.5 animate-pulse" />
               Crítico
             </span>
           )}
         </div>
-        <span className="text-[10px] text-gray-500">ID: #{item.id}</span>
+        <span className="text-[9px] text-gray-500 font-mono">ID: #{item.id}</span>
       </td>
-      <td className="px-4 py-3 text-[10px] font-semibold text-gray-400">{item.category}</td>
-      <td className="px-4 py-3 font-mono font-bold text-sm text-gray-200">
+      <td className="px-5 py-4">
+        <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-gray-900/40 text-gray-400 border border-gray-850">
+          {item.category === 'RAW_MATERIAL'
+            ? 'Insumo Base'
+            : item.category === 'BEVERAGE'
+              ? 'Bebida'
+              : 'Embalagem'}
+        </span>
+      </td>
+      <td className="px-5 py-4 font-mono font-bold text-xs text-gray-200">
         {item.current_quantity_amount}{' '}
-        <span className="text-xs text-gray-500">{item.current_quantity_unit}</span>
+        <span className="text-[10px] text-gray-500 font-sans font-medium">
+          {item.current_quantity_unit}
+        </span>
       </td>
-      <td className="px-4 py-3 font-mono text-gray-400">
-        {item.min_stock_level} {item.current_quantity_unit}
+      <td className="px-5 py-4 font-mono text-xs text-gray-400">
+        {item.min_stock_level}{' '}
+        <span className="text-[10px] text-gray-500 font-sans font-medium">
+          {item.current_quantity_unit}
+        </span>
       </td>
-      <td className="px-4 py-3 text-right space-x-1 whitespace-nowrap">
+      <td className="px-5 py-4 text-right space-x-1 whitespace-nowrap">
         <button
           type="button"
           onClick={() => onOpenAction(item, 'ADD')}
-          className="p-1 rounded bg-gray-900 border border-gray-800 hover:border-emerald-500/30 hover:text-emerald-400 text-gray-400 transition"
+          className="p-2 rounded-lg bg-gray-900/40 border border-gray-850 hover:border-emerald-500/30 hover:text-emerald-400 text-gray-400 transition"
           title="Entrada (+)"
         >
           <Plus className="h-3.5 w-3.5" />
@@ -77,7 +93,7 @@ function StockItemRow({ item, onOpenAction, onViewHistory }: StockItemRowProps) 
         <button
           type="button"
           onClick={() => onOpenAction(item, 'DEDUCT')}
-          className="p-1 rounded bg-gray-900 border border-gray-800 hover:border-red-500/30 hover:text-red-400 text-gray-400 transition"
+          className="p-2 rounded-lg bg-gray-900/40 border border-gray-850 hover:border-red-500/30 hover:text-red-400 text-gray-400 transition"
           title="Saída (-)"
         >
           <Minus className="h-3.5 w-3.5" />
@@ -85,7 +101,7 @@ function StockItemRow({ item, onOpenAction, onViewHistory }: StockItemRowProps) 
         <button
           type="button"
           onClick={() => onOpenAction(item, 'ADJUST')}
-          className="p-1 rounded bg-gray-900 border border-gray-800 hover:border-blue-500/30 hover:text-blue-400 text-gray-400 transition"
+          className="p-2 rounded-lg bg-gray-900/40 border border-gray-850 hover:border-blue-500/30 hover:text-blue-400 text-gray-400 transition"
           title="Ajustar Inventário"
         >
           <Sliders className="h-3.5 w-3.5" />
@@ -93,7 +109,7 @@ function StockItemRow({ item, onOpenAction, onViewHistory }: StockItemRowProps) 
         <button
           type="button"
           onClick={() => onOpenAction(item, 'MIN_LEVEL')}
-          className="p-1 rounded bg-gray-900 border border-gray-800 hover:border-amber-500/30 hover:text-amber-400 text-gray-400 transition"
+          className="p-2 rounded-lg bg-gray-900/40 border border-gray-850 hover:border-amber-500/30 hover:text-amber-400 text-gray-400 transition"
           title="Alterar Limiar Mínimo"
         >
           <TrendingDown className="h-3.5 w-3.5" />
@@ -101,7 +117,7 @@ function StockItemRow({ item, onOpenAction, onViewHistory }: StockItemRowProps) 
         <button
           type="button"
           onClick={() => onViewHistory(item)}
-          className="p-1 rounded bg-gray-900 border border-gray-800 hover:border-purple-500/30 hover:text-purple-400 text-gray-400 transition"
+          className="p-2 rounded-lg bg-gray-900/40 border border-gray-850 hover:border-purple-500/30 hover:text-purple-400 text-gray-400 transition"
           title="Histórico de Movimentação"
         >
           <History className="h-3.5 w-3.5" />
@@ -119,33 +135,47 @@ interface StockTableProps {
 
 function StockTable({ items, onOpenAction, onViewHistory }: StockTableProps) {
   return (
-    <div className="rounded-xl border border-gray-800/80 bg-gray-900/10 overflow-hidden backdrop-blur-md">
-      <table className="w-full border-collapse text-left text-xs text-gray-300">
-        <thead className="bg-gray-950/60 text-gray-400 border-b border-gray-800/60 uppercase tracking-wider text-[10px] font-bold">
-          <tr>
-            <th className="px-4 py-3">Insumo</th>
-            <th className="px-4 py-3">Categoria</th>
-            <th className="px-4 py-3">Quantidade</th>
-            <th className="px-4 py-3">Nível Mínimo</th>
-            <th className="px-4 py-3 text-right">Ações</th>
-          </tr>
-        </thead>
-        <tbody className="divide-y divide-gray-850">
-          {items.map((item) => (
-            <StockItemRow
-              key={item.id}
-              item={item}
-              onOpenAction={onOpenAction}
-              onViewHistory={onViewHistory}
-            />
-          ))}
-        </tbody>
-      </table>
+    <div className="rounded-2xl border border-gray-900 bg-gray-950/10 overflow-hidden backdrop-blur-md glass-card">
+      <div className="overflow-x-auto">
+        <table className="w-full border-collapse text-left text-xs text-gray-300">
+          <thead className="bg-gray-950/40 text-gray-450 border-b border-gray-900/60 uppercase tracking-widest text-[9px] font-extrabold">
+            <tr>
+              <th className="px-5 py-4">Insumo / Descrição</th>
+              <th className="px-5 py-4">Categoria</th>
+              <th className="px-5 py-4">Qtd. Atual</th>
+              <th className="px-5 py-4">Limite Alerta</th>
+              <th className="px-5 py-4 text-right">Painel de Ações</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-900/40">
+            {items.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={5}
+                  className="px-5 py-12 text-center text-gray-500 text-xs font-semibold"
+                >
+                  Nenhum insumo encontrado com os filtros atuais.
+                </td>
+              </tr>
+            ) : (
+              items.map((item) => (
+                <StockItemRow
+                  key={item.id}
+                  item={item}
+                  onOpenAction={onOpenAction}
+                  onViewHistory={onViewHistory}
+                />
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
     </div>
   )
 }
 
 interface StockActionCardProps {
+  activeItem: StockItem
   actionType: 'ADD' | 'DEDUCT' | 'ADJUST' | 'MIN_LEVEL'
   actionValue: string
   actionReason: string
@@ -156,6 +186,7 @@ interface StockActionCardProps {
 }
 
 function StockActionCard({
+  activeItem,
   actionType,
   actionValue,
   actionReason,
@@ -165,58 +196,70 @@ function StockActionCard({
   onSubmit,
 }: StockActionCardProps) {
   return (
-    <div className="rounded-xl border border-brand-500/30 bg-brand-950/5 p-4 backdrop-blur-md space-y-4">
-      <div className="flex items-center justify-between border-b border-gray-855 pb-2">
-        <h3 className="text-xs font-bold uppercase tracking-wider text-brand-400">
-          {actionType === 'ADD'
-            ? 'Registrar Entrada'
-            : actionType === 'DEDUCT'
-              ? 'Registrar Retirada'
-              : actionType === 'ADJUST'
-                ? 'Ajuste Físico'
-                : 'Alterar Limite Alerta'}
-        </h3>
+    <div className="rounded-2xl border border-brand-500/20 bg-brand-500/5 p-5 backdrop-blur-md space-y-4">
+      <div className="flex items-center justify-between border-b border-gray-900/60 pb-2.5">
+        <div>
+          <h3 className="text-xs font-black uppercase tracking-wider text-brand-400">
+            {actionType === 'ADD'
+              ? 'Registrar Entrada'
+              : actionType === 'DEDUCT'
+                ? 'Registrar Retirada'
+                : actionType === 'ADJUST'
+                  ? 'Ajustar Inventário'
+                  : 'Alterar Limiar Mínimo'}
+          </h3>
+          <span className="text-[10px] text-gray-400 font-bold mt-0.5">{activeItem.name}</span>
+        </div>
         <button
           type="button"
           onClick={onClose}
-          className="text-gray-500 hover:text-white transition"
+          className="text-gray-500 hover:text-white transition rounded-lg p-1 hover:bg-white/[0.03]"
         >
-          <X className="h-4 w-4" />
+          <X className="h-4.5 w-4.5" />
         </button>
       </div>
 
-      <div className="space-y-3 text-xs">
-        <label className="block text-[10px] text-gray-500 uppercase font-bold mb-1">
-          {actionType === 'MIN_LEVEL' ? 'Novo Mínimo de Alerta' : 'Quantidade'}
-          <input
-            type="number"
-            step="any"
-            placeholder="Ex: 5"
-            value={actionValue}
-            onChange={(e) => onChangeValue(e.target.value)}
-            className="w-full mt-1 rounded border border-gray-855 bg-gray-950 px-3 py-2 text-white placeholder-gray-650 focus:border-brand-500 focus:outline-none"
-          />
-        </label>
+      <div className="space-y-4 text-xs">
+        <div className="space-y-1.5">
+          <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
+            {actionType === 'MIN_LEVEL' ? 'Novo Mínimo de Alerta' : 'Quantidade'}
+          </span>
+          <div className="relative">
+            <input
+              type="number"
+              step="any"
+              placeholder="Digite a quantidade..."
+              value={actionValue}
+              onChange={(e) => onChangeValue(e.target.value)}
+              className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+            />
+            <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500 font-mono">
+              {activeItem.current_quantity_unit}
+            </span>
+          </div>
+        </div>
 
         {actionType !== 'MIN_LEVEL' && (
-          <label className="block text-[10px] text-gray-500 uppercase font-bold mb-1">
-            Motivo
+          <div className="space-y-1.5">
+            <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
+              Justificativa
+            </span>
             <input
               type="text"
-              placeholder="Ex: Recebimento de carga"
+              placeholder="Ex: Reposição semanal de carga"
               value={actionReason}
               onChange={(e) => onChangeReason(e.target.value)}
-              className="w-full mt-1 rounded border border-gray-855 bg-gray-950 px-3 py-2 text-white placeholder-gray-655 focus:border-brand-500 focus:outline-none"
+              className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
             />
-          </label>
+          </div>
         )}
 
         <button
           type="button"
           onClick={onSubmit}
-          className="flex w-full items-center justify-center gap-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 active:scale-[0.98] py-2 text-xs font-bold text-white transition duration-200"
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 active:scale-[0.98] py-3 text-xs font-bold text-white transition duration-200 shadow-lg shadow-brand-500/10 animate-pulse-glow"
         >
-          Confirmar
+          Confirmar Lançamento
         </button>
       </div>
     </div>
@@ -254,94 +297,115 @@ function CreateStockItemModal({ onClose, onSubmit }: CreateStockItemModalProps) 
   }
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-955/80 backdrop-blur-sm">
-      <div className="w-full max-w-md rounded-2xl border border-gray-800 bg-gray-900 p-6 shadow-xl space-y-4">
-        <div className="flex items-center justify-between border-b border-gray-800 pb-3">
-          <h3 className="text-base font-bold text-gray-100">Adicionar Novo Insumo</h3>
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+      <div className="w-full max-w-md rounded-2xl glass-elevated overflow-hidden border border-gray-800">
+        <div className="flex items-center justify-between border-b border-gray-900/60 p-5">
+          <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+            Novo Insumo de Estoque
+          </h3>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-500 hover:text-white transition"
+            className="text-gray-500 hover:text-white transition rounded-lg p-1 hover:bg-white/[0.03]"
           >
             <X className="h-5 w-5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-3.5 text-xs">
-          <label className="block text-[10px] uppercase font-bold text-gray-500">
-            Nome
+        <form onSubmit={handleSubmit} className="p-5 space-y-4 text-xs">
+          <div className="space-y-1.5">
+            <span className="block text-[10px] uppercase font-extrabold text-gray-550">
+              Nome do Item
+            </span>
             <input
               type="text"
               required
-              placeholder="Ex: Pão de Hambúrguer"
+              placeholder="Ex: Pão de Hambúrguer Gergelim"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full mt-1 rounded border border-gray-805 bg-gray-955 px-3 py-2 text-white focus:border-brand-500 focus:outline-none"
+              className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
             />
-          </label>
+          </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="block text-[10px] uppercase font-bold text-gray-500">
-              Categoria
+            <div className="space-y-1.5">
+              <span className="block text-[10px] uppercase font-extrabold text-gray-555">
+                Categoria
+              </span>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full mt-1 rounded border border-gray-805 bg-gray-955 px-3 py-2 text-white focus:border-brand-500 focus:outline-none"
+                className="w-full rounded-xl px-4 py-3 text-xs text-white bg-gray-950 border border-gray-850 focus:border-brand-500 focus:outline-none"
               >
                 <option value="RAW_MATERIAL">Insumo Base</option>
                 <option value="BEVERAGE">Bebida</option>
                 <option value="PACKAGING">Embalagem</option>
               </select>
-            </label>
+            </div>
 
-            <label className="block text-[10px] uppercase font-bold text-gray-500">
-              Unidade
+            <div className="space-y-1.5">
+              <span className="block text-[10px] uppercase font-extrabold text-gray-555">
+                Unidade
+              </span>
               <select
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
-                className="w-full mt-1 rounded border border-gray-805 bg-gray-955 px-3 py-2 text-white focus:border-brand-500 focus:outline-none"
+                className="w-full rounded-xl px-4 py-3 text-xs text-white bg-gray-950 border border-gray-850 focus:border-brand-500 focus:outline-none"
               >
-                <option value="un">Unidade (un)</option>
-                <option value="kg">Quilograma (kg)</option>
-                <option value="g">Grama (g)</option>
-                <option value="l">Litro (l)</option>
-                <option value="ml">Mililitro (ml)</option>
+                <option value="un">Unidades (un)</option>
+                <option value="kg">Quilogramas (kg)</option>
+                <option value="g">Gramas (g)</option>
+                <option value="l">Litros (l)</option>
+                <option value="ml">Mililitros (ml)</option>
               </select>
-            </label>
+            </div>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <label className="block text-[10px] uppercase font-bold text-gray-500">
-              Qtd. Inicial
+            <div className="space-y-1.5">
+              <span className="block text-[10px] uppercase font-extrabold text-gray-555">
+                Qtd. Inicial
+              </span>
               <input
                 type="number"
                 step="any"
                 required
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
-                className="w-full mt-1 rounded border border-gray-805 bg-gray-955 px-3 py-2 text-white focus:border-brand-500 focus:outline-none"
+                className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
               />
-            </label>
+            </div>
 
-            <label className="block text-[10px] uppercase font-bold text-gray-500">
-              Alerta Mínimo
+            <div className="space-y-1.5">
+              <span className="block text-[10px] uppercase font-extrabold text-gray-555">
+                Alerta Mínimo
+              </span>
               <input
                 type="number"
                 step="any"
                 required
                 value={minLevel}
                 onChange={(e) => setMinLevel(e.target.value)}
-                className="w-full mt-1 rounded border border-gray-805 bg-gray-955 px-3 py-2 text-white focus:border-brand-500 focus:outline-none"
+                className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
               />
-            </label>
+            </div>
           </div>
 
-          <button
-            type="submit"
-            className="w-full rounded-lg bg-brand-500 hover:bg-brand-600 active:scale-[0.98] py-2.5 text-xs font-bold text-white transition duration-200 mt-2"
-          >
-            Salvar Insumo
-          </button>
+          <div className="flex border-t border-gray-900/65 pt-4 gap-3">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-xl border border-gray-800 hover:bg-white/[0.02] py-3 text-xs font-bold text-gray-400 transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="flex-1 rounded-xl bg-brand-500 hover:bg-brand-600 active:scale-[0.98] py-3 text-xs font-bold text-white transition shadow-lg shadow-brand-500/10"
+            >
+              Salvar Insumo
+            </button>
+          </div>
         </form>
       </div>
     </div>
@@ -381,59 +445,71 @@ function HistoryPanel({
 }: HistoryPanelProps) {
   if (!activeHistoryItem) {
     return (
-      <div className="py-12 text-center text-xs text-gray-500">
-        Clique no ícone de histórico de um item para visualizar suas movimentações.
+      <div className="py-16 text-center text-xs text-gray-500 font-medium">
+        Selecione o histórico de um insumo para visualizar as movimentações registradas.
       </div>
     )
   }
 
   return (
-    <div className="mt-4 space-y-4">
-      <div className="text-xs font-bold text-gray-200">
-        {activeHistoryItem.name}{' '}
-        <span className="text-[10px] text-gray-500 font-mono">
-          ({activeHistoryItem.current_quantity_unit})
+    <div className="space-y-4">
+      <div className="text-xs font-bold text-gray-200 flex items-center justify-between">
+        <span>{activeHistoryItem.name}</span>
+        <span className="text-[10px] text-brand-400 bg-brand-500/10 border border-brand-500/20 px-2 py-0.5 rounded font-mono uppercase font-black">
+          {activeHistoryItem.current_quantity_unit}
         </span>
       </div>
 
       {isLoadingHistory ? (
-        <div className="text-center py-8 text-xs text-gray-500 animate-pulse">
-          Buscando registros...
+        <div className="text-center py-12 text-xs text-gray-500 animate-pulse">
+          Buscando registros na rede...
         </div>
       ) : historyMovements.length === 0 ? (
-        <div className="text-center py-8 text-xs text-gray-500">
-          Nenhuma movimentação registrada para este item.
+        <div className="text-center py-12 text-xs text-gray-500 font-semibold">
+          Nenhuma movimentação para este insumo.
         </div>
       ) : (
-        <div className="max-h-[300px] overflow-y-auto space-y-2 pr-1">
+        <div className="max-h-[350px] overflow-y-auto space-y-2 pr-1">
           {historyMovements.map((move) => {
             const isAdd = move.movement_type === 'ADD'
             const isDeduct = move.movement_type === 'DEDUCT'
+            const isMin = move.movement_type === 'MIN_LEVEL'
             const time = new Date(move.created_at).toLocaleDateString()
-            let typeColor = 'text-gray-400'
+            let typeColor = 'text-gray-400 border-gray-900 bg-gray-900/20'
             let typeSign = ''
+            let typeLabel = 'Ajuste'
 
             if (isAdd) {
-              typeColor = 'text-emerald-400'
+              typeColor = 'text-emerald-450 border-emerald-500/10 bg-emerald-500/[0.03]'
               typeSign = '+'
+              typeLabel = 'Entrada'
             } else if (isDeduct) {
-              typeColor = 'text-red-400'
+              typeColor = 'text-rose-450 border-rose-500/10 bg-rose-500/[0.03]'
               typeSign = '-'
+              typeLabel = 'Saída'
+            } else if (isMin) {
+              typeColor = 'text-amber-450 border-amber-500/10 bg-amber-500/[0.03]'
+              typeLabel = 'Limiar'
             }
 
             return (
               <div
                 key={move.id}
-                className="rounded border border-gray-850 bg-gray-950/30 p-2.5 text-[11px] space-y-1"
+                className={`rounded-xl border p-3 text-[11px] space-y-1.5 ${typeColor}`}
               >
-                <div className="flex justify-between">
-                  <span className={`font-bold ${typeColor}`}>
+                <div className="flex justify-between items-center font-bold">
+                  <span className="uppercase tracking-wider text-[9px]">{typeLabel}</span>
+                  <span className="text-[10px] text-gray-500 font-medium">{time}</span>
+                </div>
+                <div className="flex justify-between items-baseline pt-1">
+                  <span className="text-xs font-black">
                     {typeSign}
                     {move.quantity_changed}
                   </span>
-                  <span className="text-[10px] text-gray-500">{time}</span>
+                  <span className="text-[10px] text-gray-400 truncate max-w-[150px] font-medium">
+                    {move.reason}
+                  </span>
                 </div>
-                <div className="text-gray-400 truncate">{move.reason}</div>
               </div>
             )
           })}
@@ -447,6 +523,8 @@ export default function StockManager() {
   const [stockItems, setStockItems] = useState<StockItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState('')
+  const [filterTab, setFilterTab] = useState<'ALL' | 'LOW'>('ALL')
 
   const [showCreateModal, setShowCreateModal] = useState(false)
   const [activeHistoryItem, setActiveHistoryItem] = useState<StockItem | null>(null)
@@ -461,7 +539,6 @@ export default function StockManager() {
   const [actionReason, setActionReason] = useState('')
 
   const fetchStock = useCallback(async () => {
-    setIsLoading(true)
     setError(null)
     try {
       const res = await httpClient.get<StockItem[]>('/v1/stock/items')
@@ -474,6 +551,7 @@ export default function StockManager() {
   }, [])
 
   useEffect(() => {
+    setIsLoading(true)
     fetchStock()
   }, [fetchStock])
 
@@ -541,15 +619,29 @@ export default function StockManager() {
     }
   }
 
+  const getActiveItem = (): StockItem | undefined => {
+    return stockItems.find((item) => item.id === actionItemId)
+  }
+
+  // Filter items based on search query and tab filter
+  const filteredItems = stockItems.filter((item) => {
+    const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const matchesTab = filterTab === 'ALL' || item.is_low_stock
+    return matchesSearch && matchesTab
+  })
+
+  const lowStockCount = stockItems.filter((item) => item.is_low_stock).length
+  const activeItem = getActiveItem()
+
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-800/80 pb-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-900/60 pb-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-100 flex items-center gap-2">
+          <h2 className="text-lg font-black text-white tracking-wide uppercase">
             Controle de Estoque
           </h2>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-550 font-medium mt-0.5">
             Gerencie insumos, bebidas e níveis críticos de armazenamento
           </p>
         </div>
@@ -558,7 +650,7 @@ export default function StockManager() {
           <button
             type="button"
             onClick={fetchStock}
-            className="flex items-center gap-1.5 rounded-lg border border-gray-800 hover:border-gray-700 bg-gray-900/50 px-3.5 py-2 text-xs font-semibold text-gray-300 hover:text-white transition duration-200"
+            className="flex items-center gap-1.5 rounded-xl border border-gray-850 hover:border-gray-700 bg-gray-900/30 px-4 py-2.5 text-xs font-bold text-gray-300 hover:text-white transition duration-200"
           >
             <RotateCcw className="h-4 w-4" />
             Atualizar
@@ -566,7 +658,7 @@ export default function StockManager() {
           <button
             type="button"
             onClick={() => setShowCreateModal(true)}
-            className="flex items-center gap-1.5 rounded-lg bg-brand-500 hover:bg-brand-600 px-4 py-2 text-xs font-bold text-white transition duration-200 active:scale-[0.98]"
+            className="flex items-center gap-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 px-4 py-2.5 text-xs font-bold text-white transition duration-200 active:scale-[0.98] shadow-lg shadow-brand-500/10"
           >
             <PlusCircle className="h-4 w-4" />
             Novo Insumo
@@ -575,26 +667,71 @@ export default function StockManager() {
       </div>
 
       {isLoading && stockItems.length === 0 ? (
-        <div className="text-center py-20 text-xs text-gray-500">Carregando inventário...</div>
+        <div className="text-center py-20 text-xs text-gray-400 font-medium">
+          Carregando inventário...
+        </div>
       ) : error ? (
-        <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-6 text-center text-red-400">
+        <div className="rounded-2xl border border-red-955 bg-red-950/20 p-6 text-center text-red-400 font-bold text-xs">
           {error}
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Main List */}
+          {/* Main List Column */}
           <div className="lg:col-span-2 space-y-4">
+            {/* Filters and Search toolbar */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-gray-950/20 border border-gray-900 rounded-2xl p-4 glass-card">
+              <div className="flex gap-1">
+                <button
+                  type="button"
+                  onClick={() => setFilterTab('ALL')}
+                  className={`px-4 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition ${
+                    filterTab === 'ALL'
+                      ? 'bg-brand-500 text-white shadow-md'
+                      : 'bg-white/[0.02] border border-gray-900 text-gray-400 hover:text-gray-200'
+                  }`}
+                >
+                  Todos ({stockItems.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setFilterTab('LOW')}
+                  className={`px-4 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition flex items-center gap-1.5 ${
+                    filterTab === 'LOW'
+                      ? 'bg-rose-600 text-white shadow-md'
+                      : 'bg-white/[0.02] border border-gray-900 text-gray-400 hover:text-rose-400'
+                  }`}
+                >
+                  {lowStockCount > 0 && (
+                    <span className="h-2 w-2 rounded-full bg-white animate-ping" />
+                  )}
+                  Alerta Crítico ({lowStockCount})
+                </button>
+              </div>
+
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+                <input
+                  type="text"
+                  placeholder="Pesquisar insumo..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="w-full pl-9.5 pr-4 py-2.5 text-xs text-white glass-input"
+                />
+              </div>
+            </div>
+
             <StockTable
-              items={stockItems}
+              items={filteredItems}
               onOpenAction={handleOpenAction}
               onViewHistory={handleViewHistory}
             />
           </div>
 
-          {/* Right Col: Action Form or History */}
+          {/* Right Column: Action Form or History Panel */}
           <div className="space-y-6">
-            {actionItemId && actionType && (
+            {actionItemId && actionType && activeItem && (
               <StockActionCard
+                activeItem={activeItem}
                 actionType={actionType}
                 actionValue={actionValue}
                 actionReason={actionReason}
@@ -606,9 +743,9 @@ export default function StockManager() {
             )}
 
             {/* History Panel */}
-            <div className="rounded-xl border border-gray-800/80 bg-gray-900/30 p-4 backdrop-blur-md">
-              <h3 className="border-b border-gray-850 pb-2.5 text-xs font-bold uppercase tracking-wider text-gray-400 flex items-center gap-2">
-                <FileSpreadsheet className="h-4 w-4 text-purple-400" />
+            <div className="rounded-2xl border border-gray-900 bg-gray-950/10 p-5 backdrop-blur-md glass-card">
+              <h3 className="border-b border-gray-900/60 pb-3 text-xs font-black uppercase tracking-widest text-gray-500 flex items-center gap-2">
+                <FileSpreadsheet className="h-4.5 w-4.5 text-purple-400" />
                 Histórico de Movimentações
               </h3>
 

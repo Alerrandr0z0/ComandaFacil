@@ -1,4 +1,4 @@
-import { Check, Flame, GlassWater, Loader2, Play, RefreshCw, X } from 'lucide-react'
+import { Check, Clock, Flame, GlassWater, Loader2, Play, RefreshCw, X } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTenant } from '@/shared/hooks/useTenant'
 import { httpClient } from '@/shared/lib/http_client'
@@ -21,6 +21,96 @@ interface KdsColumnProps {
   actionLabel?: string
   onAction?: (itemId: number) => void
   onCancel?: (itemId: number) => void
+  seenTimestamps: Record<number, number>
+}
+
+function KdsItemCard({
+  item,
+  showCancel,
+  actionLabel,
+  onAction,
+  onCancel,
+  startTime,
+}: {
+  item: KitchenItem
+  showCancel?: boolean
+  actionLabel?: string
+  onAction?: (itemId: number) => void
+  onCancel?: (itemId: number) => void
+  startTime: number
+}) {
+  const [elapsed, setElapsed] = useState('')
+
+  useEffect(() => {
+    const updateTimer = () => {
+      const diffMs = Date.now() - startTime
+      const diffMins = Math.floor(diffMs / 60000)
+      const diffSecs = Math.floor((diffMs % 60000) / 1000)
+      setElapsed(`${diffMins}m ${diffSecs}s`)
+    }
+
+    updateTimer()
+    const interval = setInterval(updateTimer, 1000)
+    return () => clearInterval(interval)
+  }, [startTime])
+
+  const isWarning = Date.now() - startTime > 10 * 60000 // > 10 mins
+
+  return (
+    <div
+      className={`flex flex-col justify-between rounded-xl border p-4 space-y-4 transition-all duration-300 ${
+        isWarning
+          ? 'border-rose-500/30 bg-rose-950/5 hover:border-rose-500/40 shadow-md shadow-rose-950/10'
+          : 'border-gray-900 bg-gray-950/20 hover:border-gray-850'
+      }`}
+    >
+      <div className="flex justify-between items-start">
+        <div className="space-y-1">
+          <span className="text-[9px] uppercase tracking-wider font-extrabold text-gray-500">
+            Ref ID: #{item.id}
+          </span>
+          <h4 className="text-sm font-bold text-white">{item.name_cpy}</h4>
+        </div>
+        <div
+          className={`flex items-center gap-1 text-[10px] font-bold ${isWarning ? 'text-rose-400' : 'text-gray-400'}`}
+        >
+          <Clock className="h-3.5 w-3.5" />
+          <span>{elapsed}</span>
+        </div>
+      </div>
+
+      <div className="flex gap-2 justify-end border-t border-gray-900/50 pt-3">
+        {showCancel && onCancel && (
+          <button
+            type="button"
+            onClick={() => onCancel(item.id)}
+            className="rounded-xl p-2.5 border border-red-950/40 bg-red-950/10 hover:bg-red-900/20 text-red-400 transition"
+            title="Cancelar item"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        )}
+        {actionLabel && onAction && (
+          <button
+            type="button"
+            onClick={() => onAction(item.id)}
+            className={`flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold text-white transition-all duration-300 active:scale-[0.98] ${
+              item.state === 'WAITING'
+                ? 'bg-amber-500 hover:bg-amber-600 shadow-md shadow-amber-500/10'
+                : 'bg-brand-500 hover:bg-brand-600 shadow-md shadow-brand-500/10'
+            }`}
+          >
+            {item.state === 'WAITING' ? (
+              <Play className="h-3.5 w-3.5 fill-current" />
+            ) : (
+              <Check className="h-3.5 w-3.5" />
+            )}
+            <span>{actionLabel}</span>
+          </button>
+        )}
+      </div>
+    </div>
+  )
 }
 
 function KdsColumn({
@@ -32,65 +122,35 @@ function KdsColumn({
   actionLabel,
   onAction,
   onCancel,
+  seenTimestamps,
 }: KdsColumnProps) {
   return (
-    <div className="flex flex-col rounded-xl border border-gray-800/80 bg-gray-900/10 p-4">
+    <div className="flex flex-col rounded-2xl border border-gray-900 bg-gray-950/10 p-5 backdrop-blur-md glass-card h-[calc(100vh-14rem)] min-h-[400px]">
       <h3
-        className={`border-b border-gray-850 pb-3 text-sm font-bold uppercase tracking-wider ${colorClass} flex items-center justify-between`}
+        className={`border-b border-gray-900/60 pb-3 text-xs font-black uppercase tracking-widest ${colorClass} flex items-center justify-between`}
       >
-        {title}
-        <span className="rounded-full bg-gray-950/50 border border-gray-900/50 px-2 py-0.5 text-xs">
+        <span>{title}</span>
+        <span className="rounded-full bg-white/[0.03] border border-gray-900 px-2 py-0.5 text-xs font-bold">
           {count}
         </span>
       </h3>
 
-      <div className="mt-4 flex-1 space-y-3 overflow-y-auto max-h-[600px] pr-1">
+      <div className="mt-4 flex-1 space-y-3 overflow-y-auto pr-1">
         {items.length === 0 ? (
-          <div className="py-12 text-center text-xs text-gray-500">Nenhum pedido nesta fila.</div>
+          <div className="py-16 text-center text-xs text-gray-500 font-medium">
+            Nenhum pedido nesta fila.
+          </div>
         ) : (
           items.map((item) => (
-            <div
+            <KdsItemCard
               key={item.id}
-              className={`flex flex-col justify-between rounded-lg border border-gray-800/35 bg-gray-950/10 p-3 space-y-3 transition hover:border-brand-500/20`}
-            >
-              <div>
-                <div className="flex items-center justify-between text-[10px] text-gray-500">
-                  <span>Ref ID: #{item.id}</span>
-                </div>
-                <h4 className="mt-1 text-sm font-bold text-gray-100">{item.name_cpy}</h4>
-              </div>
-
-              <div className="flex gap-2 justify-end">
-                {showCancel && onCancel && (
-                  <button
-                    type="button"
-                    onClick={() => onCancel(item.id)}
-                    className="rounded-lg p-1.5 border border-red-900 bg-red-950/25 hover:bg-red-900/20 text-red-400 transition"
-                    title="Cancelar item"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                )}
-                {actionLabel && onAction && (
-                  <button
-                    type="button"
-                    onClick={() => onAction(item.id)}
-                    className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-bold text-white transition active:scale-[0.98] ${
-                      item.state === 'WAITING'
-                        ? 'bg-amber-500 hover:bg-amber-600'
-                        : 'bg-blue-500 hover:bg-blue-600'
-                    }`}
-                  >
-                    {item.state === 'WAITING' ? (
-                      <Play className="h-3.5 w-3.5 fill-current" />
-                    ) : (
-                      <Check className="h-3.5 w-3.5" />
-                    )}
-                    {actionLabel}
-                  </button>
-                )}
-              </div>
-            </div>
+              item={item}
+              showCancel={showCancel}
+              actionLabel={actionLabel}
+              onAction={onAction}
+              onCancel={onCancel}
+              startTime={seenTimestamps[item.id] || Date.now()}
+            />
           ))
         )}
       </div>
@@ -105,15 +165,30 @@ export default function KdsBoard() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [connected, setConnected] = useState(false)
+
+  // Track timestamps of when items are first seen to show elapsed timers locally
+  const [seenTimestamps, setSeenTimestamps] = useState<Record<number, number>>({})
   const wsRef = useRef<WebSocket | null>(null)
 
   const fetchItems = useCallback(async () => {
-    setIsLoading(true)
     setError(null)
     try {
       const res = await httpClient.get<KitchenItem[]>('/v1/kitchen/items', {
         params: { station_type: stationType },
       })
+
+      // Update seen timestamps dictionary
+      setSeenTimestamps((prev) => {
+        const updated = { ...prev }
+        const now = Date.now()
+        for (const item of res.data) {
+          if (!updated[item.id]) {
+            updated[item.id] = now
+          }
+        }
+        return updated
+      })
+
       setItems(res.data)
     } catch (_err) {
       setError('Erro ao carregar itens da cozinha.')
@@ -123,6 +198,7 @@ export default function KdsBoard() {
   }, [stationType])
 
   useEffect(() => {
+    setIsLoading(true)
     fetchItems()
   }, [fetchItems])
 
@@ -130,7 +206,8 @@ export default function KdsBoard() {
     if (!tenantId) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//localhost:8000/api/v1/kitchen/ws?station_type=${stationType}&tenant_id=${tenantId}`
+    const host = window.location.host
+    const wsUrl = `${protocol}//${host}/api/v1/kitchen/ws?station_type=${stationType}&tenant_id=${tenantId}`
 
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
@@ -193,26 +270,29 @@ export default function KdsBoard() {
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-800/80 pb-4">
+      {/* Header */}
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-900/60 pb-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-100 flex items-center gap-2">
-            Painel KDS
+          <h2 className="text-lg font-black text-white tracking-wide uppercase flex items-center gap-2">
+            <span>Monitor de Cozinha (KDS)</span>
             <span
-              className={`inline-block h-2.5 w-2.5 rounded-full ${connected ? 'bg-emerald-500 shadow-sm shadow-emerald-500/20' : 'bg-red-500'} animate-pulse`}
+              className={`inline-block h-2.5 w-2.5 rounded-full ${connected ? 'bg-emerald-500 shadow-lg shadow-emerald-500/20' : 'bg-red-500'} animate-pulse`}
               title={connected ? 'Conectado em tempo real' : 'Sem conexão WebSocket'}
             />
           </h2>
-          <p className="text-xs text-gray-400">Monitoramento e despacho de pedidos da cozinha</p>
+          <p className="text-xs text-gray-500 font-medium mt-0.5">
+            Gerenciamento operacional e preparo de pedidos em tempo real
+          </p>
         </div>
 
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => setStationType('GRILL')}
-            className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-wider transition duration-300 ${
+            className={`flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
               stationType === 'GRILL'
-                ? 'bg-brand-500 text-white shadow-md shadow-brand-500/10'
-                : 'bg-gray-900/50 border border-gray-800 text-gray-400 hover:text-white'
+                ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/15'
+                : 'bg-white/[0.02] border border-gray-900 text-gray-400 hover:text-white'
             }`}
           >
             <Flame className="h-4 w-4" />
@@ -221,10 +301,10 @@ export default function KdsBoard() {
           <button
             type="button"
             onClick={() => setStationType('BEVERAGE')}
-            className={`flex items-center gap-1.5 rounded-lg px-4 py-2 text-xs font-semibold uppercase tracking-wider transition duration-300 ${
+            className={`flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold uppercase tracking-wider transition-all duration-300 ${
               stationType === 'BEVERAGE'
-                ? 'bg-brand-500 text-white shadow-md shadow-brand-500/10'
-                : 'bg-gray-900/50 border border-gray-800 text-gray-400 hover:text-white'
+                ? 'bg-brand-500 text-white shadow-lg shadow-brand-500/15'
+                : 'bg-white/[0.02] border border-gray-900 text-gray-400 hover:text-white'
             }`}
           >
             <GlassWater className="h-4 w-4" />
@@ -233,7 +313,7 @@ export default function KdsBoard() {
           <button
             type="button"
             onClick={fetchItems}
-            className="rounded-lg bg-gray-900 border border-gray-800 p-2 text-gray-400 hover:text-white transition"
+            className="rounded-xl bg-gray-900/30 border border-gray-850 p-2.5 text-gray-400 hover:text-white transition-all duration-300"
             title="Atualizar Pedidos"
           >
             <RefreshCw className="h-4 w-4" />
@@ -242,12 +322,12 @@ export default function KdsBoard() {
       </div>
 
       {isLoading && items.length === 0 ? (
-        <div className="flex py-24 justify-center items-center gap-2">
+        <div className="flex py-24 justify-center items-center gap-2.5">
           <Loader2 className="h-6 w-6 animate-spin text-brand-400" />
-          <span className="text-xs text-gray-400">Carregando pedidos ativos...</span>
+          <span className="text-xs text-gray-400 font-medium">Carregando pedidos ativos...</span>
         </div>
       ) : error ? (
-        <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-6 text-center text-red-400">
+        <div className="rounded-2xl border border-red-950/40 bg-red-950/15 p-6 text-center text-red-400 text-xs font-bold">
           {error}
         </div>
       ) : (
@@ -261,6 +341,7 @@ export default function KdsBoard() {
             actionLabel="Preparar"
             onAction={handlePrepare}
             onCancel={handleCancel}
+            seenTimestamps={seenTimestamps}
           />
           <KdsColumn
             title="Em Preparação"
@@ -271,12 +352,14 @@ export default function KdsBoard() {
             actionLabel="Pronto"
             onAction={handleReady}
             onCancel={handleCancel}
+            seenTimestamps={seenTimestamps}
           />
           <KdsColumn
             title="Prontos p/ Retirada"
             count={readyItems.length}
             colorClass="text-emerald-400"
             items={readyItems}
+            seenTimestamps={seenTimestamps}
           />
         </div>
       )}

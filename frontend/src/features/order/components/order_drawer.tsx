@@ -1,0 +1,615 @@
+import { Ban, Check, DollarSign, Plus, Search, Send, Sparkles, X } from 'lucide-react'
+import { useRef, useState } from 'react'
+import type { MenuItem } from '@/features/menu/menu_hooks'
+import type { DraftItem, OrderForm } from '../hooks/use_order_drawer'
+import ModifierPicker from './modifier_picker'
+import PaymentModal from './payment_modal'
+import QuickSearch from './quick_search'
+
+interface OrderDrawerProps {
+  tableNumber: number
+  activeOrder: OrderForm | null
+  draft: DraftItem[]
+  activeMenu: { items: MenuItem[] } | null | undefined
+  isLoading: boolean
+  isSubmitting: boolean
+  isRequestingPayment: boolean
+  isProcessingPayment: boolean
+  isCancelling: boolean
+  isDelivering: boolean
+  onClose: () => void
+  onOpenTable: () => void
+  onSelectItem: (item: MenuItem) => void
+  onUpdateDraftQuantity: (itemId: number, delta: number) => void
+  onUpdateDraftNotes: (itemId: number, notes: string) => void
+  onSendToKitchen: () => Promise<unknown>
+  onRequestPayment: () => Promise<unknown>
+  onProcessPayment: (
+    method: 'PIX' | 'CREDIT' | 'DEBIT' | 'CASH',
+    receivedAmount?: number,
+  ) => Promise<unknown>
+  onDeliverOrder: () => Promise<unknown>
+  onCancelOrder: () => Promise<unknown>
+}
+
+const getItemPrice = (item: MenuItem): number => {
+  const base = 12.0
+  const offset = (item.id % 6) * 5.5
+  return base + offset
+}
+
+interface CatalogViewProps {
+  searchQuery: string
+  setSearchQuery: (q: string) => void
+  selectedCategory: string
+  setSelectedCategory: (c: string) => void
+  setIsQuickSearchOpen: (open: boolean) => void
+  categories: string[]
+  filteredCatalogItems: MenuItem[]
+  handleItemPressStart: (item: MenuItem) => void
+  handleItemPressEnd: (item: MenuItem) => void
+}
+
+function CatalogView({
+  searchQuery,
+  setSearchQuery,
+  selectedCategory,
+  setSelectedCategory,
+  setIsQuickSearchOpen,
+  categories,
+  filteredCatalogItems,
+  handleItemPressStart,
+  handleItemPressEnd,
+}: CatalogViewProps) {
+  return (
+    <div className="flex-1 flex flex-col overflow-hidden border-b border-gray-900/60">
+      {/* Search bar & Quick search trigger */}
+      <div className="px-4 pt-3 flex gap-2">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Filtrar pratos, bebidas..."
+            className="w-full bg-gray-900/20 pl-9 pr-4 py-2 text-xs text-white placeholder-gray-600 glass-input"
+          />
+        </div>
+        <button
+          type="button"
+          onClick={() => setIsQuickSearchOpen(true)}
+          className="rounded-xl border border-gray-800 bg-gray-900/40 hover:border-gray-700 px-3 py-2 text-xs text-gray-400 hover:text-white transition flex items-center gap-1.5"
+          title="Busca Rápida (Teclado)"
+        >
+          <Sparkles className="h-3.5 w-3.5 text-brand-400 animate-pulse" />
+          <span>Atalho</span>
+        </button>
+      </div>
+
+      {/* Categorias Horizontal Scroll */}
+      <div className="px-4 py-3 flex gap-1.5 overflow-x-auto scrollbar-none flex-shrink-0">
+        {categories.map((cat) => {
+          const isActive = selectedCategory === cat
+          return (
+            <button
+              type="button"
+              key={cat}
+              onClick={() => setSelectedCategory(cat)}
+              className={`px-3.5 py-1.5 rounded-full text-[10px] font-extrabold uppercase tracking-wider transition-all duration-300 flex-shrink-0 ${
+                isActive
+                  ? 'bg-brand-500 text-white shadow-md shadow-brand-500/10'
+                  : 'bg-white/[0.02] border border-gray-900 text-gray-400 hover:text-gray-200'
+              }`}
+            >
+              {cat}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Grid de Itens Scrollable */}
+      <div className="flex-1 overflow-y-auto px-4 pb-4 grid grid-cols-2 gap-2.5">
+        {filteredCatalogItems.map((item) => {
+          const price = getItemPrice(item)
+          return (
+            <button
+              type="button"
+              key={item.id}
+              className="rounded-xl border border-gray-900 bg-gray-950/20 p-2.5 flex flex-col justify-between hover:border-gray-855 hover:bg-white/[0.01] transition-all duration-300 relative group cursor-pointer text-left w-full h-full"
+              onMouseDown={() => handleItemPressStart(item)}
+              onMouseUp={() => handleItemPressEnd(item)}
+              onTouchStart={() => handleItemPressStart(item)}
+              onTouchEnd={() => handleItemPressEnd(item)}
+            >
+              <div className="space-y-0.5">
+                <span className="text-[8px] font-extrabold uppercase tracking-wider text-brand-400/80">
+                  {item.category}
+                </span>
+                <h4 className="text-[11px] font-bold text-gray-100 group-hover:text-white line-clamp-1">
+                  {item.name}
+                </h4>
+              </div>
+              <div className="flex items-center justify-between mt-3.5 w-full">
+                <span className="text-xs font-black text-amber-500">R$ {price.toFixed(2)}</span>
+                <div className="h-6 w-6 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-400 group-hover:bg-brand-500 group-hover:text-white transition-all duration-300">
+                  <Plus className="h-3.5 w-3.5" />
+                </div>
+              </div>
+            </button>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
+interface DraftItemsListProps {
+  draft: DraftItem[]
+  isSubmitting: boolean
+  draftTotal: number
+  onUpdateDraftQuantity: (itemId: number, delta: number) => void
+  onUpdateDraftNotes: (itemId: number, notes: string) => void
+  onSendToKitchen: () => Promise<unknown>
+}
+
+function DraftItemsList({
+  draft,
+  isSubmitting,
+  draftTotal,
+  onUpdateDraftQuantity,
+  onUpdateDraftNotes,
+  onSendToKitchen,
+}: DraftItemsListProps) {
+  return (
+    <div className="p-4 border-b border-brand-500/20 bg-brand-950/5 space-y-3.5">
+      <div className="flex items-center justify-between">
+        <span className="text-[10px] font-extrabold uppercase tracking-widest text-brand-400">
+          Rascunho de Pedido
+        </span>
+        <span className="text-[10px] font-bold text-gray-400">{draft.length} novos itens</span>
+      </div>
+      <div className="space-y-2 max-h-[180px] overflow-y-auto pr-1">
+        {draft.map((item) => (
+          <div
+            key={item.menuItem.id}
+            className="rounded-xl border border-gray-900 bg-gray-950/40 p-2.5 space-y-2"
+          >
+            <div className="flex items-start justify-between">
+              <div>
+                <h4 className="text-[11px] font-bold text-gray-200">{item.menuItem.name}</h4>
+                <span className="text-[10px] font-bold text-amber-500">
+                  R$ {item.price.toFixed(2)}
+                </span>
+              </div>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => onUpdateDraftQuantity(item.menuItem.id, -1)}
+                  className="h-6 w-6 rounded bg-gray-900 border border-gray-800 flex items-center justify-center text-xs font-bold text-white hover:border-gray-700"
+                >
+                  -
+                </button>
+                <span className="text-xs font-bold text-white w-4 text-center">
+                  {item.quantity}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => onUpdateDraftQuantity(item.menuItem.id, 1)}
+                  className="h-6 w-6 rounded bg-gray-900 border border-gray-800 flex items-center justify-center text-xs font-bold text-white hover:border-gray-700"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+            <input
+              type="text"
+              placeholder="Observações adicionais..."
+              value={item.notes}
+              onChange={(e) => onUpdateDraftNotes(item.menuItem.id, e.target.value)}
+              className="w-full rounded-lg border border-gray-900 bg-gray-950 px-2 py-1.5 text-[10px] text-white placeholder-gray-600 focus:border-brand-500 focus:outline-none"
+            />
+          </div>
+        ))}
+      </div>
+
+      <div className="flex gap-2">
+        <button
+          type="button"
+          disabled={isSubmitting}
+          onClick={onSendToKitchen}
+          className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 disabled:bg-gray-850 disabled:text-gray-500 py-3 text-xs font-bold text-white transition-all duration-300 shadow-md shadow-emerald-500/10"
+        >
+          {isSubmitting ? (
+            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+          ) : (
+            <>
+              <Send className="h-3.5 w-3.5" />
+              Enviar p/ Cozinha (R$ {draftTotal.toFixed(2)})
+            </>
+          )}
+        </button>
+      </div>
+    </div>
+  )
+}
+
+interface ConfirmedItemsListProps {
+  activeOrder: OrderForm
+  isPaid: boolean
+  isPaymentRequested: boolean
+  isDelivering: boolean
+  isProcessingPayment: boolean
+  isCancelling: boolean
+  isRequestingPayment: boolean
+  onDeliverOrder: () => Promise<unknown>
+  onCancelOrder: () => Promise<unknown>
+  onRequestPayment: () => Promise<unknown>
+  setIsPaymentOpen: (open: boolean) => void
+}
+
+function ConfirmedItemsList({
+  activeOrder,
+  isPaid,
+  isPaymentRequested,
+  isDelivering,
+  isProcessingPayment,
+  isCancelling,
+  isRequestingPayment,
+  onDeliverOrder,
+  onCancelOrder,
+  onRequestPayment,
+  setIsPaymentOpen,
+}: ConfirmedItemsListProps) {
+  return (
+    <div className="p-4 flex-1 flex flex-col justify-between">
+      <div>
+        <span className="block text-[10px] font-extrabold uppercase tracking-widest text-gray-500 mb-3">
+          Consumo Registrado
+        </span>
+        {activeOrder.items.length === 0 ? (
+          <div className="flex flex-col items-center justify-center text-center text-xs text-gray-600 py-8">
+            Nenhum item consumido ainda nesta mesa.
+          </div>
+        ) : (
+          <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
+            {activeOrder.items.map((item) => (
+              <div
+                key={item.id}
+                className="flex justify-between border-b border-gray-900/60 pb-2 text-xs"
+              >
+                <div className="space-y-0.5">
+                  <h4 className="font-bold text-gray-200">
+                    {item.name_cpy}{' '}
+                    <span className="text-gray-500 font-medium">x{item.quantity}</span>
+                  </h4>
+                  {item.notes && (
+                    <span className="text-[9px] italic text-brand-400 font-medium block">
+                      Obs: {item.notes}
+                    </span>
+                  )}
+                </div>
+                <span className="font-bold text-gray-400">
+                  R$ {Number(item.subtotal).toFixed(2)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="border-t border-gray-900 pt-3 space-y-4">
+        <div className="flex items-center justify-between text-xs font-bold">
+          <span className="text-gray-400">Total Acumulado</span>
+          <span className="text-white text-sm font-black">
+            R$ {Number(activeOrder.total).toFixed(2)}
+          </span>
+        </div>
+
+        {/* Operational checkout buttons */}
+        <div className="flex gap-2.5">
+          {isPaid ? (
+            /* Close table/checkout deliver */
+            <button
+              type="button"
+              disabled={isDelivering}
+              onClick={onDeliverOrder}
+              className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-purple-600 hover:bg-purple-700 py-3 text-xs font-bold text-white transition-all duration-300"
+            >
+              {isDelivering ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <>
+                  <Check className="h-4 w-4" />
+                  Desocupar & Liberar Mesa
+                </>
+              )}
+            </button>
+          ) : isPaymentRequested ? (
+            /* Request payment details / Process payment */
+            <button
+              type="button"
+              disabled={isProcessingPayment}
+              onClick={() => setIsPaymentOpen(true)}
+              className="w-full flex items-center justify-center gap-1.5 rounded-xl bg-blue-600 hover:bg-blue-700 py-3 text-xs font-bold text-white transition-all duration-300"
+            >
+              {isProcessingPayment ? (
+                <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+              ) : (
+                <>
+                  <DollarSign className="h-4 w-4" />
+                  Processar Pagamento
+                </>
+              )}
+            </button>
+          ) : (
+            /* Request count / cancel comanda */
+            <>
+              <button
+                type="button"
+                disabled={isCancelling}
+                onClick={onCancelOrder}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-xl border border-red-950/40 bg-red-950/10 hover:bg-red-900/20 py-3 text-xs font-bold text-red-400 transition"
+              >
+                <Ban className="h-3.5 w-3.5" />
+                Cancelar
+              </button>
+              <button
+                type="button"
+                disabled={isRequestingPayment}
+                onClick={onRequestPayment}
+                className="flex-grow flex items-center justify-center gap-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 py-3 text-xs font-bold text-white transition"
+              >
+                <DollarSign className="h-3.5 w-3.5" />
+                Pedir Conta
+              </button>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+interface OrderDrawerHeaderProps {
+  tableNumber: number
+  isOccupied: boolean
+  isPaid: boolean
+  isPaymentRequested: boolean
+  onClose: () => void
+}
+
+function OrderDrawerHeader({
+  tableNumber,
+  isOccupied,
+  isPaid,
+  isPaymentRequested,
+  onClose,
+}: OrderDrawerHeaderProps) {
+  return (
+    <div className="flex items-center justify-between px-6 py-4.5 border-b border-gray-900/60">
+      <div>
+        <div className="flex items-center gap-2">
+          <h2 className="text-base font-black text-white">
+            Mesa {tableNumber < 10 ? `0${tableNumber}` : tableNumber}
+          </h2>
+          {isOccupied && (
+            <span
+              className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider border ${
+                isPaid
+                  ? 'border-purple-500/20 bg-purple-950/20 text-purple-400'
+                  : isPaymentRequested
+                    ? 'border-blue-500/20 bg-blue-950/20 text-blue-400'
+                    : 'border-amber-500/20 bg-amber-950/20 text-amber-400'
+              }`}
+            >
+              {isPaid ? 'Pago' : isPaymentRequested ? 'Conta Pedida' : 'Ativo'}
+            </span>
+          )}
+        </div>
+        <p className="text-[10px] text-gray-550 font-medium mt-0.5">
+          {isOccupied ? 'Comanda aberta' : 'Mesa desocupada'}
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onClose}
+        className="rounded-lg p-2 text-gray-550 hover:text-white transition bg-white/[0.02]"
+      >
+        <X className="h-4.5 w-4.5" />
+      </button>
+    </div>
+  )
+}
+
+interface OrderDrawerLivreStateProps {
+  onOpenTable: () => void
+}
+
+function OrderDrawerLivreState({ onOpenTable }: OrderDrawerLivreStateProps) {
+  return (
+    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
+      <div className="h-16 w-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/5">
+        <Check className="h-8 w-8" />
+      </div>
+      <div>
+        <h3 className="text-sm font-bold text-gray-200">Mesa Livre</h3>
+        <p className="text-xs text-gray-500 max-w-xs mt-1">
+          Abra uma nova comanda nesta mesa para registrar pedidos de clientes.
+        </p>
+      </div>
+      <button
+        type="button"
+        onClick={onOpenTable}
+        className="rounded-xl bg-brand-500 hover:bg-brand-600 active:scale-[0.98] px-6 py-3 text-xs font-bold text-white transition-all duration-300 shadow-lg shadow-brand-500/15"
+      >
+        Abrir Mesa / Comanda
+      </button>
+    </div>
+  )
+}
+
+export default function OrderDrawer({
+  tableNumber,
+  activeOrder,
+  draft,
+  activeMenu,
+  isLoading,
+  isSubmitting,
+  isRequestingPayment,
+  isProcessingPayment,
+  isCancelling,
+  isDelivering,
+  onClose,
+  onOpenTable,
+  onSelectItem,
+  onUpdateDraftQuantity,
+  onUpdateDraftNotes,
+  onSendToKitchen,
+  onRequestPayment,
+  onProcessPayment,
+  onDeliverOrder,
+  onCancelOrder,
+}: OrderDrawerProps) {
+  const [searchQuery, setSearchQuery] = useState('')
+  const [selectedCategory, setSelectedCategory] = useState('Todos')
+  const [selectedModifierItem, setSelectedModifierItem] = useState<MenuItem | null>(null)
+  const [isModifierOpen, setIsModifierOpen] = useState(false)
+  const [isPaymentOpen, setIsPaymentOpen] = useState(false)
+  const [isQuickSearchOpen, setIsQuickSearchOpen] = useState(false)
+
+  const longPressTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // Long press helpers for modifiers picker on Catalog
+  const handleItemPressStart = (item: MenuItem) => {
+    longPressTimer.current = setTimeout(() => {
+      setSelectedModifierItem(item)
+      setIsModifierOpen(true)
+      longPressTimer.current = null
+    }, 550)
+  }
+
+  const handleItemPressEnd = (item: MenuItem) => {
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current)
+      longPressTimer.current = null
+      onSelectItem(item)
+    }
+  }
+
+  const handleModifierConfirm = (notes: string) => {
+    if (!selectedModifierItem) return
+    onSelectItem(selectedModifierItem)
+    setTimeout(() => {
+      onUpdateDraftNotes(selectedModifierItem.id, notes)
+    }, 10)
+  }
+
+  // Pre-process categories
+  const categories: string[] = activeMenu
+    ? [
+        'Todos',
+        ...Array.from(new Set<string>(activeMenu.items.map((item: MenuItem) => item.category))),
+      ]
+    : ['Todos']
+
+  // Pre-process items based on category and search
+  const filteredCatalogItems: MenuItem[] = activeMenu
+    ? activeMenu.items.filter((item: MenuItem) => {
+        const matchesCategory = selectedCategory === 'Todos' || item.category === selectedCategory
+        const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase())
+        return matchesCategory && matchesSearch && item.is_available
+      })
+    : []
+
+  const draftTotal = draft.reduce((sum, d) => sum + d.price * d.quantity, 0)
+  const isOccupied = activeOrder !== null
+  const isPaymentRequested = !!activeOrder?.payment_requested
+  const isPaid = activeOrder?.state === 'PAID'
+
+  return (
+    <div className="flex flex-col h-full bg-gray-950/95 border-l border-gray-900 glass-elevated animate-slide-in-right select-none">
+      <OrderDrawerHeader
+        tableNumber={tableNumber}
+        isOccupied={isOccupied}
+        isPaid={isPaid}
+        isPaymentRequested={isPaymentRequested}
+        onClose={onClose}
+      />
+
+      {isLoading ? (
+        <div className="flex-1 flex items-center justify-center">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
+        </div>
+      ) : !isOccupied ? (
+        <OrderDrawerLivreState onOpenTable={onOpenTable} />
+      ) : (
+        <div className="flex-1 flex flex-col overflow-hidden min-h-0">
+          {!isPaymentRequested && !isPaid && (
+            <CatalogView
+              searchQuery={searchQuery}
+              setSearchQuery={setSearchQuery}
+              selectedCategory={selectedCategory}
+              setSelectedCategory={setSelectedCategory}
+              setIsQuickSearchOpen={setIsQuickSearchOpen}
+              categories={categories}
+              filteredCatalogItems={filteredCatalogItems}
+              handleItemPressStart={handleItemPressStart}
+              handleItemPressEnd={handleItemPressEnd}
+            />
+          )}
+
+          <div className="flex-grow flex flex-col overflow-y-auto min-h-0 bg-gray-950/40">
+            {draft.length > 0 && (
+              <DraftItemsList
+                draft={draft}
+                isSubmitting={isSubmitting}
+                draftTotal={draftTotal}
+                onUpdateDraftQuantity={onUpdateDraftQuantity}
+                onUpdateDraftNotes={onUpdateDraftNotes}
+                onSendToKitchen={onSendToKitchen}
+              />
+            )}
+
+            <ConfirmedItemsList
+              activeOrder={activeOrder}
+              isPaid={isPaid}
+              isPaymentRequested={isPaymentRequested}
+              isDelivering={isDelivering}
+              isProcessingPayment={isProcessingPayment}
+              isCancelling={isCancelling}
+              isRequestingPayment={isRequestingPayment}
+              onDeliverOrder={onDeliverOrder}
+              onCancelOrder={onCancelOrder}
+              onRequestPayment={onRequestPayment}
+              setIsPaymentOpen={setIsPaymentOpen}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Modals & Overlays */}
+      <ModifierPicker
+        isOpen={isModifierOpen}
+        onClose={() => setIsModifierOpen(false)}
+        itemName={selectedModifierItem?.name || ''}
+        category={selectedModifierItem?.category || ''}
+        initialNotes=""
+        onConfirm={handleModifierConfirm}
+      />
+
+      <PaymentModal
+        isOpen={isPaymentOpen}
+        onClose={() => setIsPaymentOpen(false)}
+        total={activeOrder ? Number(activeOrder.total) : 0}
+        onConfirm={onProcessPayment}
+      />
+
+      <QuickSearch
+        isOpen={isQuickSearchOpen}
+        onClose={() => setIsQuickSearchOpen(false)}
+        menuItems={activeMenu ? activeMenu.items : []}
+        onSelectItem={onSelectItem}
+      />
+    </div>
+  )
+}

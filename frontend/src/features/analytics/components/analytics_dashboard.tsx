@@ -1,4 +1,12 @@
-import { AlertTriangle, Clock, DollarSign, RefreshCw, ShoppingBag, TrendingUp } from 'lucide-react'
+import {
+  AlertTriangle,
+  CheckCircle,
+  Clock,
+  DollarSign,
+  RefreshCw,
+  ShoppingBag,
+  TrendingUp,
+} from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import {
   Area,
@@ -105,7 +113,7 @@ export default function AnalyticsDashboard() {
         { time: 'Qui', total: 2200 },
         { time: 'Sex', total: 3500 },
         { time: 'Sáb', total: 4200 },
-        { time: 'Dom', total: 3800 },
+        { time: 'Dom', total: 3805 },
       ]
     }
     return [
@@ -116,55 +124,49 @@ export default function AnalyticsDashboard() {
     ]
   })()
 
-  const colors = ['#f97316', '#a855f7', '#06b6d4', '#10b981', '#ef4444']
+  // Premium harmonized category chart colors
+  const chartColors = ['#f97316', '#8b5cf6', '#06b6d4', '#10b981', '#f43f5e']
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-800/80 pb-4">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-gray-900/60 pb-4">
         <div>
-          <h2 className="text-xl font-bold text-gray-100">Painel Analytics</h2>
-          <p className="text-xs text-gray-400">
+          <h2 className="text-lg font-black text-white tracking-wide uppercase">
+            Painel Analytics
+          </h2>
+          <p className="text-xs text-gray-500 font-medium mt-0.5">
             Análise de vendas, faturamento e tempos operacionais de cozinha
           </p>
         </div>
 
         {/* Filters */}
         <div className="flex items-center gap-2">
-          <div className="flex bg-gray-900/50 border border-gray-800 rounded-lg p-1">
-            <button
-              type="button"
-              onClick={() => setPeriod('day')}
-              className={`rounded px-3 py-1 text-xs font-semibold uppercase tracking-wider transition ${
-                period === 'day' ? 'bg-brand-500 text-white' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Hoje
-            </button>
-            <button
-              type="button"
-              onClick={() => setPeriod('week')}
-              className={`rounded px-3 py-1 text-xs font-semibold uppercase tracking-wider transition ${
-                period === 'week' ? 'bg-brand-500 text-white' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Semana
-            </button>
-            <button
-              type="button"
-              onClick={() => setPeriod('month')}
-              className={`rounded px-3 py-1 text-xs font-semibold uppercase tracking-wider transition ${
-                period === 'month' ? 'bg-brand-500 text-white' : 'text-gray-400 hover:text-white'
-              }`}
-            >
-              Mês
-            </button>
+          <div className="flex bg-gray-950/40 border border-gray-900 rounded-xl p-1">
+            {[
+              { id: 'day', label: 'Hoje' },
+              { id: 'week', label: 'Semana' },
+              { id: 'month', label: 'Mês' },
+            ].map((p) => (
+              <button
+                type="button"
+                key={p.id}
+                onClick={() => setPeriod(p.id as 'day' | 'week' | 'month')}
+                className={`rounded-lg px-3.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider transition-all duration-300 ${
+                  period === p.id
+                    ? 'bg-brand-500 text-white shadow-md shadow-brand-500/10'
+                    : 'text-gray-400 hover:text-gray-200'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
           </div>
 
           <button
             type="button"
             onClick={fetchAnalytics}
-            className="rounded-lg bg-gray-900 border border-gray-800 p-2 text-gray-400 hover:text-white transition"
+            className="rounded-xl bg-gray-900/30 border border-gray-850 p-2.5 text-gray-400 hover:text-white transition-all duration-300"
             title="Atualizar Indicadores"
           >
             <RefreshCw className="h-4 w-4" />
@@ -173,88 +175,102 @@ export default function AnalyticsDashboard() {
       </div>
 
       {isLoading && !stats ? (
-        <div className="text-center py-24 text-xs text-gray-500 animate-pulse">
-          Calculando estatísticas analíticas...
+        <div className="flex py-24 justify-center items-center gap-2.5">
+          <Loader2 className="h-6 w-6 animate-spin text-brand-400" />
+          <span className="text-xs text-gray-400 font-medium">
+            Calculando estatísticas analíticas...
+          </span>
         </div>
       ) : error ? (
-        <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-6 text-center text-red-400">
+        <div className="rounded-2xl border border-red-955 bg-red-950/20 p-6 text-center text-red-400 font-bold text-xs">
           {error}
         </div>
       ) : (
-        <div className="space-y-6">
-          {/* KPI Cards */}
-          <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-            {/* Card 1: Sales */}
-            <div className="rounded-xl border border-gray-800 bg-gray-900/20 p-4 space-y-2 backdrop-blur-md">
+        <div className="space-y-6 animate-fade-in">
+          {/* KPI Cards Grid */}
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
+            {/* Card 1: Faturamento */}
+            <div className="rounded-2xl border border-gray-900/60 bg-gray-950/15 p-5 space-y-2 backdrop-blur-md glass-card">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400">
+                <span className="text-[10px] uppercase font-extrabold tracking-widest text-gray-500">
                   Faturamento
                 </span>
-                <DollarSign className="h-4 w-4 text-emerald-400" />
+                <div className="h-7 w-7 rounded-lg bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-455">
+                  <DollarSign className="h-4 w-4" />
+                </div>
               </div>
-              <div className="text-xl font-black text-white tracking-tight">
+              <div className="text-2xl font-black text-white tracking-tight">
                 R$ {Number(stats?.total_sales).toFixed(2)}
               </div>
             </div>
 
-            {/* Card 2: Ticket */}
-            <div className="rounded-xl border border-gray-800 bg-gray-900/20 p-4 space-y-2 backdrop-blur-md">
+            {/* Card 2: Ticket Médio */}
+            <div className="rounded-2xl border border-gray-900/60 bg-gray-950/15 p-5 space-y-2 backdrop-blur-md glass-card">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400">
+                <span className="text-[10px] uppercase font-extrabold tracking-widest text-gray-500">
                   Ticket Médio
                 </span>
-                <TrendingUp className="h-4 w-4 text-brand-400" />
+                <div className="h-7 w-7 rounded-lg bg-brand-500/10 border border-brand-500/20 flex items-center justify-center text-brand-455">
+                  <TrendingUp className="h-4 w-4" />
+                </div>
               </div>
-              <div className="text-xl font-black text-white tracking-tight">
+              <div className="text-2xl font-black text-white tracking-tight">
                 R$ {Number(stats?.average_ticket).toFixed(2)}
               </div>
             </div>
 
-            {/* Card 3: Orders */}
-            <div className="rounded-xl border border-gray-800 bg-gray-900/20 p-4 space-y-2 backdrop-blur-md">
+            {/* Card 3: Comandas */}
+            <div className="rounded-2xl border border-gray-900/60 bg-gray-950/15 p-5 space-y-2 backdrop-blur-md glass-card">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400">
-                  Comandas
+                <span className="text-[10px] uppercase font-extrabold tracking-widest text-gray-500">
+                  Total Pedidos
                 </span>
-                <ShoppingBag className="h-4 w-4 text-purple-400" />
+                <div className="h-7 w-7 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center justify-center text-purple-455">
+                  <ShoppingBag className="h-4 w-4" />
+                </div>
               </div>
-              <div className="text-xl font-black text-white tracking-tight">
+              <div className="text-2xl font-black text-white tracking-tight">
                 {stats?.orders_count}
               </div>
             </div>
 
             {/* Card 4: Prep Time */}
-            <div className="rounded-xl border border-gray-800 bg-gray-900/20 p-4 space-y-2 backdrop-blur-md">
+            <div className="rounded-2xl border border-gray-900/60 bg-gray-950/15 p-5 space-y-2 backdrop-blur-md glass-card">
               <div className="flex items-center justify-between">
-                <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400">
-                  Preparo Cozinha
+                <span className="text-[10px] uppercase font-extrabold tracking-widest text-gray-500">
+                  Preparo Médio
                 </span>
-                <Clock className="h-4 w-4 text-blue-400" />
+                <div className="h-7 w-7 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-455">
+                  <Clock className="h-4 w-4" />
+                </div>
               </div>
-              <div className="text-xl font-black text-white tracking-tight">
-                {stats?.average_prep_time_minutes.toFixed(1)}{' '}
-                <span className="text-xs text-gray-400">min</span>
+              <div className="text-2xl font-black text-white tracking-tight flex items-baseline gap-1">
+                {stats?.average_prep_time_minutes.toFixed(1)}
+                <span className="text-xs text-gray-500 font-medium">min</span>
               </div>
             </div>
           </div>
 
-          {/* Warnings (if low stock exists) */}
+          {/* Warnings - critical stock items */}
           {stats && stats.low_stock_items > 0 && (
-            <div className="flex items-center gap-3 rounded-xl border border-amber-900/40 bg-amber-950/10 p-4 text-xs text-amber-400 backdrop-blur-md">
-              <AlertTriangle className="h-5 w-5 text-amber-400 flex-shrink-0" />
+            <div className="flex items-center gap-3 rounded-2xl border border-amber-900/40 bg-amber-950/10 p-4.5 text-xs text-amber-400 backdrop-blur-md">
+              <AlertTriangle className="h-5 w-5 text-amber-400 flex-shrink-0 animate-bounce" />
               <div>
-                <span className="font-bold">Atenção Gerência:</span> Existem{' '}
-                <span className="font-extrabold">{stats.low_stock_items}</span> itens com estoque
-                abaixo do nível crítico de alerta. Verifique o painel de Estoque.
+                <span className="font-extrabold uppercase tracking-wide text-[10px] px-1.5 py-0.5 rounded bg-amber-500/10 border border-amber-500/20 mr-1.5">
+                  Alerta Estoque
+                </span>
+                Existem{' '}
+                <span className="font-black underline">{stats.low_stock_items} insumos</span> abaixo
+                do nível crítico de alerta. Verifique a seção de Estoque.
               </div>
             </div>
           )}
 
-          {/* Recharts Graphs */}
+          {/* Charts Row */}
           <div className="grid gap-6 md:grid-cols-2">
-            {/* Sales Trends Chart */}
-            <div className="rounded-xl border border-gray-800/80 bg-gray-900/10 p-5 space-y-4 backdrop-blur-md">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+            {/* Sales Trend Chart Card */}
+            <div className="rounded-2xl border border-gray-900 bg-gray-950/10 p-5 space-y-5 backdrop-blur-md glass-card">
+              <h3 className="text-xs font-black uppercase tracking-widest text-gray-500">
                 Evolução do Faturamento
               </h3>
               <div className="h-64">
@@ -266,13 +282,14 @@ export default function AnalyticsDashboard() {
                         <stop offset="95%" stopColor="#f97316" stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                    <XAxis dataKey="time" stroke="#9ca3af" fontSize={10} />
-                    <YAxis stroke="#9ca3af" fontSize={10} />
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" opacity={0.3} />
+                    <XAxis dataKey="time" stroke="#6b7280" fontSize={10} tickLine={false} />
+                    <YAxis stroke="#6b7280" fontSize={10} tickLine={false} />
                     <Tooltip
                       contentStyle={{
-                        backgroundColor: '#030712',
+                        backgroundColor: '#0c0c14',
                         borderColor: '#1f2937',
+                        borderRadius: '12px',
                         color: '#fff',
                         fontSize: 11,
                       }}
@@ -290,35 +307,39 @@ export default function AnalyticsDashboard() {
               </div>
             </div>
 
-            {/* Category Chart */}
-            <div className="rounded-xl border border-gray-800/80 bg-gray-900/10 p-5 space-y-4 backdrop-blur-md">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+            {/* Sales by Category Chart Card */}
+            <div className="rounded-2xl border border-gray-900 bg-gray-950/10 p-5 space-y-5 backdrop-blur-md glass-card">
+              <h3 className="text-xs font-black uppercase tracking-widest text-gray-500">
                 Vendas por Categoria
               </h3>
 
               {categoryChartData.length === 0 ? (
-                <div className="flex h-64 items-center justify-center text-xs text-gray-500">
+                <div className="flex h-64 items-center justify-center text-xs text-gray-550 italic">
                   Nenhuma venda realizada neste período para gerar dados de categorias.
                 </div>
               ) : (
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={categoryChartData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
-                      <XAxis dataKey="name" stroke="#9ca3af" fontSize={10} />
-                      <YAxis stroke="#9ca3af" fontSize={10} />
+                      <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" opacity={0.3} />
+                      <XAxis dataKey="name" stroke="#6b7280" fontSize={10} tickLine={false} />
+                      <YAxis stroke="#6b7280" fontSize={10} tickLine={false} />
                       <Tooltip
                         contentStyle={{
-                          backgroundColor: '#030712',
+                          backgroundColor: '#0c0c14',
                           borderColor: '#1f2937',
+                          borderRadius: '12px',
                           color: '#fff',
                           fontSize: 11,
                         }}
-                        cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                        cursor={{ fill: 'rgba(255,255,255,0.02)' }}
                       />
-                      <Bar dataKey="valor" radius={[4, 4, 0, 0]}>
+                      <Bar dataKey="valor" radius={[6, 6, 0, 0]} maxBarSize={45}>
                         {categoryChartData.map((entry, index) => (
-                          <Cell key={`cell-${entry.name}`} fill={colors[index % colors.length]} />
+                          <Cell
+                            key={`cell-${entry.name}`}
+                            fill={chartColors[index % chartColors.length]}
+                          />
                         ))}
                       </Bar>
                     </BarChart>
@@ -328,35 +349,35 @@ export default function AnalyticsDashboard() {
             </div>
           </div>
 
-          {/* Kitchen KPIs */}
+          {/* Kitchen KPIs Summary Panel */}
           {kitchenStats && (
-            <div className="rounded-xl border border-gray-800/80 bg-gray-900/10 p-5 backdrop-blur-md space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400">
+            <div className="rounded-2xl border border-gray-900 bg-gray-950/10 p-5 backdrop-blur-md glass-card space-y-4">
+              <h3 className="text-xs font-black uppercase tracking-widest text-gray-500">
                 Produtividade da Cozinha
               </h3>
               <div className="grid gap-4 sm:grid-cols-3 text-center text-xs">
-                <div className="border border-gray-850 rounded-lg p-3 space-y-1">
-                  <span className="text-[10px] text-gray-500 uppercase font-bold">
-                    Total Pratos Preparados
+                <div className="border border-gray-900 bg-gray-950/20 rounded-xl p-4.5 space-y-1.5">
+                  <span className="text-[10px] text-gray-550 uppercase font-extrabold tracking-wider">
+                    Pratos Preparados
                   </span>
-                  <div className="text-lg font-extrabold text-white">
-                    {kitchenStats.items_prepared}
-                  </div>
+                  <div className="text-xl font-black text-white">{kitchenStats.items_prepared}</div>
                 </div>
-                <div className="border border-gray-850 rounded-lg p-3 space-y-1">
-                  <span className="text-[10px] text-gray-500 uppercase font-bold">
+                <div className="border border-gray-900 bg-gray-950/20 rounded-xl p-4.5 space-y-1.5">
+                  <span className="text-[10px] text-gray-550 uppercase font-extrabold tracking-wider">
                     Taxa de Conclusão
                   </span>
-                  <div className="text-lg font-extrabold text-emerald-400">
-                    {(kitchenStats.completion_rate * 100).toFixed(0)}%
+                  <div className="text-xl font-black text-emerald-400 flex items-center justify-center gap-1.5">
+                    <CheckCircle className="h-4.5 w-4.5 text-emerald-500" />
+                    <span>{(kitchenStats.completion_rate * 100).toFixed(0)}%</span>
                   </div>
                 </div>
-                <div className="border border-gray-850 rounded-lg p-3 space-y-1">
-                  <span className="text-[10px] text-gray-500 uppercase font-bold">
-                    Média de Espera
+                <div className="border border-gray-900 bg-gray-950/20 rounded-xl p-4.5 space-y-1.5">
+                  <span className="text-[10px] text-gray-550 uppercase font-extrabold tracking-wider">
+                    Tempo Médio Fila
                   </span>
-                  <div className="text-lg font-extrabold text-blue-400">
-                    {kitchenStats.average_prep_time_minutes.toFixed(1)} min
+                  <div className="text-xl font-black text-blue-400">
+                    {kitchenStats.average_prep_time_minutes.toFixed(1)}{' '}
+                    <span className="text-xs font-medium text-gray-500">min</span>
                   </div>
                 </div>
               </div>
@@ -365,5 +386,14 @@ export default function AnalyticsDashboard() {
         </div>
       )}
     </div>
+  )
+}
+
+// Simple loader helper inside file scope
+function Loader2({ className }: { className?: string }) {
+  return (
+    <div
+      className={`h-5 w-5 animate-spin rounded-full border-2 border-brand-500 border-t-transparent ${className}`}
+    />
   )
 }
