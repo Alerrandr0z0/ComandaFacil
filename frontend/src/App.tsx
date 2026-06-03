@@ -7,8 +7,14 @@ import LoginPage from '@/pages/login'
 import OrdersPage from '@/pages/orders'
 import StockPage from '@/pages/stock'
 
-function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading } = useAuth()
+function ProtectedRoute({
+  children,
+  allowedRoles,
+}: {
+  children: React.ReactNode
+  allowedRoles?: string[]
+}) {
+  const { isAuthenticated, isLoading, employee } = useAuth()
 
   if (isLoading) {
     return (
@@ -18,28 +24,42 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     )
   }
 
-  if (!isAuthenticated) {
+  if (!isAuthenticated || !employee) {
     return <Navigate to="/login" replace />
+  }
+
+  if (allowedRoles && employee.role && !allowedRoles.includes(employee.role)) {
+    const defaultRedirect = employee.role === 'COOK' ? '/kitchen' : '/orders'
+    return <Navigate to={defaultRedirect} replace />
   }
 
   return <>{children}</>
 }
 
+function RootRedirect() {
+  const { employee } = useAuth()
+  const defaultRedirect = employee?.role === 'COOK' ? '/kitchen' : '/orders'
+  return <Navigate to={defaultRedirect} replace />
+}
+
 export default function App() {
-  const { isAuthenticated } = useAuth()
+  const { isAuthenticated, employee } = useAuth()
+
+  // Default login landing redirect based on role
+  const defaultLoginRedirect = employee?.role === 'COOK' ? '/kitchen' : '/orders'
 
   return (
     <Routes>
       <Route
         path="/login"
-        element={isAuthenticated ? <Navigate to="/orders" replace /> : <LoginPage />}
+        element={isAuthenticated ? <Navigate to={defaultLoginRedirect} replace /> : <LoginPage />}
       />
 
       <Route
         path="/"
         element={
           <ProtectedRoute>
-            <Navigate to="/orders" replace />
+            <RootRedirect />
           </ProtectedRoute>
         }
       />
@@ -47,7 +67,7 @@ export default function App() {
       <Route
         path="/orders"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['MANAGER', 'WAITER', 'CASHIER']}>
             <OrdersPage />
           </ProtectedRoute>
         }
@@ -56,7 +76,7 @@ export default function App() {
       <Route
         path="/kitchen"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['MANAGER', 'COOK']}>
             <KitchenPage />
           </ProtectedRoute>
         }
@@ -65,7 +85,7 @@ export default function App() {
       <Route
         path="/stock"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['MANAGER']}>
             <StockPage />
           </ProtectedRoute>
         }
@@ -74,7 +94,7 @@ export default function App() {
       <Route
         path="/analytics"
         element={
-          <ProtectedRoute>
+          <ProtectedRoute allowedRoles={['MANAGER']}>
             <AnalyticsPage />
           </ProtectedRoute>
         }

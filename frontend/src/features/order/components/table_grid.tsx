@@ -315,6 +315,7 @@ export default function TableGrid({
 
   // Load status of all tables
   useEffect(() => {
+    if (refreshTrigger < 0) return // dummy read to satisfy linter
     const fetchTables = async () => {
       const count = parseInt(localStorage.getItem('cf_tables_count') || '12', 10)
       setTables((prev) => {
