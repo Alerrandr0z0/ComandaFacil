@@ -1,4 +1,14 @@
-import { ClipboardList, Coffee, Flame, LogOut, Shield, TrendingUp } from 'lucide-react'
+import {
+  ClipboardList,
+  Coffee,
+  Flame,
+  History,
+  LogOut,
+  Shield,
+  TrendingUp,
+  Users,
+  Utensils,
+} from 'lucide-react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/auth_context'
 import { useTenant } from '@/shared/hooks/useTenant'
@@ -19,6 +29,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     { label: 'Cozinha', path: '/kitchen', icon: Flame, roles: ['MANAGER', 'COOK'] },
     { label: 'Estoque', path: '/stock', icon: Coffee, roles: ['MANAGER'] },
     { label: 'Analytics', path: '/analytics', icon: TrendingUp, roles: ['MANAGER'] },
+    { label: 'Cardápios', path: '/menu-manager', icon: Utensils, roles: ['MANAGER'] },
+    { label: 'Colaboradores', path: '/employees', icon: Users, roles: ['MANAGER'] },
+    { label: 'Histórico', path: '/history', icon: History, roles: ['MANAGER', 'CASHIER'] },
   ]
 
   // Filter navigation items based on the employee's role

@@ -2,8 +2,11 @@ import type React from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from '@/features/auth/auth_context'
 import AnalyticsPage from '@/pages/analytics'
+import EmployeesPage from '@/pages/employees'
+import HistoryPage from '@/pages/history'
 import KitchenPage from '@/pages/kitchen'
 import LoginPage from '@/pages/login'
+import MenuManagerPage from '@/pages/menu_manager'
 import OrdersPage from '@/pages/orders'
 import StockPage from '@/pages/stock'
 
@@ -96,6 +99,33 @@ export default function App() {
         element={
           <ProtectedRoute allowedRoles={['MANAGER']}>
             <AnalyticsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/menu-manager"
+        element={
+          <ProtectedRoute allowedRoles={['MANAGER']}>
+            <MenuManagerPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/employees"
+        element={
+          <ProtectedRoute allowedRoles={['MANAGER']}>
+            <EmployeesPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/history"
+        element={
+          <ProtectedRoute allowedRoles={['MANAGER', 'CASHIER']}>
+            <HistoryPage />
           </ProtectedRoute>
         }
       />
