@@ -18,7 +18,18 @@ interface OrderDrawerProps {
   isCancelling: boolean
   isDelivering: boolean
   onClose: () => void
-  onOpenTable: () => void
+  onOpenTable: (options?: {
+    fulfillment_type: 'TABLE' | 'TAKEAWAY' | 'DELIVERY'
+    customer_name?: string
+    delivery_street?: string
+    delivery_number?: string
+    delivery_neighborhood?: string
+    delivery_city?: string
+    delivery_state?: string
+    delivery_postal_code?: string
+    delivery_estimated_time?: number
+    delivery_tracking_code?: number
+  }) => void
   onSelectItem: (item: MenuItem) => void
   onUpdateDraftQuantity: (itemId: number, delta: number) => void
   onUpdateDraftNotes: (itemId: number, notes: string) => void
@@ -33,6 +44,17 @@ interface OrderDrawerProps {
 }
 
 const getItemPrice = (item: MenuItem): number => {
+  try {
+    const pricesStr = localStorage.getItem('cf_menu_item_prices')
+    if (pricesStr) {
+      const prices = JSON.parse(pricesStr)
+      if (prices[item.id] !== undefined) {
+        return Number(prices[item.id])
+      }
+    }
+  } catch (_e) {
+    // Ignore and fallback
+  }
   const base = 12.0
   const offset = (item.id % 6) * 5.5
   return base + offset
@@ -422,29 +444,246 @@ function OrderDrawerHeader({
 }
 
 interface OrderDrawerLivreStateProps {
-  onOpenTable: () => void
+  onOpenTable: (options: {
+    fulfillment_type: 'TABLE' | 'TAKEAWAY' | 'DELIVERY'
+    customer_name?: string
+    delivery_street?: string
+    delivery_number?: string
+    delivery_neighborhood?: string
+    delivery_city?: string
+    delivery_state?: string
+    delivery_postal_code?: string
+    delivery_estimated_time?: number
+    delivery_tracking_code?: number
+  }) => void
 }
 
 function OrderDrawerLivreState({ onOpenTable }: OrderDrawerLivreStateProps) {
+  const [fulfillmentType, setFulfillmentType] = useState<'TABLE' | 'TAKEAWAY' | 'DELIVERY'>('TABLE')
+  const [customerName, setCustomerName] = useState('')
+  const [street, setStreet] = useState('')
+  const [number, setNumber] = useState('')
+  const [neighborhood, setNeighborhood] = useState('')
+  const [city, setCity] = useState('')
+  const [stateCode, setStateCode] = useState('')
+  const [postalCode, setPostalCode] = useState('')
+  const [estTime, setEstTime] = useState('40')
+
+  const validateForm = () => {
+    if (fulfillmentType === 'TAKEAWAY' && !customerName.trim()) {
+      alert('Por favor, informe o nome do cliente.')
+      return false
+    }
+    if (fulfillmentType === 'DELIVERY') {
+      const hasAddress =
+        street.trim() && number.trim() && city.trim() && stateCode.trim() && postalCode.trim()
+      if (!hasAddress) {
+        alert('Por favor, preencha todos os campos do endereço de entrega.')
+        return false
+      }
+    }
+    return true
+  }
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!validateForm()) return
+
+    const payload: {
+      fulfillment_type: 'TABLE' | 'TAKEAWAY' | 'DELIVERY'
+      customer_name?: string
+      delivery_street?: string
+      delivery_number?: string
+      delivery_neighborhood?: string
+      delivery_city?: string
+      delivery_state?: string
+      delivery_postal_code?: string
+      delivery_estimated_time?: number
+    } = {
+      fulfillment_type: fulfillmentType,
+    }
+
+    if (fulfillmentType === 'TAKEAWAY') {
+      payload.customer_name = customerName
+    } else if (fulfillmentType === 'DELIVERY') {
+      payload.delivery_street = street
+      payload.delivery_number = number
+      payload.delivery_neighborhood = neighborhood
+      payload.delivery_city = city
+      payload.delivery_state = stateCode
+      payload.delivery_postal_code = postalCode
+      payload.delivery_estimated_time = Number.parseInt(estTime, 10) || 40
+    }
+
+    onOpenTable(payload)
+  }
+
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center space-y-4">
-      <div className="h-16 w-16 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400 shadow-lg shadow-emerald-500/5">
-        <Check className="h-8 w-8" />
+    <form
+      onSubmit={handleSubmit}
+      className="flex-1 flex flex-col justify-between p-6 overflow-y-auto space-y-5"
+    >
+      <div className="space-y-4">
+        <div className="flex flex-col items-center text-center space-y-2">
+          <div className="h-12 w-12 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
+            <Check className="h-6 w-6" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-200">Novo Pedido / Comanda</h3>
+            <p className="text-[11px] text-gray-550 max-w-xs mt-0.5">
+              Escolha a modalidade de atendimento e preencha os detalhes para iniciar
+            </p>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <div className="space-y-1.5">
+            <span className="block text-[10px] uppercase font-extrabold text-gray-400">
+              Tipo de Atendimento
+            </span>
+            <select
+              value={fulfillmentType}
+              onChange={(e) =>
+                setFulfillmentType(e.target.value as 'TABLE' | 'TAKEAWAY' | 'DELIVERY')
+              }
+              className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input bg-[#0b0b11]"
+            >
+              <option value="TABLE">Mesa / Consumo Local</option>
+              <option value="TAKEAWAY">Retirada (Takeaway)</option>
+              <option value="DELIVERY">Entrega (Delivery)</option>
+            </select>
+          </div>
+
+          {fulfillmentType === 'TAKEAWAY' && (
+            <div className="space-y-1.5 animate-fade-in">
+              <span className="block text-[10px] uppercase font-extrabold text-gray-400">
+                Nome do Cliente
+              </span>
+              <input
+                type="text"
+                required
+                placeholder="Ex: Carlos Silva"
+                value={customerName}
+                onChange={(e) => setCustomerName(e.target.value)}
+                className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+              />
+            </div>
+          )}
+
+          {fulfillmentType === 'DELIVERY' && (
+            <div className="space-y-3 animate-fade-in">
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2 space-y-1.5">
+                  <span className="block text-[10px] uppercase font-extrabold text-gray-400">
+                    Logradouro / Rua
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    placeholder="Av. Paulista"
+                    value={street}
+                    onChange={(e) => setStreet(e.target.value)}
+                    className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+                  />
+                </div>
+                <div className="col-span-1 space-y-1.5">
+                  <span className="block text-[10px] uppercase font-extrabold text-gray-400">
+                    Número
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    placeholder="1000"
+                    value={number}
+                    onChange={(e) => setNumber(e.target.value)}
+                    className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1.5">
+                  <span className="block text-[10px] uppercase font-extrabold text-gray-400">
+                    Bairro
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Bela Vista"
+                    value={neighborhood}
+                    onChange={(e) => setNeighborhood(e.target.value)}
+                    className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <span className="block text-[10px] uppercase font-extrabold text-gray-400">
+                    CEP
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    placeholder="01311-000"
+                    value={postalCode}
+                    onChange={(e) => setPostalCode(e.target.value)}
+                    className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-2">
+                <div className="col-span-2 space-y-1.5">
+                  <span className="block text-[10px] uppercase font-extrabold text-gray-400">
+                    Cidade
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    placeholder="São Paulo"
+                    value={city}
+                    onChange={(e) => setCity(e.target.value)}
+                    className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+                  />
+                </div>
+                <div className="col-span-1 space-y-1.5">
+                  <span className="block text-[10px] uppercase font-extrabold text-gray-400">
+                    UF
+                  </span>
+                  <input
+                    type="text"
+                    required
+                    maxLength={2}
+                    placeholder="SP"
+                    value={stateCode}
+                    onChange={(e) => setStateCode(e.target.value.toUpperCase())}
+                    className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input text-center"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="block text-[10px] uppercase font-extrabold text-gray-400">
+                  Tempo Estimado (minutos)
+                </span>
+                <input
+                  type="number"
+                  required
+                  value={estTime}
+                  onChange={(e) => setEstTime(e.target.value)}
+                  className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </div>
-      <div>
-        <h3 className="text-sm font-bold text-gray-200">Mesa Livre</h3>
-        <p className="text-xs text-gray-500 max-w-xs mt-1">
-          Abra uma nova comanda nesta mesa para registrar pedidos de clientes.
-        </p>
-      </div>
+
       <button
-        type="button"
-        onClick={onOpenTable}
-        className="rounded-xl bg-brand-500 hover:bg-brand-600 active:scale-[0.98] px-6 py-3 text-xs font-bold text-white transition-all duration-300 shadow-lg shadow-brand-500/15"
+        type="submit"
+        className="w-full rounded-xl bg-brand-500 hover:bg-brand-600 py-3 text-xs font-bold text-white transition-all shadow-lg shadow-brand-500/15 flex items-center justify-center gap-1.5"
       >
-        Abrir Mesa / Comanda
+        <Plus className="h-4 w-4" />
+        Iniciar Pedido / Comanda
       </button>
-    </div>
+    </form>
   )
 }
 

@@ -56,6 +56,17 @@ export default function QuickSearch({
 
   // Deterministic helper to get a menu item's price
   const getItemPrice = (item: MenuItem): number => {
+    try {
+      const pricesStr = localStorage.getItem('cf_menu_item_prices')
+      if (pricesStr) {
+        const prices = JSON.parse(pricesStr)
+        if (prices[item.id] !== undefined) {
+          return Number(prices[item.id])
+        }
+      }
+    } catch (_e) {
+      // Ignore and fallback
+    }
     const base = 12.0
     const offset = (item.id % 6) * 5.5
     return base + offset

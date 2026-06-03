@@ -29,6 +29,58 @@ export interface OrderForm {
   items: OrderItem[]
 }
 
+export interface OpenTableOptions {
+  fulfillment_type: 'TABLE' | 'TAKEAWAY' | 'DELIVERY'
+  customer_name?: string
+  delivery_street?: string
+  delivery_number?: string
+  delivery_neighborhood?: string
+  delivery_city?: string
+  delivery_state?: string
+  delivery_postal_code?: string
+  delivery_estimated_time?: number
+  delivery_tracking_code?: number
+}
+
+function buildOpenTablePayload(tableNum: number, options?: OpenTableOptions) {
+  const base = {
+    id: tableNum + Math.floor(Math.random() * 1000000),
+    fulfillment_type: 'TABLE',
+    table_number: tableNum as number | null,
+    customer_name: null as string | null,
+    delivery_street: null as string | null,
+    delivery_number: null as string | null,
+    delivery_neighborhood: null as string | null,
+    delivery_city: null as string | null,
+    delivery_state: null as string | null,
+    delivery_postal_code: null as string | null,
+    delivery_estimated_time: 40,
+    delivery_tracking_code: 0,
+  }
+
+  if (options) {
+    base.fulfillment_type = options.fulfillment_type
+    if (options.fulfillment_type !== 'TABLE') {
+      base.table_number = null
+    }
+    if (options.customer_name) {
+      base.customer_name = options.customer_name
+    }
+    if (options.delivery_street) {
+      base.delivery_street = options.delivery_street
+      base.delivery_number = options.delivery_number || null
+      base.delivery_neighborhood = options.delivery_neighborhood || null
+      base.delivery_city = options.delivery_city || null
+      base.delivery_state = options.delivery_state || null
+      base.delivery_postal_code = options.delivery_postal_code || null
+      base.delivery_estimated_time = options.delivery_estimated_time || 40
+      base.delivery_tracking_code = options.delivery_tracking_code || 0
+    }
+  }
+
+  return base
+}
+
 export interface DraftItem {
   menuItem: MenuItem
   quantity: number
@@ -38,6 +90,17 @@ export interface DraftItem {
 
 // Helper price lookup based on ID
 const getItemPrice = (item: MenuItem): number => {
+  try {
+    const pricesStr = localStorage.getItem('cf_menu_item_prices')
+    if (pricesStr) {
+      const prices = JSON.parse(pricesStr)
+      if (prices[item.id] !== undefined) {
+        return Number(prices[item.id])
+      }
+    }
+  } catch (_e) {
+    // Ignore and fallback
+  }
   const base = 12.0
   const offset = (item.id % 6) * 5.5
   return base + offset
@@ -109,20 +172,17 @@ export function useOrderDrawer() {
     setDraft([])
   }, [])
 
-  const openTable = async (tableNum: number) => {
+  const openTable = async (tableNum: number, options?: OpenTableOptions) => {
     setIsLoading(true)
+    const payload = buildOpenTablePayload(tableNum, options)
     try {
-      const res = await httpClient.post<OrderForm>('/v1/order', {
-        id: tableNum,
-        fulfillment_type: 'TABLE',
-        table_number: tableNum,
-      })
+      const res = await httpClient.post<OrderForm>('/v1/order', payload)
       setActiveOrder(res.data)
       setSelectedTableNumber(tableNum)
       setDraft([])
       return res.data
     } catch (err) {
-      alert(`Falha ao abrir a mesa ${tableNum}. Tente novamente.`)
+      alert('Falha ao abrir o pedido. Tente novamente.')
       throw err
     } finally {
       setIsLoading(false)

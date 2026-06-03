@@ -124,7 +124,7 @@ export default function OrdersPage() {
               isCancelling={drawer.isCancelling}
               isDelivering={drawer.isDelivering}
               onClose={drawer.closeDrawer}
-              onOpenTable={() => drawer.openTable(drawer.selectedTableNumber ?? 0)}
+              onOpenTable={(options) => drawer.openTable(drawer.selectedTableNumber ?? 0, options)}
               onSelectItem={drawer.handleSelectItem}
               onUpdateDraftQuantity={drawer.updateDraftQuantity}
               onUpdateDraftNotes={drawer.updateDraftNotes}
