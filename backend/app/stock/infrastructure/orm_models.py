@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, func
+from sqlalchemy import DateTime, Float, ForeignKey, Integer, Numeric, String, func
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.shared.base_orm import Base
@@ -17,8 +18,9 @@ class StockItemORM(Base):
     tenant_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     category: Mapped[str] = mapped_column(String(100), nullable=False)
-    current_quantity_amount: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
-    current_quantity_unit: Mapped[str] = mapped_column(String(20), nullable=False)
+    # SIMPLE or COMPOSITE
+    type: Mapped[str] = mapped_column(String(50), nullable=False, default="SIMPLE")
+    unit: Mapped[str] = mapped_column(String(20), nullable=False, default="un")
     min_stock_level: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
     is_active: Mapped[bool] = mapped_column(default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
@@ -29,28 +31,68 @@ class StockItemORM(Base):
     def __repr__(self) -> str:
         return (
             f"StockItemORM(id={self.id}, name={self.name!r}, "
-            f"qty={self.current_quantity_amount}, unit={self.current_quantity_unit!r})"
+            f"type={self.type!r}, unit={self.unit!r})"
         )
 
 
-class StockMovementORM(Base):
-    """SQLAlchemy model for stock_movements table."""
+class CompositeStockItemRelationORM(Base):
+    """SQLAlchemy model mapping parent composite items to children items."""
 
-    __tablename__ = "stock_movements"
+    __tablename__ = "composite_stock_item_relations"
+
+    parent_id: Mapped[int] = mapped_column(
+        ForeignKey("stock_items.id", ondelete="CASCADE"), primary_key=True
+    )
+    child_id: Mapped[int] = mapped_column(
+        ForeignKey("stock_items.id", ondelete="CASCADE"), primary_key=True
+    )
+
+
+class StockTransactionORM(Base):
+    """SQLAlchemy model for stock_transactions table."""
+
+    __tablename__ = "stock_transactions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     stock_item_id: Mapped[int] = mapped_column(
         ForeignKey("stock_items.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    movement_type: Mapped[str] = mapped_column(String(20), nullable=False)
-    quantity_changed: Mapped[float] = mapped_column(Float, nullable=False)
-    reason: Mapped[str] = mapped_column(String(500), nullable=False, default="")
-    reference_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
-    reference_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    transaction_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    quantity_value: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    quantity_unit: Mapped[str] = mapped_column(String(20), nullable=False)
+    occurred_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
 
     def __repr__(self) -> str:
         return (
-            f"StockMovementORM(id={self.id}, item_id={self.stock_item_id}, "
-            f"type={self.movement_type!r}, qty={self.quantity_changed})"
+            f"StockTransactionORM(id={self.id}, item_id={self.stock_item_id}, "
+            f"type={self.transaction_type!r}, qty={self.quantity_value}{self.quantity_unit})"
         )
+
+
+class RecipeORM(Base):
+    """SQLAlchemy model for recipes table."""
+
+    __tablename__ = "recipes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    menu_item_id: Mapped[int] = mapped_column(Integer, nullable=False, index=True)
+    tenant_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+
+
+class RecipeIngredientORM(Base):
+    """SQLAlchemy model for recipe_ingredients table."""
+
+    __tablename__ = "recipe_ingredients"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    recipe_id: Mapped[int] = mapped_column(
+        ForeignKey("recipes.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    stock_item_id: Mapped[int] = mapped_column(
+        ForeignKey("stock_items.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    quantity_value: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+    quantity_unit: Mapped[str] = mapped_column(String(20), nullable=False)

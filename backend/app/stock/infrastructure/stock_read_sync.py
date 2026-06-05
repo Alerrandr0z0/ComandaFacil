@@ -13,13 +13,14 @@ class StockReadModelSync:
         self._collection = mongo_db["stock_read"]
 
     async def sync(self, item: StockItem) -> None:
+        balance = item.get_balance()
         doc = {
             "stock_item_id": item.id,
             "tenant_id": item.tenant_id,
             "name": item.name,
             "category": item.category,
-            "current_quantity": item.current_quantity.amount,
-            "unit": item.current_quantity.unit.value,
+            "current_quantity": float(balance.value),
+            "unit": balance.unit,
             "min_stock_level": item.min_stock_level,
             "is_low_stock": item.is_low_stock,
             "is_active": item.is_active,

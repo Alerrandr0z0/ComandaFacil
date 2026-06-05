@@ -3,10 +3,12 @@ from __future__ import annotations
 from enum import StrEnum
 
 
-class MovementType(StrEnum):
-    INBOUND = "INBOUND"
-    OUTBOUND = "OUTBOUND"
+class TransactionType(StrEnum):
+    INPUT = "INPUT"
+    OUTPUT = "OUTPUT"
     ADJUSTMENT = "ADJUSTMENT"
+    PRODUCTION = "PRODUCTION"
+    WASTE = "WASTE"
 
 
 class StockCategory(StrEnum):

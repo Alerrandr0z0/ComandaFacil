@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import TYPE_CHECKING
 
 import pytest
@@ -9,9 +10,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.dependencies import db_session
 from app.main import app
 from app.shared.base_orm import Base
-from app.shared.value_objects import MeasuredQuantity, MeasurementUnit
+from app.shared.value_objects import MeasuredQuantity
 from app.stock.domain.enums import StockCategory
-from app.stock.domain.stock_item import StockItem
+from app.stock.domain.stock_item import SimpleStockItem
 from app.stock.infrastructure.pg_repository import SQLAlchemyStockItemRepository
 from tests.integration.conftest_helpers import make_mock_db
 
@@ -96,12 +97,12 @@ async def test_create_stock_item_duplicate_name_returns_409(
 ) -> None:
     # Arrange
     repo = SQLAlchemyStockItemRepository(sqlite_session)
-    item = StockItem(
+    item = SimpleStockItem(
         id=5,
         tenant_id="franquia_001",
         name="Tomate",
         category=StockCategory.RAW_MATERIAL.value,
-        current_quantity=MeasuredQuantity(10.0, MeasurementUnit.KILOGRAM),
+        unit="kg",
     )
     await repo.save(item)
     await sqlite_session.commit()
@@ -232,12 +233,12 @@ async def test_get_stock_item_not_found_returns_404(api_client: AsyncClient) -> 
 async def test_add_stock_endpoint(api_client: AsyncClient, sqlite_session: AsyncSession) -> None:
     # Arrange
     repo = SQLAlchemyStockItemRepository(sqlite_session)
-    item = StockItem(
+    item = SimpleStockItem(
         id=40,
         tenant_id="franquia_001",
         name="Óleo",
         category=StockCategory.RAW_MATERIAL.value,
-        current_quantity=MeasuredQuantity(10.0, MeasurementUnit.LITER),
+        unit="l",
     )
     await repo.save(item)
     await sqlite_session.commit()
@@ -251,19 +252,25 @@ async def test_add_stock_endpoint(api_client: AsyncClient, sqlite_session: Async
     # Assert
     assert response.status_code == 200
     json_data = response.json()
-    assert json_data["current_quantity_amount"] == 15.0
+    assert json_data["current_quantity_amount"] == 5.0
 
 
 @pytest.mark.asyncio
 async def test_deduct_stock_endpoint(api_client: AsyncClient, sqlite_session: AsyncSession) -> None:
     # Arrange
     repo = SQLAlchemyStockItemRepository(sqlite_session)
-    item = StockItem(
+    item = SimpleStockItem(
         id=50,
         tenant_id="franquia_001",
         name="Carne Moída",
         category=StockCategory.RAW_MATERIAL.value,
-        current_quantity=MeasuredQuantity(20.0, MeasurementUnit.KILOGRAM),
+        unit="kg",
+    )
+    from app.stock.domain.enums import TransactionType
+    from app.stock.domain.transaction import StockTransaction
+
+    item.add_transaction(
+        StockTransaction(0, MeasuredQuantity(Decimal("20.0"), "kg"), TransactionType.INPUT)
     )
     await repo.save(item)
     await sqlite_session.commit()
@@ -286,12 +293,18 @@ async def test_deduct_stock_insufficient_returns_422(
 ) -> None:
     # Arrange
     repo = SQLAlchemyStockItemRepository(sqlite_session)
-    item = StockItem(
+    item = SimpleStockItem(
         id=55,
         tenant_id="franquia_001",
         name="Manteiga",
         category=StockCategory.RAW_MATERIAL.value,
-        current_quantity=MeasuredQuantity(2.0, MeasurementUnit.KILOGRAM),
+        unit="kg",
+    )
+    from app.stock.domain.enums import TransactionType
+    from app.stock.domain.transaction import StockTransaction
+
+    item.add_transaction(
+        StockTransaction(0, MeasuredQuantity(Decimal("2.0"), "kg"), TransactionType.INPUT)
     )
     await repo.save(item)
     await sqlite_session.commit()
@@ -312,12 +325,12 @@ async def test_set_min_stock_level_endpoint(
 ) -> None:
     # Arrange
     repo = SQLAlchemyStockItemRepository(sqlite_session)
-    item = StockItem(
+    item = SimpleStockItem(
         id=60,
         tenant_id="franquia_001",
         name="Papel Toalha",
         category=StockCategory.PACKAGING.value,
-        current_quantity=MeasuredQuantity(50.0, MeasurementUnit.UNIT),
+        unit="un",
     )
     await repo.save(item)
     await sqlite_session.commit()
@@ -338,12 +351,12 @@ async def test_set_min_stock_level_endpoint(
 async def test_adjust_stock_endpoint(api_client: AsyncClient, sqlite_session: AsyncSession) -> None:
     # Arrange
     repo = SQLAlchemyStockItemRepository(sqlite_session)
-    item = StockItem(
+    item = SimpleStockItem(
         id=70,
         tenant_id="franquia_001",
         name="Detergente",
         category=StockCategory.SUPPLEMENT.value,
-        current_quantity=MeasuredQuantity(10.0, MeasurementUnit.LITER),
+        unit="l",
     )
     await repo.save(item)
     await sqlite_session.commit()
@@ -366,12 +379,12 @@ async def test_get_stock_movements_endpoint(
 ) -> None:
     # Arrange — create item and a movement via add stock
     repo = SQLAlchemyStockItemRepository(sqlite_session)
-    item = StockItem(
+    item = SimpleStockItem(
         id=80,
         tenant_id="franquia_001",
         name="Refrigerante",
         category=StockCategory.BEVERAGE.value,
-        current_quantity=MeasuredQuantity(48.0, MeasurementUnit.UNIT),
+        unit="un",
     )
     await repo.save(item)
     await sqlite_session.commit()
@@ -388,5 +401,5 @@ async def test_get_stock_movements_endpoint(
     json_data = response.json()
     assert len(json_data) >= 1
     assert json_data[0]["stock_item_id"] == 80
-    assert json_data[0]["movement_type"] == "INBOUND"
+    assert json_data[0]["movement_type"] == "INPUT"
     assert json_data[0]["quantity_changed"] == 12.0

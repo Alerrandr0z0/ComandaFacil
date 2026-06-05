@@ -1,20 +1,16 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 
 from app.dependencies import CurrentTenantId, DbSession, MongoDB, require_permission
 from app.stock.application.commands import (
-    AddStockCommand,
-    AddStockHandler,
-    AdjustStockCommand,
-    AdjustStockHandler,
     CreateStockItemCommand,
     CreateStockItemHandler,
-    DeductStockCommand,
-    DeductStockHandler,
-    SetMinStockLevelCommand,
-    SetMinStockLevelHandler,
+    StockService,
 )
 from app.stock.application.queries import (
     GetStockItemHandler,
@@ -24,9 +20,10 @@ from app.stock.application.queries import (
 )
 from app.stock.domain.stock_item import StockItem
 from app.stock.infrastructure.mongo_read_repository import MongoStockReadRepository
+from app.stock.infrastructure.orm_models import StockTransactionORM
 from app.stock.infrastructure.pg_repository import (
+    SQLAlchemyRecipeRepository,
     SQLAlchemyStockItemRepository,
-    SQLAlchemyStockMovementRepository,
 )
 from app.stock.infrastructure.stock_read_sync import StockReadModelSync
 
@@ -130,7 +127,7 @@ async def create_stock_item(
         tenant_id=tenant_id,
         name=schema.name,
         category=schema.category,
-        current_quantity=schema.current_quantity,
+        current_quantity=Decimal(str(schema.current_quantity)),
         unit=schema.unit,
         min_stock_level=schema.min_stock_level,
     )
@@ -196,19 +193,15 @@ async def add_stock(
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
     item_repo = SQLAlchemyStockItemRepository(db)
-    movement_repo = SQLAlchemyStockMovementRepository(db)
-    handler = AddStockHandler(item_repo, movement_repo)
-    item = await handler.handle(
-        AddStockCommand(
-            stock_item_id=item_id,
-            tenant_id=tenant_id,
-            quantity=schema.quantity,
-            reason=schema.reason,
-            reference_type=schema.reference_type,
-            reference_id=schema.reference_id,
-        )
-    )
+    recipe_repo = SQLAlchemyRecipeRepository(db, item_repo)
+    service = StockService(item_repo, recipe_repo)
+    await service.add_input(item_id, Decimal(str(schema.quantity)), tenant_id)
     await db.commit()
+
+    # Reload item for response
+    item = await item_repo.find_by_id(item_id, tenant_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="StockItem not found")
     background_tasks.add_task(StockReadModelSync(mongo).sync, item)
     return _item_to_response(item)
 
@@ -229,22 +222,21 @@ async def deduct_stock(
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
     item_repo = SQLAlchemyStockItemRepository(db)
-    movement_repo = SQLAlchemyStockMovementRepository(db)
-    handler = DeductStockHandler(item_repo, movement_repo)
+    recipe_repo = SQLAlchemyRecipeRepository(db, item_repo)
+    service = StockService(item_repo, recipe_repo)
+
     try:
-        item = await handler.handle(
-            DeductStockCommand(
-                stock_item_id=item_id,
-                tenant_id=tenant_id,
-                quantity=schema.quantity,
-                reason=schema.reason,
-                reference_type=schema.reference_type,
-                reference_id=schema.reference_id,
-            )
+        await service.register_output(
+            item_id, Decimal(str(schema.quantity)), tenant_id, schema.reason
         )
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e)) from e
+
     await db.commit()
+
+    item = await item_repo.find_by_id(item_id, tenant_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="StockItem not found")
     background_tasks.add_task(StockReadModelSync(mongo).sync, item)
     return _item_to_response(item)
 
@@ -265,14 +257,12 @@ async def set_min_stock_level(
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
     repo = SQLAlchemyStockItemRepository(db)
-    handler = SetMinStockLevelHandler(repo)
-    item = await handler.handle(
-        SetMinStockLevelCommand(
-            stock_item_id=item_id,
-            tenant_id=tenant_id,
-            min_stock_level=schema.min_stock_level,
-        )
-    )
+    item = await repo.find_by_id(item_id, tenant_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="StockItem not found")
+
+    item.set_min_stock_level(schema.min_stock_level)
+    await repo.save(item)
     await db.commit()
     background_tasks.add_task(StockReadModelSync(mongo).sync, item)
     return _item_to_response(item)
@@ -294,17 +284,15 @@ async def adjust_stock(
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
     item_repo = SQLAlchemyStockItemRepository(db)
-    movement_repo = SQLAlchemyStockMovementRepository(db)
-    handler = AdjustStockHandler(item_repo, movement_repo)
-    item = await handler.handle(
-        AdjustStockCommand(
-            stock_item_id=item_id,
-            tenant_id=tenant_id,
-            new_quantity=schema.new_quantity,
-            reason=schema.reason,
-        )
-    )
+    recipe_repo = SQLAlchemyRecipeRepository(db, item_repo)
+    service = StockService(item_repo, recipe_repo)
+
+    await service.adjust(item_id, Decimal(str(schema.new_quantity)), schema.reason, tenant_id)
     await db.commit()
+
+    item = await item_repo.find_by_id(item_id, tenant_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="StockItem not found")
     background_tasks.add_task(StockReadModelSync(mongo).sync, item)
     return _item_to_response(item)
 
@@ -319,39 +307,45 @@ async def adjust_stock(
 async def get_stock_movements(
     item_id: int,
     db: DbSession,
-    tenant_id: CurrentTenantId,
+    _tenant_id: CurrentTenantId,
 ) -> list[StockMovementResponseSchema]:
-    movement_repo = SQLAlchemyStockMovementRepository(db)
-    movements = await movement_repo.find_by_stock_item(item_id, tenant_id)
+    # Query transactions
+    stmt = (
+        _from_val := select(StockTransactionORM)
+        .where(StockTransactionORM.stock_item_id == item_id)
+        .order_by(StockTransactionORM.occurred_at.desc())
+    )
+    res = await db.execute(stmt)
+    txs = res.scalars().all()
     return [
         StockMovementResponseSchema(
-            id=m.id,
-            stock_item_id=m.stock_item_id,
-            movement_type=m.movement_type.value,
-            quantity_changed=m.quantity_changed,
-            reason=m.reason,
-            reference_type=m.reference_type,
-            reference_id=m.reference_id,
-            created_at=m.created_at.isoformat(),
+            id=t.id,
+            stock_item_id=t.stock_item_id,
+            movement_type=t.transaction_type,
+            quantity_changed=float(t.quantity_value),
+            reason="",
+            reference_type=None,
+            reference_id=None,
+            created_at=t.occurred_at.isoformat(),
         )
-        for m in movements
+        for t in txs
     ]
 
 
 # ─── Internal Helpers ─────────────────────────────────────────────────────────
 
 
-def _item_to_response(item: object) -> StockItemResponseSchema:
-    i: StockItem = item  # type: ignore[no-redef]
+def _item_to_response(item: StockItem) -> StockItemResponseSchema:
+    bal = item.get_balance()
     return StockItemResponseSchema(
-        id=i.id,
-        name=i.name,
-        category=i.category,
-        current_quantity_amount=i.current_quantity.amount,
-        current_quantity_unit=i.current_quantity.unit.value,
-        min_stock_level=i.min_stock_level,
-        is_active=i.is_active,
-        is_low_stock=i.is_low_stock,
+        id=item.id,
+        name=item.name,
+        category=item.category,
+        current_quantity_amount=float(bal.value),
+        current_quantity_unit=bal.unit,
+        min_stock_level=item.min_stock_level,
+        is_active=item.is_active,
+        is_low_stock=item.is_low_stock,
     )
 
 
