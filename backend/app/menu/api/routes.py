@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from decimal import Decimal
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
+from sqlalchemy import select
 
 from app.dependencies import CurrentTenantId, DbSession, MongoDB, require_permission
 from app.menu.application.commands import (
@@ -26,7 +28,12 @@ from app.menu.application.queries import (
 )
 from app.menu.infrastructure.mongo_read_repository import MongoMenuReadRepository
 from app.menu.infrastructure.mongo_sync import MenuReadModelSync
-from app.menu.infrastructure.repositories import SQLAlchemyMenuRepository
+from app.menu.infrastructure.orm_models import MenuItemORM, PriceListItemORM
+from app.menu.infrastructure.repositories import (
+    SQLAlchemyMenuItemRepository,
+    SQLAlchemyMenuRepository,
+)
+from app.shared.money import Money
 
 if TYPE_CHECKING:
     from app.menu.domain.menu import Menu
@@ -50,6 +57,7 @@ class MenuItemSchema(BaseModel):
     name: str
     description: str
     category: str
+    price: Decimal | None = None
     image_url: str | None = None
     is_available: bool = True
 
@@ -61,6 +69,7 @@ class MenuResponseSchema(BaseModel):
     name: str
     description: str
     is_active: bool
+    price_list_id: int | None = None
     items: list[MenuItemSchema] = []
 
     model_config = ConfigDict(from_attributes=True, frozen=True)
@@ -73,6 +82,8 @@ class MenuItemAddSchema(BaseModel):
     category: str = Field(
         ..., max_length=100, description="Category name (e.g. 'Bebidas', 'Pratos')"
     )
+    base_price: Decimal = Field(default=Decimal("0.00"), description="Base price fallback")
+    station_type: str = Field(default="GRILL", description="Preparation station type")
     image_url: str | None = Field(default=None, description="Optional image URL")
     is_available: bool = Field(default=True, description="Availability flag")
 
@@ -110,9 +121,10 @@ async def create_menu(
     menu = await handler.handle(command)
     await db.commit()
 
-    background_tasks.add_task(MenuReadModelSync(mongo).sync, menu)
+    menu_doc = await _resolve_menu_doc(db, menu)
+    background_tasks.add_task(MenuReadModelSync(mongo).sync, menu_doc)
 
-    return _menu_to_response(menu)
+    return _menu_dict_to_response(menu_doc)
 
 
 @router.get(
@@ -166,7 +178,8 @@ async def add_menu_item(
     tenant_id: CurrentTenantId,
 ) -> MenuItemSchema:
     repo = SQLAlchemyMenuRepository(db)
-    handler = AddMenuItemHandler(repo)
+    item_repo = SQLAlchemyMenuItemRepository(db)
+    handler = AddMenuItemHandler(repo, item_repo)
     command = AddMenuItemCommand(
         menu_id=menu_id,
         tenant_id=tenant_id,
@@ -174,6 +187,8 @@ async def add_menu_item(
         name=schema.name,
         description=schema.description,
         category=schema.category,
+        base_price=Money(schema.base_price),
+        station_type=schema.station_type,
         image_url=schema.image_url,
         is_available=schema.is_available,
     )
@@ -182,13 +197,26 @@ async def add_menu_item(
 
     menu = await repo.find_by_id(menu_id, tenant_id)
     if menu:
-        background_tasks.add_task(MenuReadModelSync(mongo).sync, menu)
+        menu_doc = await _resolve_menu_doc(db, menu)
+        background_tasks.add_task(MenuReadModelSync(mongo).sync, menu_doc)
+
+    price_val = float(schema.base_price)
+    if menu and menu.price_list_id:
+        stmt = select(PriceListItemORM).where(
+            PriceListItemORM.price_list_id == menu.price_list_id,
+            PriceListItemORM.menu_item_id == item.id,
+        )
+        result = await db.execute(stmt)
+        override = result.scalar_one_or_none()
+        if override:
+            price_val = float(override.price)
 
     return MenuItemSchema(
         id=item.id,
         name=item.name,
         description=item.description,
-        category=str(item.category),
+        category=item.category_name,
+        price=Decimal(str(price_val)),
         image_url=item.image_url,
         is_available=item.is_available,
     )
@@ -216,7 +244,8 @@ async def remove_menu_item(
 
     menu = await repo.find_by_id(menu_id, tenant_id)
     if menu:
-        background_tasks.add_task(MenuReadModelSync(mongo).sync, menu)
+        menu_doc = await _resolve_menu_doc(db, menu)
+        background_tasks.add_task(MenuReadModelSync(mongo).sync, menu_doc)
 
     return {"detail": "Item removido do cardápio com sucesso."}
 
@@ -242,9 +271,10 @@ async def toggle_menu(
     menu = await handler.handle(command)
     await db.commit()
 
-    background_tasks.add_task(MenuReadModelSync(mongo).sync, menu)
+    menu_doc = await _resolve_menu_doc(db, menu)
+    background_tasks.add_task(MenuReadModelSync(mongo).sync, menu_doc)
 
-    return _menu_to_response(menu)
+    return _menu_to_response_doc(menu_doc)
 
 
 @router.delete(
@@ -274,25 +304,57 @@ async def delete_menu(
 # ─── Internal Helpers ─────────────────────────────────────────────────────────
 
 
-def _menu_to_response(menu: object) -> MenuResponseSchema:
-    m: Menu = menu  # type: ignore[no-redef]
-    return MenuResponseSchema(
-        id=m.id,
-        name=m.name,
-        description=m.description,
-        is_active=m.is_active,
-        items=[
-            MenuItemSchema(
-                id=item.id,
-                name=item.name,
-                description=item.description,
-                category=str(item.category),
-                image_url=item.image_url,
-                is_available=item.is_available,
+async def _resolve_menu_doc(db: DbSession, menu: Menu) -> dict[str, Any]:
+    item_ids = []
+    category_by_item_id = {}
+    for category in menu.categories:
+        for item in category.items:
+            item_ids.append(item.menu_item_id)
+            category_by_item_id[item.menu_item_id] = category.name
+
+    items_data = []
+    if item_ids:
+        stmt = select(MenuItemORM).where(MenuItemORM.id.in_(item_ids))
+        result = await db.execute(stmt)
+        items_orm = result.scalars().all()
+
+        prices_by_item_id = {}
+        if menu.price_list_id:
+            stmt = select(PriceListItemORM).where(
+                PriceListItemORM.price_list_id == menu.price_list_id
             )
-            for item in m.items
-        ],
-    )
+            result = await db.execute(stmt)
+            price_items = result.scalars().all()
+            prices_by_item_id = {pi.menu_item_id: pi.price for pi in price_items}
+
+        for item_orm in items_orm:
+            override_price = prices_by_item_id.get(item_orm.id)
+            final_price = override_price if override_price is not None else item_orm.base_price
+            items_data.append(
+                {
+                    "id": item_orm.id,
+                    "name": item_orm.name,
+                    "description": item_orm.description,
+                    "price": float(final_price),
+                    "category": category_by_item_id.get(item_orm.id, item_orm.category_name),
+                    "image_url": item_orm.image_url,
+                    "is_available": item_orm.is_available,
+                }
+            )
+
+    return {
+        "menu_id": menu.id,
+        "tenant_id": menu.tenant_id,
+        "name": menu.name,
+        "description": menu.description,
+        "is_active": menu.is_active,
+        "price_list_id": menu.price_list_id,
+        "items": items_data,
+    }
+
+
+def _menu_to_response_doc(doc: dict[str, Any]) -> MenuResponseSchema:
+    return _menu_dict_to_response(doc)
 
 
 def _menu_dict_to_response(data: dict[str, object]) -> MenuResponseSchema:
@@ -305,12 +367,14 @@ def _menu_dict_to_response(data: dict[str, object]) -> MenuResponseSchema:
         name=str(data["name"]),
         description=str(data.get("description", "")),
         is_active=bool(data["is_active"]),
+        price_list_id=data.get("price_list_id"),  # type: ignore[arg-type]
         items=[
             MenuItemSchema(
                 id=int(str(item["id"])),
                 name=str(item["name"]),
                 description=str(item.get("description", "")),
                 category=str(item["category"]),
+                price=Decimal(str(item["price"])) if item.get("price") is not None else None,
                 image_url=str(item["image_url"]) if item.get("image_url") else None,
                 is_available=bool(item["is_available"]),
             )

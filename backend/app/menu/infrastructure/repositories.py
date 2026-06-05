@@ -5,10 +5,16 @@ from typing import TYPE_CHECKING
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
-from app.menu.domain.category import Category
-from app.menu.domain.menu import Menu, MenuItem, MenuRepository
+from app.menu.domain.category import Category, CategoryItem
+from app.menu.domain.menu import Menu, MenuItem, MenuItemRepository, MenuRepository
 from app.menu.domain.price_list import PriceList, PriceListItem, PriceListRepository
-from app.menu.infrastructure.orm_models import MenuItemORM, MenuORM, PriceListItemORM, PriceListORM
+from app.menu.infrastructure.orm_models import (
+    CategoryItemORM,
+    MenuItemORM,
+    MenuORM,
+    PriceListItemORM,
+    PriceListORM,
+)
 from app.shared.money import Money
 
 if TYPE_CHECKING:
@@ -23,7 +29,7 @@ class SQLAlchemyMenuRepository(MenuRepository):
         stmt = (
             select(MenuORM)
             .where(MenuORM.id == id, MenuORM.tenant_id == tenant_id)
-            .options(selectinload(MenuORM.items))
+            .options(selectinload(MenuORM.category_items))
         )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
@@ -35,7 +41,7 @@ class SQLAlchemyMenuRepository(MenuRepository):
         stmt = (
             select(MenuORM)
             .where(MenuORM.tenant_id == tenant_id)
-            .options(selectinload(MenuORM.items))
+            .options(selectinload(MenuORM.category_items))
         )
         result = await self._session.execute(stmt)
         orms = result.scalars().all()
@@ -45,7 +51,7 @@ class SQLAlchemyMenuRepository(MenuRepository):
         stmt = (
             select(MenuORM)
             .where(MenuORM.id == menu.id, MenuORM.tenant_id == menu.tenant_id)
-            .options(selectinload(MenuORM.items))
+            .options(selectinload(MenuORM.category_items))
         )
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
@@ -54,7 +60,8 @@ class SQLAlchemyMenuRepository(MenuRepository):
             orm.name = menu.name
             orm.description = menu.description
             orm.is_active = menu.is_active
-            orm.items.clear()
+            orm.price_list_id = menu.price_list_id
+            orm.category_items.clear()
         else:
             orm = MenuORM(
                 id=menu.id,
@@ -62,20 +69,18 @@ class SQLAlchemyMenuRepository(MenuRepository):
                 name=menu.name,
                 description=menu.description,
                 is_active=menu.is_active,
+                price_list_id=menu.price_list_id,
             )
             self._session.add(orm)
 
-        for item in menu.items:
-            item_orm = MenuItemORM(
-                id=item.id,
-                menu_id=menu.id,
-                name=item.name,
-                description=item.description,
-                category=str(item.category),
-                image_url=item.image_url,
-                is_available=item.is_available,
-            )
-            orm.items.append(item_orm)
+        for category in menu.categories:
+            for item in category.items:
+                item_orm = CategoryItemORM(
+                    menu_id=menu.id,
+                    category_name=category.name,
+                    menu_item_id=item.menu_item_id,
+                )
+                orm.category_items.append(item_orm)
 
         await self._session.flush()
 
@@ -94,18 +99,86 @@ class SQLAlchemyMenuRepository(MenuRepository):
             name=orm.name,
             description=orm.description,
             is_active=orm.is_active,
+            price_list_id=orm.price_list_id,
         )
-        for item_orm in orm.items:
-            item = MenuItem(
-                id=item_orm.id,
-                name=item_orm.name,
-                description=item_orm.description,
-                category=Category(item_orm.category),
-                image_url=item_orm.image_url,
-                is_available=item_orm.is_available,
+        categories_map: dict[str, list[CategoryItem]] = {}
+        for item_orm in orm.category_items:
+            categories_map.setdefault(item_orm.category_name, []).append(
+                CategoryItem(menu_item_id=item_orm.menu_item_id)
             )
-            menu.items.append(item)
+        for cat_name, items in categories_map.items():
+            menu.categories.append(Category(name=cat_name, items=items))
         return menu
+
+
+class SQLAlchemyMenuItemRepository(MenuItemRepository):
+    def __init__(self, session: AsyncSession) -> None:
+        self._session = session
+
+    async def find_by_id(self, id: int, tenant_id: str) -> MenuItem | None:
+        stmt = select(MenuItemORM).where(MenuItemORM.id == id, MenuItemORM.tenant_id == tenant_id)
+        result = await self._session.execute(stmt)
+        orm = result.scalar_one_or_none()
+        if not orm:
+            return None
+        return self._map_to_domain(orm)
+
+    async def find_all(self, tenant_id: str) -> list[MenuItem]:
+        stmt = select(MenuItemORM).where(MenuItemORM.tenant_id == tenant_id)
+        result = await self._session.execute(stmt)
+        orms = result.scalars().all()
+        return [self._map_to_domain(o) for o in orms]
+
+    async def save(self, item: MenuItem) -> None:
+        stmt = select(MenuItemORM).where(
+            MenuItemORM.id == item.id, MenuItemORM.tenant_id == item.tenant_id
+        )
+        result = await self._session.execute(stmt)
+        orm = result.scalar_one_or_none()
+
+        if orm:
+            orm.name = item.name
+            orm.description = item.description
+            orm.base_price = item.base_price.amount
+            orm.station_type = item.station_type
+            orm.category_name = item.category_name
+            orm.image_url = item.image_url
+            orm.is_available = item.is_available
+        else:
+            orm = MenuItemORM(
+                id=item.id,
+                tenant_id=item.tenant_id,
+                name=item.name,
+                description=item.description,
+                base_price=item.base_price.amount,
+                station_type=item.station_type,
+                category_name=item.category_name,
+                image_url=item.image_url,
+                is_available=item.is_available,
+            )
+            self._session.add(orm)
+        await self._session.flush()
+
+    async def delete(self, id: int, tenant_id: str) -> None:
+        stmt = select(MenuItemORM).where(MenuItemORM.id == id, MenuItemORM.tenant_id == tenant_id)
+        result = await self._session.execute(stmt)
+        orm = result.scalar_one_or_none()
+        if orm:
+            await self._session.delete(orm)
+            await self._session.flush()
+
+    def _map_to_domain(self, orm: MenuItemORM) -> MenuItem:
+        return MenuItem(
+            id=orm.id,
+            tenant_id=orm.tenant_id,
+            name=orm.name,
+            description=orm.description,
+            base_price=Money(amount=orm.base_price),
+            station_type=orm.station_type,
+            category_name=orm.category_name,
+            image_url=orm.image_url,
+            is_available=orm.is_available,
+        )
 
 
 class SQLAlchemyPriceListRepository(PriceListRepository):

@@ -3,9 +3,9 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Final
 
-from app.menu.domain.category import Category
-from app.menu.domain.menu import Menu, MenuItem, MenuRepository
+from app.menu.domain.menu import Menu, MenuItem, MenuItemRepository, MenuRepository
 from app.shared.exceptions import ConflictError, NotFoundError
+from app.shared.money import Money
 
 
 @dataclass(frozen=True)
@@ -50,6 +50,8 @@ class AddMenuItemCommand:
     name: str
     description: str
     category: str
+    base_price: Money | None = None
+    station_type: str = "GRILL"
     image_url: str | None = None
     is_available: bool = True
 
@@ -58,23 +60,32 @@ class AddMenuItemCommand:
 
 
 class AddMenuItemHandler:
-    def __init__(self, menu_repo: MenuRepository) -> None:
+    def __init__(self, menu_repo: MenuRepository, item_repo: MenuItemRepository) -> None:
         self._menu_repo: Final[MenuRepository] = menu_repo
+        self._item_repo: Final[MenuItemRepository] = item_repo
 
     async def handle(self, command: AddMenuItemCommand) -> MenuItem:
         menu = await self._menu_repo.find_by_id(command.menu_id, command.tenant_id)
         if not menu:
             raise NotFoundError("Cardápio", command.menu_id)
 
+        # Create/Save the MenuItem as a standalone aggregate
+        base_price = command.base_price or Money.zero()
         item = MenuItem(
             id=command.item_id,
+            tenant_id=command.tenant_id,
             name=command.name,
             description=command.description,
-            category=Category(command.category),
+            base_price=base_price,
+            station_type=command.station_type,
+            category_name=command.category,
             image_url=command.image_url,
             is_available=command.is_available,
         )
-        menu.add_item(item)
+        await self._item_repo.save(item)
+
+        # Associate the MenuItem to the Menu category
+        menu.add_item_to_category(command.category, command.item_id)
         await self._menu_repo.save(menu)
         return item
 
@@ -100,7 +111,17 @@ class RemoveMenuItemHandler:
         menu = await self._menu_repo.find_by_id(command.menu_id, command.tenant_id)
         if not menu:
             raise NotFoundError("Cardápio", command.menu_id)
-        menu.remove_item(command.item_id)
+
+        found_category = None
+        for category in menu.categories:
+            if any(item.menu_item_id == command.item_id for item in category.items):
+                found_category = category.name
+                break
+
+        if not found_category:
+            raise ValueError(f"Item com id {command.item_id} não encontrado neste cardápio.")
+
+        menu.remove_item_from_category(found_category, command.item_id)
         await self._menu_repo.save(menu)
 
     def __repr__(self) -> str:
@@ -154,6 +175,32 @@ class DeleteMenuHandler:
         if not menu:
             raise NotFoundError("Cardápio", command.menu_id)
         await self._menu_repo.delete(command.menu_id, command.tenant_id)
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}()"
+
+
+@dataclass(frozen=True)
+class AssociatePriceListToMenuCommand:
+    menu_id: int
+    tenant_id: str
+    price_list_id: int | None
+
+    def __repr__(self) -> str:
+        return f"AssociatePriceListToMenuCommand(menu_id={self.menu_id}, tenant_id={self.tenant_id!r}, price_list_id={self.price_list_id})"
+
+
+class AssociatePriceListToMenuHandler:
+    def __init__(self, menu_repo: MenuRepository) -> None:
+        self._menu_repo: Final[MenuRepository] = menu_repo
+
+    async def handle(self, command: AssociatePriceListToMenuCommand) -> Menu:
+        menu = await self._menu_repo.find_by_id(command.menu_id, command.tenant_id)
+        if not menu:
+            raise NotFoundError("Cardápio", command.menu_id)
+        menu.associate_price_list(command.price_list_id)
+        await self._menu_repo.save(menu)
+        return menu
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"

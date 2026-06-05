@@ -8,10 +8,13 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.dependencies import db_session
 from app.main import app
-from app.menu.domain.category import Category
 from app.menu.domain.menu import Menu, MenuItem
-from app.menu.infrastructure.repositories import SQLAlchemyMenuRepository
+from app.menu.infrastructure.repositories import (
+    SQLAlchemyMenuItemRepository,
+    SQLAlchemyMenuRepository,
+)
 from app.shared.base_orm import Base
+from app.shared.money import Money
 from tests.integration.conftest_helpers import make_mock_db
 
 if TYPE_CHECKING:
@@ -98,6 +101,8 @@ async def test_get_menu_endpoint_success(
             "name": "Feijoada",
             "description": "Completa",
             "category": "Pratos",
+            "base_price": 45.00,
+            "station_type": "GRILL",
             "is_available": True,
         },
     )
@@ -115,6 +120,7 @@ async def test_get_menu_endpoint_success(
     assert json_data["items"][0]["id"] == 10
     assert json_data["items"][0]["name"] == "Feijoada"
     assert json_data["items"][0]["category"] == "Pratos"
+    assert float(json_data["items"][0]["price"]) == 45.00
 
 
 @pytest.mark.asyncio
@@ -135,6 +141,8 @@ async def test_add_menu_item_endpoint_success(
             "name": "Suco de Laranja",
             "description": "Copo 300ml",
             "category": "Bebidas",
+            "base_price": 8.50,
+            "station_type": "BEVERAGE",
             "is_available": True,
         },
     )
@@ -145,12 +153,14 @@ async def test_add_menu_item_endpoint_success(
     assert json_data["id"] == 10
     assert json_data["name"] == "Suco de Laranja"
     assert json_data["category"] == "Bebidas"
+    assert float(json_data["price"]) == 8.50
 
     # Verify db items
     updated = await repo.find_by_id(1, "test_franchise")
     assert updated is not None
-    assert len(updated.items) == 1
-    assert updated.items[0].name == "Suco de Laranja"
+    assert len(updated.categories) == 1
+    assert len(updated.categories[0].items) == 1
+    assert updated.categories[0].items[0].menu_item_id == 10
 
 
 @pytest.mark.asyncio
@@ -159,9 +169,22 @@ async def test_remove_menu_item_endpoint_success(
 ) -> None:
     # Arrange
     repo = SQLAlchemyMenuRepository(sqlite_session)
+    item_repo = SQLAlchemyMenuItemRepository(sqlite_session)
+
+    item = MenuItem(
+        id=10,
+        tenant_id="test_franchise",
+        name="Feijoada",
+        description="Completa",
+        base_price=Money.from_float(45.00),
+        station_type="GRILL",
+        category_name="Pratos",
+        is_available=True,
+    )
+    await item_repo.save(item)
+
     menu = Menu(id=1, tenant_id="test_franchise", name="Almoço")
-    item = MenuItem(id=10, name="Feijoada", description="Completa", category=Category("Pratos"))
-    menu.add_item(item)
+    menu.add_item_to_category("Pratos", 10)
     await repo.save(menu)
     await sqlite_session.commit()
 
@@ -175,7 +198,7 @@ async def test_remove_menu_item_endpoint_success(
     # Verify database
     updated = await repo.find_by_id(1, "test_franchise")
     assert updated is not None
-    assert len(updated.items) == 0
+    assert len(updated.categories) == 0
 
 
 @pytest.mark.asyncio
