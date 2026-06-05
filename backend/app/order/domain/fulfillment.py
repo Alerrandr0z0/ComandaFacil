@@ -39,15 +39,15 @@ class IFulfillmentStratrgy(ABC):
 class Table(IFulfillmentStratrgy):
     def __init__(self, table_num: TableNum) -> None:
         self.table_num: TableNum = table_num
-        self._status: FulfillmentStatus = FulfillmentStatus.PENDING
+        self._status: FulfillmentStatus = FulfillmentStatus.READY_FOR_PICKUP
 
     @property
     def name(self) -> str:
         return "TABLE"
 
     def deliver(self, order: OrderForm) -> None:  # noqa: ARG002
-        # Entrega imediata na mesa: muda status para SUCCESS
-        self._status = FulfillmentStatus.SUCCESS
+        # Entrega imediata na mesa: muda status para DELIVERED
+        self._status = FulfillmentStatus.DELIVERED
 
     def validate(self) -> bool:
         return self.table_num is not None  # type: ignore[reportUnnecessaryComparison]
@@ -65,15 +65,15 @@ class Takeaway(IFulfillmentStratrgy):
         if not customer_name or not customer_name.strip():
             raise ValueError("Customer name cannot be empty for takeaway orders.")
         self.customer_name: str = customer_name
-        self._status: FulfillmentStatus = FulfillmentStatus.PENDING
+        self._status: FulfillmentStatus = FulfillmentStatus.READY_FOR_PICKUP
 
     @property
     def name(self) -> str:
         return "TAKEAWAY"
 
     def deliver(self, order: OrderForm) -> None:  # noqa: ARG002
-        # Entrega por retirada: muda status para SUCCESS
-        self._status = FulfillmentStatus.SUCCESS
+        # Entrega por retirada: muda status para DELIVERED
+        self._status = FulfillmentStatus.DELIVERED
 
     def validate(self) -> bool:
         return bool(self.customer_name)
@@ -91,7 +91,7 @@ class Delivery(IFulfillmentStratrgy):
         self.estimated_time: int = estimated_time
         self.tracking_code: int = tracking_code
         self._state: IDeliveryState = AwaitingPickup()
-        self._status: FulfillmentStatus = FulfillmentStatus.PENDING
+        self._status: FulfillmentStatus = FulfillmentStatus.READY_FOR_PICKUP
 
     @property
     def name(self) -> str:
@@ -103,15 +103,15 @@ class Delivery(IFulfillmentStratrgy):
 
     def dispatch(self) -> None:
         self._state.dispatch(self)
-        self._status = FulfillmentStatus.IN_PROGRESS
+        self._status = FulfillmentStatus.SHIPPED
 
     def deliver(self, order: OrderForm) -> None:  # noqa: ARG002
         self._state.deliver(self)
-        self._status = FulfillmentStatus.SUCCESS
+        self._status = FulfillmentStatus.DELIVERED
 
     def fail(self) -> None:
         self._state.fail(self)
-        self._status = FulfillmentStatus.FAILED
+        self._status = FulfillmentStatus.RETURNED
 
     def validate(self) -> bool:
         return self.address is not None  # type: ignore[reportUnnecessaryComparison]

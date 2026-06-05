@@ -178,14 +178,14 @@ class SQLAlchemyOrderRepository(OrderRepository):
             assert orm.table_number is not None
             table = Table(TableNum(orm.table_number))
             if orm.state == "CLOSED":
-                table._status = FulfillmentStatus.SUCCESS  # type: ignore[reportPrivateUsage]
+                table._status = FulfillmentStatus.DELIVERED  # type: ignore[reportPrivateUsage]
             return table
 
         if orm.fulfillment_type == "TAKEAWAY":
             assert orm.customer_name is not None
             takeaway = Takeaway(orm.customer_name)
             if orm.state == "CLOSED":
-                takeaway._status = FulfillmentStatus.SUCCESS  # type: ignore[reportPrivateUsage]
+                takeaway._status = FulfillmentStatus.DELIVERED  # type: ignore[reportPrivateUsage]
             return takeaway
 
         if orm.fulfillment_type == "DELIVERY":
@@ -221,15 +221,15 @@ class SQLAlchemyOrderRepository(OrderRepository):
         # Reconstruct delivery state and status
         if orm.delivery_state_name == "AWAITING_PICKUP":
             delivery._state = AwaitingPickup()  # type: ignore[reportPrivateUsage]
-            delivery._status = FulfillmentStatus.PENDING  # type: ignore[reportPrivateUsage]
+            delivery._status = FulfillmentStatus.READY_FOR_PICKUP  # type: ignore[reportPrivateUsage]
         elif orm.delivery_state_name == "IN_TRANSIT":
             delivery._state = InTransit()  # type: ignore[reportPrivateUsage]
-            delivery._status = FulfillmentStatus.IN_PROGRESS  # type: ignore[reportPrivateUsage]
+            delivery._status = FulfillmentStatus.SHIPPED  # type: ignore[reportPrivateUsage]
         elif orm.delivery_state_name == "DELIVERED":
             delivery._state = Delivered()  # type: ignore[reportPrivateUsage]
-            delivery._status = FulfillmentStatus.SUCCESS  # type: ignore[reportPrivateUsage]
+            delivery._status = FulfillmentStatus.DELIVERED  # type: ignore[reportPrivateUsage]
         elif orm.delivery_state_name == "FAILED_DELIVERY":
             delivery._state = FailedDelivery()  # type: ignore[reportPrivateUsage]
-            delivery._status = FulfillmentStatus.FAILED  # type: ignore[reportPrivateUsage]
+            delivery._status = FulfillmentStatus.RETURNED  # type: ignore[reportPrivateUsage]
 
         return delivery

@@ -75,7 +75,7 @@ async def test_order_repository_lifecycle_with_table(db_session: AsyncSession) -
     strat = retrieved.fulfillment_strategy
     assert isinstance(strat, Table)
     assert strat.table_num.value == 5
-    assert strat.get_status() == FulfillmentStatus.PENDING
+    assert strat.get_status() == FulfillmentStatus.READY_FOR_PICKUP
 
     # 3. Update order state and strategy
     retrieved.request_payment()
@@ -89,7 +89,7 @@ async def test_order_repository_lifecycle_with_table(db_session: AsyncSession) -
     assert updated is not None
     assert updated.state.name == "CLOSED"
     assert updated.fulfillment_strategy is not None
-    assert updated.fulfillment_strategy.get_status() == FulfillmentStatus.SUCCESS
+    assert updated.fulfillment_strategy.get_status() == FulfillmentStatus.DELIVERED
 
     # 5. Delete order and verify cascade deletion of items
     await repo.delete(42, "franquia_001")
@@ -124,7 +124,7 @@ async def test_order_repository_lifecycle_with_delivery(db_session: AsyncSession
     assert strat.estimated_time == 45
     assert strat.tracking_code == 98765
     assert strat.state.name == "AWAITING_PICKUP"
-    assert strat.get_status() == FulfillmentStatus.PENDING
+    assert strat.get_status() == FulfillmentStatus.READY_FOR_PICKUP
 
     # 3. Dispatch delivery and fail it (physical tracking)
     strat.dispatch()
@@ -136,7 +136,7 @@ async def test_order_repository_lifecycle_with_delivery(db_session: AsyncSession
     updated = await repo.find_by_id(43, "franquia_001")
     assert updated is not None
     assert updated.fulfillment_strategy is not None
-    assert updated.fulfillment_strategy.get_status() == FulfillmentStatus.FAILED
+    assert updated.fulfillment_strategy.get_status() == FulfillmentStatus.RETURNED
     assert updated.fulfillment_strategy.state.name == "FAILED_DELIVERY"  # type: ignore
 
 
