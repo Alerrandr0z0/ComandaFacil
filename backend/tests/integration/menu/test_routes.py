@@ -222,3 +222,50 @@ async def test_toggle_menu_endpoint_success(
     updated = await repo.find_by_id(1, "test_franchise")
     assert updated is not None
     assert updated.is_active is False
+
+
+@pytest.mark.asyncio
+async def test_update_menu_item_price_endpoint_success(
+    api_client: AsyncClient, sqlite_session: AsyncSession
+) -> None:
+    # Arrange
+    repo = SQLAlchemyMenuRepository(sqlite_session)
+    item_repo = SQLAlchemyMenuItemRepository(sqlite_session)
+
+    item = MenuItem(
+        id=10,
+        tenant_id="test_franchise",
+        name="Feijoada",
+        description="Completa",
+        base_price=Money.from_float(45.00),
+        station_type="GRILL",
+        category_name="Pratos",
+        is_available=True,
+    )
+    await item_repo.save(item)
+
+    menu = Menu(id=1, tenant_id="test_franchise", name="Almoço")
+    menu.add_item_to_category("Pratos", 10)
+    await repo.save(menu)
+    await sqlite_session.commit()
+
+    # Act - update price
+    response = await api_client.patch(
+        "/api/v1/menu/1/items/10/price", json={"price": 49.90}
+    )
+
+    # Assert
+    assert response.status_code == 200
+    assert response.json() == {"detail": "Preço do item atualizado com sucesso."}
+
+    # Verify database override
+    from app.menu.infrastructure.repositories import SQLAlchemyPriceListRepository
+    pl_repo = SQLAlchemyPriceListRepository(sqlite_session)
+    updated_menu = await repo.find_by_id(1, "test_franchise")
+    assert updated_menu is not None
+    assert updated_menu.price_list_id is not None
+
+    price_list = await pl_repo.find_by_id(updated_menu.price_list_id, "test_franchise")
+    assert price_list is not None
+    assert len(price_list.items) == 1
+    assert float(price_list.items[0].price.amount) == 49.90

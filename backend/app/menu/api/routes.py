@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
@@ -26,12 +27,14 @@ from app.menu.application.queries import (
     ListMenusHandler,
     ListMenusQuery,
 )
+from app.menu.domain.price_list import PriceList, PriceListItem
 from app.menu.infrastructure.mongo_read_repository import MongoMenuReadRepository
 from app.menu.infrastructure.mongo_sync import MenuReadModelSync
 from app.menu.infrastructure.orm_models import MenuItemORM, PriceListItemORM
 from app.menu.infrastructure.repositories import (
     SQLAlchemyMenuItemRepository,
     SQLAlchemyMenuRepository,
+    SQLAlchemyPriceListRepository,
 )
 from app.shared.money import Money
 
@@ -248,6 +251,77 @@ async def remove_menu_item(
         background_tasks.add_task(MenuReadModelSync(mongo).sync, menu_doc)
 
     return {"detail": "Item removido do cardápio com sucesso."}
+
+
+class MenuItemPriceUpdateSchema(BaseModel):
+    price: Decimal = Field(..., ge=0, description="New price of the menu item")
+
+    model_config = ConfigDict(frozen=True)
+
+
+@router.patch(
+    "/{menu_id}/items/{item_id}/price",
+    status_code=status.HTTP_200_OK,
+    summary="Update the price of a menu item in a menu's price list",
+    dependencies=[Depends(require_permission("MANAGE_MENU"))],
+)
+async def update_menu_item_price(
+    menu_id: int,
+    item_id: int,
+    schema: MenuItemPriceUpdateSchema,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
+    mongo: MongoDB,
+    tenant_id: CurrentTenantId,
+) -> dict[str, str]:
+    menu_repo = SQLAlchemyMenuRepository(db)
+    price_list_repo = SQLAlchemyPriceListRepository(db)
+
+    menu = await menu_repo.find_by_id(menu_id, tenant_id)
+    if not menu:
+        raise HTTPException(status_code=404, detail="Cardápio não encontrado.")
+
+    # Get or create price list
+    price_list = None
+    if menu.price_list_id is not None:
+        price_list = await price_list_repo.find_by_id(menu.price_list_id, tenant_id)
+
+    if not price_list:
+        pl_id = int(datetime.datetime.now(datetime.UTC).timestamp() * 1000) + int(item_id % 1000)
+        price_list = PriceList(
+            id=pl_id,
+            tenant_id=tenant_id,
+            name=f"Preços de {menu.name}",
+            description=f"Lista de preços gerada automaticamente para o cardápio {menu.name}",
+            is_active=True,
+        )
+        menu.price_list_id = pl_id
+        await menu_repo.save(menu)
+
+    # Find if item already exists in price list
+    existing_item = next((pi for pi in price_list.items if pi.menu_item_id == item_id), None)
+    if existing_item:
+        existing_item.update_price(Money(schema.price))
+    else:
+        new_pi_id = int(datetime.datetime.now(datetime.UTC).timestamp() * 1000) + int(item_id % 1000) + 1
+        new_item = PriceListItem(
+            id=new_pi_id,
+            price_list_id=price_list.id,
+            menu_item_id=item_id,
+            price=Money(schema.price),
+        )
+        price_list.add_item(new_item)
+
+    await price_list_repo.save(price_list)
+    await db.commit()
+
+    # Sync menu read models to MongoDB
+    updated_menu = await menu_repo.find_by_id(menu_id, tenant_id)
+    if updated_menu:
+        menu_doc = await _resolve_menu_doc(db, updated_menu)
+        background_tasks.add_task(MenuReadModelSync(mongo).sync, menu_doc)
+
+    return {"detail": "Preço do item atualizado com sucesso."}
 
 
 @router.patch(

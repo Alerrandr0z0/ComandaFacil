@@ -1,4 +1,13 @@
-import { ArrowRight, Plus, Sparkles, ToggleLeft, ToggleRight, Trash2, Utensils } from 'lucide-react'
+import {
+  ArrowRight,
+  Edit2,
+  Plus,
+  Sparkles,
+  ToggleLeft,
+  ToggleRight,
+  Trash2,
+  Utensils,
+} from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import Layout from '@/shared/components/layout'
 import { httpClient } from '@/shared/lib/http_client'
@@ -8,6 +17,7 @@ interface MenuItem {
   name: string
   description: string
   category: string
+  price?: number
   image_url: string | null
   is_available: boolean
 }
@@ -26,6 +36,8 @@ export default function MenuManagerPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [isCreatingMenu, setIsCreatingMenu] = useState(false)
   const [isAddingItem, setIsAddingItem] = useState(false)
+  const [editingItem, setEditingItem] = useState<MenuItem | null>(null)
+  const [editingPriceValue, setEditingPriceValue] = useState('')
 
   // Menu form state
   const [newMenuName, setNewMenuName] = useState('')
@@ -146,17 +158,34 @@ export default function MenuManagerPage() {
     }
   }
 
-  const getCustomPrice = (itemId: number): number => {
-    const pricesStr = localStorage.getItem('cf_menu_item_prices')
-    if (pricesStr) {
-      const prices = JSON.parse(pricesStr)
-      if (prices[itemId] !== undefined) {
-        return Number(prices[itemId])
-      }
+  const getItemPrice = (item: MenuItem): number => {
+    if (item.price !== undefined && item.price !== null) {
+      return Number(item.price)
     }
     const base = 12.0
-    const offset = (itemId % 6) * 5.5
+    const offset = (item.id % 6) * 5.5
     return base + offset
+  }
+
+  const handleEditPrice = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedMenu || !editingItem) return
+    const priceNum = parseFloat(editingPriceValue)
+    if (Number.isNaN(priceNum) || priceNum < 0) {
+      alert('Por favor, insira um preço válido.')
+      return
+    }
+
+    try {
+      await httpClient.patch(`/v1/menu/${selectedMenu.id}/items/${editingItem.id}/price`, {
+        price: priceNum,
+      })
+      setEditingItem(null)
+      setEditingPriceValue('')
+      fetchMenus()
+    } catch (_err) {
+      alert('Erro ao atualizar o preço do item.')
+    }
   }
 
   return (
@@ -347,9 +376,22 @@ export default function MenuManagerPage() {
                             <span className="text-[9px] uppercase font-bold text-brand-400 px-1.5 py-0.5 rounded bg-brand-500/5 border border-brand-500/10">
                               {item.category}
                             </span>
-                            <span className="text-xs font-black text-amber-500">
-                              R$ {getCustomPrice(item.id).toFixed(2)}
-                            </span>
+                            <div className="flex items-center gap-1.5">
+                              <span className="text-xs font-black text-amber-500">
+                                R$ {getItemPrice(item).toFixed(2)}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingItem(item)
+                                  setEditingPriceValue(getItemPrice(item).toFixed(2))
+                                }}
+                                className="text-gray-650 hover:text-brand-400 p-0.5 rounded transition"
+                                title="Alterar Preço"
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </button>
+                            </div>
                           </div>
                         </div>
 
@@ -540,6 +582,59 @@ export default function MenuManagerPage() {
                   className="flex-1 rounded-xl bg-brand-500 hover:bg-brand-600 py-2.5 text-xs font-bold text-white transition"
                 >
                   Adicionar Item
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
+
+        {/* Modal: Edit Item Price */}
+        {editingItem && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+            <form
+              onSubmit={handleEditPrice}
+              className="w-full max-w-sm rounded-2xl glass-elevated p-6 space-y-4"
+            >
+              <div>
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                  Alterar Preço do Item
+                </h3>
+                <p className="text-xs text-gray-550 mt-1">
+                  Defina o novo preço para <strong>{editingItem.name}</strong> no cardápio ativo.
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <span className="block text-[10px] uppercase font-extrabold text-gray-400">
+                  Preço (R$)
+                </span>
+                <input
+                  type="number"
+                  step="0.01"
+                  required
+                  placeholder="29.90"
+                  value={editingPriceValue}
+                  onChange={(e) => setEditingPriceValue(e.target.value)}
+                  className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+                />
+              </div>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEditingItem(null)
+                    setEditingPriceValue('')
+                  }}
+                  className="flex-1 rounded-xl border border-gray-850 hover:bg-white/[0.02] py-2.5 text-xs font-bold text-gray-400 transition"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 rounded-xl bg-brand-500 hover:bg-brand-600 py-2.5 text-xs font-bold text-white transition"
+                >
+                  Salvar Preço
                 </button>
               </div>
             </form>

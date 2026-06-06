@@ -1,4 +1,4 @@
-import { Lock, Mail, RefreshCcw, Shield, UserPlus, Users } from 'lucide-react'
+import { Lock, Mail, Power, RefreshCcw, Shield, Trash, UserPlus, Users } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
 import { useAuth } from '@/features/auth/auth_context'
 import Layout from '@/shared/components/layout'
@@ -10,6 +10,113 @@ interface Employee {
   name: string
   email: string
   role: 'MANAGER' | 'WAITER' | 'COOK' | 'CASHIER' | null
+  is_active: boolean
+}
+
+interface EmployeeCardProps {
+  emp: Employee
+  currentEmployee: { id: number } | null
+  getRoleBadgeClasses: (role: string | null) => string
+  formatRoleLabel: (role: string | null) => string
+  onToggleActive: (emp: Employee) => void
+  onDelete: (emp: Employee) => void
+  onAssignRole: (emp: Employee) => void
+}
+
+function EmployeeCard({
+  emp,
+  currentEmployee,
+  getRoleBadgeClasses,
+  formatRoleLabel,
+  onToggleActive,
+  onDelete,
+  onAssignRole,
+}: EmployeeCardProps) {
+  const isSelf = emp.id === currentEmployee?.id
+  return (
+    <div
+      className={`p-5 rounded-2xl border border-gray-900 bg-gray-950/15 flex flex-col justify-between transition-all duration-300 hover:border-gray-800 ${
+        isSelf ? 'border-brand-500/40 bg-brand-950/2' : ''
+      }`}
+    >
+      <div>
+        <div className="flex items-start justify-between">
+          <div>
+            <h4 className="text-xs font-bold text-gray-200">
+              {emp.name}
+              {isSelf && (
+                <span className="text-[9px] text-brand-400 ml-1.5 font-normal">(Você)</span>
+              )}
+            </h4>
+            <p className="text-[10px] text-gray-500 mt-0.5">ID: {emp.id}</p>
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span
+              className={`text-[8px] px-1.5 py-0.5 rounded-full border uppercase tracking-wider font-extrabold ${
+                emp.is_active
+                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-400'
+                  : 'border-rose-500/25 bg-rose-500/10 text-rose-450'
+              }`}
+            >
+              {emp.is_active ? 'Ativo' : 'Suspenso'}
+            </span>
+            <span
+              className={`text-[9px] px-2 py-0.5 rounded-full border uppercase tracking-wider font-extrabold ${getRoleBadgeClasses(
+                emp.role,
+              )}`}
+            >
+              {formatRoleLabel(emp.role)}
+            </span>
+          </div>
+        </div>
+
+        <div className="mt-4 space-y-1.5 text-xs text-gray-400">
+          <div className="flex items-center gap-2">
+            <Mail className="h-3.5 w-3.5 text-gray-600" />
+            <span className="truncate">{emp.email}</span>
+          </div>
+        </div>
+      </div>
+
+      <div className="mt-5 pt-3.5 border-t border-gray-900/40 flex justify-between items-center">
+        <div className="flex gap-1.5">
+          {!isSelf && (
+            <>
+              <button
+                type="button"
+                onClick={() => onToggleActive(emp)}
+                className={`p-1.5 rounded-lg border transition ${
+                  emp.is_active
+                    ? 'border-rose-500/20 bg-rose-950/10 text-rose-400 hover:bg-rose-500/20'
+                    : 'border-emerald-500/20 bg-emerald-950/10 text-emerald-400 hover:bg-emerald-500/20'
+                }`}
+                title={emp.is_active ? 'Suspender Acesso' : 'Reativar Acesso'}
+              >
+                <Power className="h-3.5 w-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => onDelete(emp)}
+                className="p-1.5 rounded-lg border border-red-500/20 bg-red-950/10 text-red-400 hover:bg-red-500/20 transition"
+                title="Remover da Franquia"
+              >
+                <Trash className="h-3.5 w-3.5" />
+              </button>
+            </>
+          )}
+        </div>
+
+        <button
+          type="button"
+          onClick={() => onAssignRole(emp)}
+          className="rounded-lg bg-gray-900 border border-gray-850 hover:bg-gray-850 px-3 py-1.5 text-[10px] font-bold text-brand-400 hover:text-white transition flex items-center gap-1"
+        >
+          <Shield className="h-3 w-3" />
+          Alterar Cargo
+        </button>
+      </div>
+    </div>
+  )
 }
 
 export default function EmployeesPage() {
@@ -112,6 +219,43 @@ export default function EmployeesPage() {
     }
   }
 
+  const handleToggleActive = async (emp: Employee) => {
+    if (emp.id === currentEmployee?.id) {
+      alert('Você não pode desativar a si mesmo!')
+      return
+    }
+    try {
+      await httpClient.post(`/v1/auth/employees/${emp.id}/toggle-active`)
+      fetchEmployees()
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { detail?: string } }; message?: string }
+      const msg = error.response?.data?.detail || error.message || 'Erro ao alterar status.'
+      alert(`Falha ao alterar status: ${msg}`)
+    }
+  }
+
+  const handleDeleteEmployee = async (emp: Employee) => {
+    if (emp.id === currentEmployee?.id) {
+      alert('Você não pode se remover da franquia!')
+      return
+    }
+    if (
+      !window.confirm(
+        `Deseja realmente remover ${emp.name} desta franquia? Esta ação revogará o acesso dele a este estabelecimento.`,
+      )
+    ) {
+      return
+    }
+    try {
+      await httpClient.delete(`/v1/auth/employees/${emp.id}`)
+      fetchEmployees()
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { detail?: string } }; message?: string }
+      const msg = error.response?.data?.detail || error.message || 'Erro ao remover colaborador.'
+      alert(`Falha ao remover: ${msg}`)
+    }
+  }
+
   const formatRoleLabel = (role: string | null) => {
     switch (role) {
       case 'MANAGER':
@@ -206,56 +350,19 @@ export default function EmployeesPage() {
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {employees.map((emp) => (
-              <div
+              <EmployeeCard
                 key={emp.id}
-                className={`p-5 rounded-2xl border border-gray-900 bg-gray-950/15 flex flex-col justify-between transition-all duration-300 hover:border-gray-800 ${
-                  emp.id === currentEmployee?.id ? 'border-brand-500/40 bg-brand-950/2' : ''
-                }`}
-              >
-                <div>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <h4 className="text-xs font-bold text-gray-200">
-                        {emp.name}
-                        {emp.id === currentEmployee?.id && (
-                          <span className="text-[9px] text-brand-400 ml-1.5 font-normal">
-                            (Você)
-                          </span>
-                        )}
-                      </h4>
-                      <p className="text-[10px] text-gray-500 mt-0.5">ID: {emp.id}</p>
-                    </div>
-                    <span
-                      className={`text-[9px] px-2 py-0.5 rounded-full border uppercase tracking-wider font-extrabold ${getRoleBadgeClasses(
-                        emp.role,
-                      )}`}
-                    >
-                      {formatRoleLabel(emp.role)}
-                    </span>
-                  </div>
-
-                  <div className="mt-4 space-y-1.5 text-xs text-gray-400">
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-3.5 w-3.5 text-gray-600" />
-                      <span className="truncate">{emp.email}</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="mt-5 pt-3.5 border-t border-gray-900/40 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSelectedRole(emp.role || 'WAITER')
-                      setIsAssigningRole(emp)
-                    }}
-                    className="rounded-lg bg-gray-900 border border-gray-850 hover:bg-gray-850 px-3 py-1.5 text-[10px] font-bold text-brand-400 hover:text-white transition flex items-center gap-1"
-                  >
-                    <Shield className="h-3 w-3" />
-                    Alterar Cargo
-                  </button>
-                </div>
-              </div>
+                emp={emp}
+                currentEmployee={currentEmployee}
+                getRoleBadgeClasses={getRoleBadgeClasses}
+                formatRoleLabel={formatRoleLabel}
+                onToggleActive={handleToggleActive}
+                onDelete={handleDeleteEmployee}
+                onAssignRole={(emp) => {
+                  setSelectedRole(emp.role || 'WAITER')
+                  setIsAssigningRole(emp)
+                }}
+              />
             ))}
           </div>
         )}

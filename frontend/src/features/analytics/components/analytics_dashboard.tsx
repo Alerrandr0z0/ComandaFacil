@@ -59,13 +59,13 @@ export default function AnalyticsDashboard() {
     try {
       const [statsRes, salesRes, kitchenRes] = await Promise.all([
         httpClient.get<DashboardStats>('/v1/analytics/dashboard', {
-          params: { period: period.toUpperCase() },
+          params: { period: period },
         }),
         httpClient.get<SalesReport>('/v1/analytics/sales', {
-          params: { period: period.toUpperCase() },
+          params: { period: period },
         }),
         httpClient.get<KitchenPerformance>('/v1/analytics/kitchen', {
-          params: { period: period.toUpperCase() },
+          params: { period: period },
         }),
       ])
 

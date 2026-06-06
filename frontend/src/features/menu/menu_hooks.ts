@@ -6,6 +6,7 @@ export interface MenuItem {
   name: string
   description: string
   category: string
+  price?: number
   image_url: string | null
   is_available: boolean
   // Under order items, there's station_type_cpy which maps to backend KDS routing.

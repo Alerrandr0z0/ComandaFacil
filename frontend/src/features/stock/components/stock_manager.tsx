@@ -28,7 +28,16 @@ interface StockItem {
 interface StockMovement {
   id: number
   stock_item_id: number
-  movement_type: 'ADD' | 'DEDUCT' | 'ADJUST' | 'MIN_LEVEL'
+  movement_type:
+    | 'ADD'
+    | 'DEDUCT'
+    | 'ADJUST'
+    | 'MIN_LEVEL'
+    | 'INPUT'
+    | 'OUTPUT'
+    | 'ADJUSTMENT'
+    | 'PRODUCTION'
+    | 'WASTE'
   quantity_changed: number
   reason: string
   created_at: string
@@ -298,44 +307,44 @@ function CreateStockItemModal({ onClose, onSubmit }: CreateStockItemModalProps) 
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-      <div className="w-full max-w-md rounded-2xl glass-elevated overflow-hidden border border-gray-800">
-        <div className="flex items-center justify-between border-b border-gray-900/60 p-5">
-          <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+      <div className="w-full max-w-md rounded-2xl border border-gray-900 bg-[#0c0c12] p-6 space-y-6 shadow-2xl glass-card">
+        <div className="flex items-center justify-between border-b border-gray-900/60 pb-3">
+          <h2 className="text-sm font-black text-white uppercase tracking-wider">
             Novo Insumo de Estoque
-          </h3>
+          </h2>
           <button
             type="button"
             onClick={onClose}
             className="text-gray-500 hover:text-white transition rounded-lg p-1 hover:bg-white/[0.03]"
           >
-            <X className="h-5 w-5" />
+            <X className="h-4.5 w-4.5" />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-5 space-y-4 text-xs">
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
           <div className="space-y-1.5">
-            <span className="block text-[10px] uppercase font-extrabold text-gray-550">
-              Nome do Item
+            <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
+              Nome do Insumo
             </span>
             <input
               type="text"
               required
-              placeholder="Ex: Pão de Hambúrguer Gergelim"
+              placeholder="Ex: Queijo Coalho"
               value={name}
               onChange={(e) => setName(e.target.value)}
               className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <span className="block text-[10px] uppercase font-extrabold text-gray-555">
+              <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
                 Categoria
               </span>
               <select
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
-                className="w-full rounded-xl px-4 py-3 text-xs text-white bg-gray-950 border border-gray-850 focus:border-brand-500 focus:outline-none"
+                className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input bg-[#0c0c12]"
               >
                 <option value="RAW_MATERIAL">Insumo Base</option>
                 <option value="BEVERAGE">Bebida</option>
@@ -344,26 +353,23 @@ function CreateStockItemModal({ onClose, onSubmit }: CreateStockItemModalProps) 
             </div>
 
             <div className="space-y-1.5">
-              <span className="block text-[10px] uppercase font-extrabold text-gray-555">
-                Unidade
+              <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
+                Unidade de Medida
               </span>
-              <select
+              <input
+                type="text"
+                required
+                placeholder="Ex: kg, g, l, un"
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
-                className="w-full rounded-xl px-4 py-3 text-xs text-white bg-gray-950 border border-gray-850 focus:border-brand-500 focus:outline-none"
-              >
-                <option value="un">Unidades (un)</option>
-                <option value="kg">Quilogramas (kg)</option>
-                <option value="g">Gramas (g)</option>
-                <option value="l">Litros (l)</option>
-                <option value="ml">Mililitros (ml)</option>
-              </select>
+                className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+              />
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <span className="block text-[10px] uppercase font-extrabold text-gray-555">
+              <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
                 Qtd. Inicial
               </span>
               <input
@@ -377,8 +383,8 @@ function CreateStockItemModal({ onClose, onSubmit }: CreateStockItemModalProps) 
             </div>
 
             <div className="space-y-1.5">
-              <span className="block text-[10px] uppercase font-extrabold text-gray-555">
-                Alerta Mínimo
+              <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
+                Mínimo Alerta
               </span>
               <input
                 type="number"
@@ -391,11 +397,11 @@ function CreateStockItemModal({ onClose, onSubmit }: CreateStockItemModalProps) 
             </div>
           </div>
 
-          <div className="flex border-t border-gray-900/65 pt-4 gap-3">
+          <div className="flex gap-3 pt-2">
             <button
               type="button"
               onClick={onClose}
-              className="flex-1 rounded-xl border border-gray-800 hover:bg-white/[0.02] py-3 text-xs font-bold text-gray-400 transition"
+              className="flex-1 rounded-xl border border-gray-850 hover:border-gray-700 bg-gray-900/30 py-3 text-xs font-bold text-gray-300 hover:text-white transition"
             >
               Cancelar
             </button>
@@ -445,7 +451,7 @@ function HistoryPanel({
 }: HistoryPanelProps) {
   if (!activeHistoryItem) {
     return (
-      <div className="py-16 text-center text-xs text-gray-500 font-medium">
+      <div className="py-16 text-center text-xs text-gray-550 font-medium">
         Selecione o histórico de um insumo para visualizar as movimentações registradas.
       </div>
     )
@@ -471,8 +477,11 @@ function HistoryPanel({
       ) : (
         <div className="max-h-[350px] overflow-y-auto space-y-2 pr-1">
           {historyMovements.map((move) => {
-            const isAdd = move.movement_type === 'ADD'
-            const isDeduct = move.movement_type === 'DEDUCT'
+            const isAdd = move.movement_type === 'ADD' || move.movement_type === 'INPUT'
+            const isDeduct =
+              move.movement_type === 'DEDUCT' ||
+              move.movement_type === 'OUTPUT' ||
+              move.movement_type === 'WASTE'
             const isMin = move.movement_type === 'MIN_LEVEL'
             const time = new Date(move.created_at).toLocaleDateString()
             let typeColor = 'text-gray-400 border-gray-900 bg-gray-900/20'
