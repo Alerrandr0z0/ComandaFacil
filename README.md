@@ -38,6 +38,7 @@ Monorepo:
 ```bash
 make setup           # uv sync + npm install + pre-commit
 make start           # docker compose up -d (Postgres + MongoDB)
+make migrate         # Aplica as migrations do banco de dados (Alembic)
 make dev             # backend :8000 + frontend :5173
 ```
 
