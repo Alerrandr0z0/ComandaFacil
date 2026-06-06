@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
@@ -21,22 +21,39 @@ class MongoAnalyticsRepository:
     def __init__(self, db: AsyncIOMotorDatabase) -> None:  # type: ignore[type-arg]
         self._db = db
 
+    def _resolve_date_range(
+        self, period: AnalyticsPeriod, date_range: DateRange | None
+    ) -> DateRange:
+        if date_range:
+            return date_range
+        now = datetime.now(UTC)
+        if period == AnalyticsPeriod.DAY:
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif period == AnalyticsPeriod.WEEK:
+            start = now - timedelta(days=7)
+        else:  # MONTH
+            start = now - timedelta(days=30)
+        return DateRange(start=start, end=now)
+
     async def get_dashboard(
         self,
         tenant_id: str,
-        period: AnalyticsPeriod = AnalyticsPeriod.DAY,  # noqa: ARG002
-        date_range: DateRange | None = None,  # noqa: ARG002
+        period: AnalyticsPeriod = AnalyticsPeriod.DAY,
+        date_range: DateRange | None = None,
     ) -> DashboardData:
         orders_coll = self._db["orders_read"]
         stock_coll = self._db["stock_read"]
         kitchen_coll = self._db["kitchen_read"]
+
+        dr = self._resolve_date_range(period, date_range)
 
         pipe: list[dict[str, Any]] = [
             {
                 "$match": {
                     "tenant_id": tenant_id,
                     "created_at": {
-                        "$gte": datetime.now(UTC).replace(hour=0, minute=0, second=0, microsecond=0)
+                        "$gte": dr.start,
+                        "$lte": dr.end,
                     },
                 }
             },
@@ -54,7 +71,16 @@ class MongoAnalyticsRepository:
         low_stock = await stock_coll.count_documents({"tenant_id": tenant_id, "is_low_stock": True})
 
         prep_pipe: list[dict[str, Any]] = [
-            {"$match": {"tenant_id": tenant_id, "completed_at": {"$ne": None}}},
+            {
+                "$match": {
+                    "tenant_id": tenant_id,
+                    "completed_at": {"$ne": None},
+                    "created_at": {
+                        "$gte": dr.start,
+                        "$lte": dr.end,
+                    },
+                }
+            },
             {
                 "$group": {
                     "_id": None,
@@ -88,9 +114,11 @@ class MongoAnalyticsRepository:
     ) -> SalesReportData:
         orders_coll = self._db["orders_read"]
 
-        match: dict[str, Any] = {"tenant_id": tenant_id}
-        if date_range:
-            match["created_at"] = {"$gte": date_range.start, "$lte": date_range.end}
+        dr = self._resolve_date_range(period, date_range)
+        match: dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "created_at": {"$gte": dr.start, "$lte": dr.end},
+        }
 
         pipe: list[dict[str, Any]] = [
             {"$match": match},
@@ -137,9 +165,11 @@ class MongoAnalyticsRepository:
     ) -> OrderInsights:
         orders_coll = self._db["orders_read"]
 
-        match: dict[str, Any] = {"tenant_id": tenant_id}
-        if date_range:
-            match["created_at"] = {"$gte": date_range.start, "$lte": date_range.end}
+        dr = self._resolve_date_range(period, date_range)
+        match: dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "created_at": {"$gte": dr.start, "$lte": dr.end},
+        }
 
         pipe: list[dict[str, Any]] = [
             {"$match": match},
@@ -173,9 +203,11 @@ class MongoAnalyticsRepository:
     ) -> KitchenPerformance:
         kitchen_coll = self._db["kitchen_read"]
 
-        match: dict[str, Any] = {"tenant_id": tenant_id}
-        if date_range:
-            match["created_at"] = {"$gte": date_range.start, "$lte": date_range.end}
+        dr = self._resolve_date_range(period, date_range)
+        match: dict[str, Any] = {
+            "tenant_id": tenant_id,
+            "created_at": {"$gte": dr.start, "$lte": dr.end},
+        }
 
         pipe: list[dict[str, Any]] = [
             {"$match": match},

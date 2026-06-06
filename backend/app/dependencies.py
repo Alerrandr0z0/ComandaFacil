@@ -1,4 +1,4 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from typing import Annotated
 
 from fastapi import Depends, HTTPException, status
@@ -11,6 +11,7 @@ from app.auth.domain.session import Session
 from app.auth.infrastructure.repositories import (
     SQLAlchemyEmployeeRepository,
     SQLAlchemySessionRepository,
+    SQLAlchemyTenantRepository,
 )
 from app.settings import Settings, get_settings
 from app.shared.database import get_async_session, get_mongo_db
@@ -90,3 +91,42 @@ async def get_current_employee(
 
 
 CurrentEmployee = Annotated[Employee, Depends(get_current_employee)]
+
+
+def require_permission(action: str) -> Callable[..., Awaitable[Employee]]:
+    """Dependency creator enforcing a specific employee permission strategy on the route."""
+
+    async def dependency(
+        current_employee: CurrentEmployee,
+        tenant_id_str: CurrentTenantId,
+        db: DbSession,
+    ) -> Employee:
+        try:
+            tenant_id = int(tenant_id_str)
+        except ValueError as err:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid tenant ID format.",
+            ) from err
+
+        tenant_repo = SQLAlchemyTenantRepository(db)
+        tenant = await tenant_repo.find_by_id(tenant_id)
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Franquia '{tenant_id}' não encontrada.",
+            )
+        if not tenant.is_active_tenant():
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Franquia inativa.",
+            )
+
+        if not current_employee.permits(action, tenant):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Funcionário não possui permissão para executar esta ação: {action}",
+            )
+        return current_employee
+
+    return dependency

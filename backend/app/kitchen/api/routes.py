@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, BackgroundTasks, Depends, WebSocket, WebSocketDisconnect
 
-from app.dependencies import CurrentTenantId, DbSession, MongoDB
+from app.dependencies import CurrentTenantId, DbSession, MongoDB, require_permission
 from app.kitchen.application.commands import (
     CancelKitchenItemCommand,
     CancelKitchenItemHandler,
@@ -23,7 +23,7 @@ from app.kitchen.infrastructure.websocket_manager import kds_ws_manager
 router = APIRouter(prefix="/kitchen", tags=["Kitchen"])
 
 
-@router.patch("/items/{id}/prepare")
+@router.patch("/items/{id}/prepare", dependencies=[Depends(require_permission("PREPARE_ITEM"))])
 async def prepare_item(
     id: int,
     session: DbSession,
@@ -39,7 +39,7 @@ async def prepare_item(
     return {"status": "success", "state": updated_item.state.name}
 
 
-@router.patch("/items/{id}/ready")
+@router.patch("/items/{id}/ready", dependencies=[Depends(require_permission("PREPARE_ITEM"))])
 async def mark_item_ready(
     id: int,
     session: DbSession,
@@ -57,7 +57,7 @@ async def mark_item_ready(
     return {"status": "success", "state": updated_item.state.name}
 
 
-@router.patch("/items/{id}/cancel")
+@router.patch("/items/{id}/cancel", dependencies=[Depends(require_permission("PREPARE_ITEM"))])
 async def cancel_item(
     id: int,
     session: DbSession,
@@ -73,7 +73,7 @@ async def cancel_item(
     return {"status": "success", "state": updated_item.state.name}
 
 
-@router.get("/items")
+@router.get("/items", dependencies=[Depends(require_permission("PREPARE_ITEM"))])
 async def get_active_items(
     station_type: str,
     mongo: MongoDB,

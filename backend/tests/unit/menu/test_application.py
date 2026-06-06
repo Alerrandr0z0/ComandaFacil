@@ -20,9 +20,9 @@ from app.menu.application.queries import (
     ListMenusHandler,
     ListMenusQuery,
 )
-from app.menu.domain.category import Category
-from app.menu.domain.menu import Menu, MenuItem, MenuRepository
+from app.menu.domain.menu import Menu, MenuItem, MenuItemRepository, MenuRepository
 from app.shared.exceptions import ConflictError, NotFoundError
+from app.shared.money import Money
 
 
 class InMemoryMenuRepository(MenuRepository):
@@ -42,9 +42,31 @@ class InMemoryMenuRepository(MenuRepository):
         self._menus.pop(id, None)
 
 
+class InMemoryMenuItemRepository(MenuItemRepository):
+    def __init__(self) -> None:
+        self._items: dict[int, MenuItem] = {}
+
+    async def find_by_id(self, id: int, tenant_id: str = "") -> MenuItem | None:
+        return self._items.get(id)
+
+    async def find_all(self, tenant_id: str = "") -> list[MenuItem]:
+        return list(self._items.values())
+
+    async def save(self, item: MenuItem) -> None:
+        self._items[item.id] = item
+
+    async def delete(self, id: int, tenant_id: str = "") -> None:
+        self._items.pop(id, None)
+
+
 @pytest.fixture
 def menu_repo() -> InMemoryMenuRepository:
     return InMemoryMenuRepository()
+
+
+@pytest.fixture
+def item_repo() -> InMemoryMenuItemRepository:
+    return InMemoryMenuItemRepository()
 
 
 @pytest.mark.unit
@@ -83,11 +105,13 @@ async def test_create_menu_duplicate_id(menu_repo: InMemoryMenuRepository) -> No
 
 
 @pytest.mark.unit
-async def test_add_menu_item_success(menu_repo: InMemoryMenuRepository) -> None:
+async def test_add_menu_item_success(
+    menu_repo: InMemoryMenuRepository, item_repo: InMemoryMenuItemRepository
+) -> None:
     # Arrange
     menu = Menu(id=1, tenant_id="test", name="Almoço")
     await menu_repo.save(menu)
-    handler = AddMenuItemHandler(menu_repo)
+    handler = AddMenuItemHandler(menu_repo, item_repo)
     command = AddMenuItemCommand(
         menu_id=1,
         tenant_id="test",
@@ -95,6 +119,8 @@ async def test_add_menu_item_success(menu_repo: InMemoryMenuRepository) -> None:
         name="Feijoada",
         description="Feijoada completa",
         category="Pratos",
+        base_price=Money.zero(),
+        station_type="GRILL",
     )
 
     # Act
@@ -103,18 +129,22 @@ async def test_add_menu_item_success(menu_repo: InMemoryMenuRepository) -> None:
     # Assert
     assert item.id == 10
     assert item.name == "Feijoada"
-    assert str(item.category) == "Pratos"
+    assert item.category_name == "Pratos"
 
     saved = await menu_repo.find_by_id(1)
     assert saved is not None
-    assert len(saved.items) == 1
-    assert saved.items[0].name == "Feijoada"
+    assert len(saved.categories) == 1
+    assert saved.categories[0].name == "Pratos"
+    assert len(saved.categories[0].items) == 1
+    assert saved.categories[0].items[0].menu_item_id == 10
 
 
 @pytest.mark.unit
-async def test_add_menu_item_nonexistent_menu(menu_repo: InMemoryMenuRepository) -> None:
+async def test_add_menu_item_nonexistent_menu(
+    menu_repo: InMemoryMenuRepository, item_repo: InMemoryMenuItemRepository
+) -> None:
     # Arrange
-    handler = AddMenuItemHandler(menu_repo)
+    handler = AddMenuItemHandler(menu_repo, item_repo)
     command = AddMenuItemCommand(
         menu_id=99,
         tenant_id="test",
@@ -130,12 +160,25 @@ async def test_add_menu_item_nonexistent_menu(menu_repo: InMemoryMenuRepository)
 
 
 @pytest.mark.unit
-async def test_remove_menu_item_success(menu_repo: InMemoryMenuRepository) -> None:
+async def test_remove_menu_item_success(
+    menu_repo: InMemoryMenuRepository, item_repo: InMemoryMenuItemRepository
+) -> None:
     # Arrange
     menu = Menu(id=1, tenant_id="test", name="Almoço")
-    item = MenuItem(id=10, name="Feijoada", description="", category=Category("Pratos"))
-    menu.add_item(item)
+    menu.add_item_to_category("Pratos", 10)
     await menu_repo.save(menu)
+
+    item = MenuItem(
+        id=10,
+        tenant_id="test",
+        name="Feijoada",
+        description="",
+        base_price=Money.zero(),
+        station_type="GRILL",
+        category_name="Pratos",
+    )
+    await item_repo.save(item)
+
     handler = RemoveMenuItemHandler(menu_repo)
     command = RemoveMenuItemCommand(menu_id=1, tenant_id="test", item_id=10)
 
@@ -145,7 +188,7 @@ async def test_remove_menu_item_success(menu_repo: InMemoryMenuRepository) -> No
     # Assert
     saved = await menu_repo.find_by_id(1)
     assert saved is not None
-    assert len(saved.items) == 0
+    assert len(saved.categories) == 0
 
 
 @pytest.mark.unit

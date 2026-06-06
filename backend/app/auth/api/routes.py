@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import datetime
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from app.auth.application.commands import (
     AssignRoleCommand,
@@ -16,12 +18,19 @@ from app.auth.application.commands import (
     LogoutHandler,
 )
 from app.auth.domain.employee import RoleType
+from app.auth.infrastructure.orm_models import EmployeeORM
 from app.auth.infrastructure.repositories import (
     SQLAlchemyEmployeeRepository,
     SQLAlchemySessionRepository,
     SQLAlchemyTenantRepository,
 )
-from app.dependencies import CurrentEmployee, CurrentSession, DbSession
+from app.dependencies import (
+    CurrentEmployee,
+    CurrentSession,
+    DbSession,
+    get_current_tenant_id,
+    require_permission,
+)
 
 router = APIRouter(prefix="/auth", tags=["Auth"])
 
@@ -46,6 +55,8 @@ class EmployeeResponseSchema(BaseModel):
     id: int
     name: str
     email: str
+    role: str | None = None
+    is_active: bool = True
 
     model_config = ConfigDict(from_attributes=True, frozen=True)
 
@@ -79,6 +90,48 @@ class SessionResponseSchema(BaseModel):
 
 
 # ─── REST Endpoints ───────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/employees",
+    response_model=list[EmployeeResponseSchema],
+    status_code=status.HTTP_200_OK,
+    summary="Get all employees in the current tenant franchise",
+)
+async def list_employees(
+    db: DbSession,
+    tenant_id: str = Depends(get_current_tenant_id),
+) -> list[EmployeeResponseSchema]:
+    """Lists all registered employees and resolves their active role for the tenant."""
+    stmt = select(EmployeeORM).options(selectinload(EmployeeORM.roles))
+    result = await db.execute(stmt)
+    orms = result.scalars().all()
+
+    response = []
+    try:
+        t_id = int(tenant_id)
+    except ValueError:
+        t_id = None
+
+    for orm in orms:
+        active_role = None
+        is_active = True
+        if t_id is not None:
+            for r in orm.roles:
+                if r.tenant_id == t_id:
+                    active_role = r.role_type
+                    is_active = r.is_active
+                    break
+        response.append(
+            EmployeeResponseSchema(
+                id=orm.id,
+                name=orm.name,
+                email=orm.email,
+                role=active_role,
+                is_active=is_active,
+            )
+        )
+    return response
 
 
 @router.post(
@@ -156,8 +209,109 @@ async def logout(current_session: CurrentSession, db: DbSession) -> dict[str, st
     status_code=status.HTTP_200_OK,
     summary="Get authenticated Employee profile",
 )
-async def get_me(current_employee: CurrentEmployee) -> EmployeeResponseSchema:
+async def get_me(
+    current_employee: CurrentEmployee,
+    tenant_id: str = Depends(get_current_tenant_id),
+) -> EmployeeResponseSchema:
     """Returns the profile of the currently logged-in employee."""
+    active_role = None
+    try:
+        t_id = int(tenant_id)
+        for role in current_employee.roles:
+            if role.tenant_id == t_id and role.is_active:
+                active_role = role.role_type.value
+                break
+    except ValueError:
+        pass
+
     return EmployeeResponseSchema(
-        id=current_employee.id, name=current_employee.name, email=str(current_employee.email)
+        id=current_employee.id,
+        name=current_employee.name,
+        email=str(current_employee.email),
+        role=active_role,
     )
+
+
+@router.post(
+    "/employees/{employee_id}/toggle-active",
+    status_code=status.HTTP_200_OK,
+    summary="Toggle active status of a franchise employee",
+    dependencies=[Depends(require_permission("MANAGE_EMPLOYEES"))],
+)
+async def toggle_active_employee(
+    employee_id: int,
+    db: DbSession,
+    tenant_id_str: str = Depends(get_current_tenant_id),
+) -> dict[str, bool]:
+    try:
+        t_id = int(tenant_id_str)
+    except ValueError as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid tenant ID format.",
+        ) from err
+
+    emp_repo = SQLAlchemyEmployeeRepository(db)
+    tenant_repo = SQLAlchemyTenantRepository(db)
+    employee = await emp_repo.find_by_id(employee_id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
+
+    tenant = await tenant_repo.find_by_id(t_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Franquia não encontrada.")
+
+    role = next((r for r in employee.roles if r.tenant_id == t_id), None)
+    if not role:
+        raise HTTPException(
+            status_code=400, detail="Colaborador não possui cargo associado a esta franquia."
+        )
+
+    # Toggle active status
+    if role.is_active:
+        role.deactivate()
+    else:
+        role.is_active = True
+
+    await emp_repo.save(employee)
+    await db.commit()
+    return {"is_active": role.is_active}
+
+
+@router.delete(
+    "/employees/{employee_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Remove an employee from the franchise",
+    dependencies=[Depends(require_permission("MANAGE_EMPLOYEES"))],
+)
+async def delete_employee(
+    employee_id: int,
+    db: DbSession,
+    tenant_id_str: str = Depends(get_current_tenant_id),
+) -> dict[str, str]:
+    try:
+        t_id = int(tenant_id_str)
+    except ValueError as err:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid tenant ID format.",
+        ) from err
+
+    emp_repo = SQLAlchemyEmployeeRepository(db)
+    tenant_repo = SQLAlchemyTenantRepository(db)
+    employee = await emp_repo.find_by_id(employee_id)
+    if not employee:
+        raise HTTPException(status_code=404, detail="Colaborador não encontrado.")
+
+    tenant = await tenant_repo.find_by_id(t_id)
+    if not tenant:
+        raise HTTPException(status_code=404, detail="Franquia não encontrada.")
+
+    try:
+        employee.remove_role(tenant)
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
+
+    await emp_repo.save(employee)
+    await db.commit()
+    return {"detail": "Colaborador removido da franquia com sucesso."}

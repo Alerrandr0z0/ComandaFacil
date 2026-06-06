@@ -60,6 +60,9 @@ packages = ["app"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+exclude = [
+    "scratch",
+]
 
 [tool.ruff.lint]
 select = [
@@ -161,6 +164,7 @@ exclude = [
     "alembic/",
     ".venv",
     "mutants/",
+    "scratch/",
 ]
 
 # Enable rigorous type checking on app/ and tests/ with pragmatic third-party overrides

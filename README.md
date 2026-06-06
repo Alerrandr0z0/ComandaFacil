@@ -41,6 +41,14 @@ make start           # docker compose up -d (Postgres + MongoDB)
 make dev             # backend :8000 + frontend :5173
 ```
 
+### Mock Seeder (Barraca do Sol)
+
+Para rodar a aplicação com a base simulada de um restaurante de praia (cardápio com 16 itens, estoque integrado, comandas ativas na KDS, pagamentos e histórico para o Analytics):
+
+```bash
+cd backend && uv run python scratch/seed_beach_restaurant.py
+```
+
 ## Qualidade
 
 | Gate | Backend | Frontend |

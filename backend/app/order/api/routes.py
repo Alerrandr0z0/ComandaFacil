@@ -3,11 +3,11 @@ from __future__ import annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
 import app.shared.database
-from app.dependencies import CurrentTenantId, DbSession, MongoDB
+from app.dependencies import CurrentTenantId, DbSession, MongoDB, require_permission
 from app.kitchen.application.commands import KitchenService
 from app.kitchen.infrastructure.kitchen_read_sync import KitchenReadModelSync
 from app.kitchen.infrastructure.pg_repository import SQLAlchemyKitchenOrderItemRepository
@@ -132,6 +132,7 @@ class OrderResponseSchema(BaseModel):
     response_model=OrderResponseSchema,
     status_code=status.HTTP_201_CREATED,
     summary="Create a new Order Form",
+    dependencies=[Depends(require_permission("CREATE_ORDER"))],
 )
 async def create_order(
     schema: OrderCreateSchema,
@@ -168,6 +169,7 @@ async def create_order(
     response_model=OrderResponseSchema,
     status_code=status.HTTP_200_OK,
     summary="Get active Order Form by ID",
+    dependencies=[Depends(require_permission("CREATE_ORDER"))],
 )
 async def get_order(
     order_id: int, db: DbSession, tenant_id: CurrentTenantId
@@ -217,6 +219,7 @@ async def _notify_kitchen(
     response_model=OrderItemResponseSchema,
     status_code=status.HTTP_201_CREATED,
     summary="Add an item to an active Order Form",
+    dependencies=[Depends(require_permission("CREATE_ORDER"))],
 )
 async def add_order_item(
     order_id: int,
@@ -272,6 +275,7 @@ async def add_order_item(
     response_model=OrderResponseSchema,
     status_code=status.HTTP_200_OK,
     summary="Request payment (lock) for an active Order Form",
+    dependencies=[Depends(require_permission("CREATE_ORDER"))],
 )
 async def request_payment(
     order_id: int, db: DbSession, tenant_id: CurrentTenantId
@@ -291,6 +295,7 @@ async def request_payment(
     response_model=OrderResponseSchema,
     status_code=status.HTTP_200_OK,
     summary="Process payment for an active Order Form",
+    dependencies=[Depends(require_permission("CLOSE_ORDER"))],
 )
 async def process_payment(
     order_id: int, db: DbSession, tenant_id: CurrentTenantId
@@ -310,6 +315,7 @@ async def process_payment(
     response_model=OrderResponseSchema,
     status_code=status.HTTP_200_OK,
     summary="Cancel an active Order Form",
+    dependencies=[Depends(require_permission("CLOSE_ORDER"))],
 )
 async def cancel_order(
     order_id: int, db: DbSession, tenant_id: CurrentTenantId
@@ -329,6 +335,7 @@ async def cancel_order(
     response_model=OrderResponseSchema,
     status_code=status.HTTP_200_OK,
     summary="Deliver/complete an active Order Form, close it, and sync to MongoDB",
+    dependencies=[Depends(require_permission("CLOSE_ORDER"))],
 )
 async def deliver_order(
     order_id: int,
@@ -354,6 +361,7 @@ async def deliver_order(
     response_model=list[dict[str, Any]],
     status_code=status.HTTP_200_OK,
     summary="Get completed Order History read models from MongoDB",
+    dependencies=[Depends(require_permission("CLOSE_ORDER"))],
 )
 async def get_order_history(
     tenant_id: CurrentTenantId,

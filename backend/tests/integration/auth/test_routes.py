@@ -195,3 +195,76 @@ async def test_me_and_logout_endpoints_success(
         "/api/v1/auth/me", headers={"Authorization": f"Bearer {session_id}"}
     )
     assert me_after_logout.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_toggle_active_employee_endpoint_success(
+    api_client: AsyncClient, sqlite_session: AsyncSession
+) -> None:
+    # Arrange
+    tenant_repo = SQLAlchemyTenantRepository(sqlite_session)
+    tenant = Tenant(id=10, name="Main Franchise", plan_type=PlanType.PRO, is_active=True)
+    await tenant_repo.save(tenant)
+    await sqlite_session.commit()
+
+    # Register employee
+    await api_client.post(
+        "/api/v1/auth/employees",
+        json={
+            "id": 1,
+            "name": "Jane Doe",
+            "email": "jane@comandafacil.com",
+            "password": "secure_password_123",
+        },
+    )
+
+    # Assign Role
+    await api_client.post(
+        "/api/v1/auth/employees/1/roles", json={"tenant_id": 10, "role_type": "WAITER"}
+    )
+
+    # Act - Toggle active to deactivate
+    response_deactivate = await api_client.post(
+        "/api/v1/auth/employees/1/toggle-active", headers={"X-Tenant-ID": "10"}
+    )
+    assert response_deactivate.status_code == 200
+    assert response_deactivate.json() == {"is_active": False}
+
+    # Act - Toggle active to reactivate
+    response_reactivate = await api_client.post(
+        "/api/v1/auth/employees/1/toggle-active", headers={"X-Tenant-ID": "10"}
+    )
+    assert response_reactivate.status_code == 200
+    assert response_reactivate.json() == {"is_active": True}
+
+
+@pytest.mark.asyncio
+async def test_delete_employee_endpoint_success(
+    api_client: AsyncClient, sqlite_session: AsyncSession
+) -> None:
+    # Arrange
+    tenant_repo = SQLAlchemyTenantRepository(sqlite_session)
+    tenant = Tenant(id=10, name="Main Franchise", plan_type=PlanType.PRO, is_active=True)
+    await tenant_repo.save(tenant)
+    await sqlite_session.commit()
+
+    # Register employee
+    await api_client.post(
+        "/api/v1/auth/employees",
+        json={
+            "id": 1,
+            "name": "Jane Doe",
+            "email": "jane@comandafacil.com",
+            "password": "secure_password_123",
+        },
+    )
+
+    # Assign Role
+    await api_client.post(
+        "/api/v1/auth/employees/1/roles", json={"tenant_id": 10, "role_type": "WAITER"}
+    )
+
+    # Act - Delete employee role from tenant
+    response = await api_client.delete("/api/v1/auth/employees/1", headers={"X-Tenant-ID": "10"})
+    assert response.status_code == 200
+    assert response.json() == {"detail": "Colaborador removido da franquia com sucesso."}

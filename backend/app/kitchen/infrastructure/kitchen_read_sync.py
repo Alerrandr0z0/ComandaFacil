@@ -15,14 +15,14 @@ class KitchenReadModelSync:
 
     async def sync(self, item: KitchenOrder_Item) -> None:
         now = datetime.datetime.now(datetime.UTC)
-        started_at: str | None = None
-        completed_at: str | None = None
+        started_at: datetime.datetime | None = None
+        completed_at: datetime.datetime | None = None
 
         state = item.state.name
         if state in ("PREPARING", "READY", "CANCELLED"):
-            started_at = now.isoformat()
+            started_at = now
         if state in ("READY", "CANCELLED"):
-            completed_at = now.isoformat()
+            completed_at = now
 
         doc = {
             "kitchen_item_id": item.id,

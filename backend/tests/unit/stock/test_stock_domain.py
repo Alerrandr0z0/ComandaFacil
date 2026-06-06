@@ -1,256 +1,131 @@
 from __future__ import annotations
 
-import pytest
+from decimal import Decimal
 
-from app.shared.exceptions import InsufficientStockError
-from app.shared.value_objects import MeasuredQuantity, MeasurementUnit
-from app.stock.domain.enums import MovementType
-from app.stock.domain.stock_item import StockItem
-from app.stock.domain.stock_movement import StockMovement
+from app.shared.value_objects import MeasuredQuantity
+from app.stock.domain.converters import MetricConverter
+from app.stock.domain.enums import TransactionType
+from app.stock.domain.recipe import Recipe
+from app.stock.domain.stock_item import CompositeStockItem, SimpleStockItem
+from app.stock.domain.transaction import StockTransaction
 
 
-def test_create_stock_item_when_valid_params_then_initializes() -> None:
-    # Arrange
-    qty = MeasuredQuantity(10.0, MeasurementUnit.KILOGRAM)
+def test_measured_quantity_conversions() -> None:
+    qty_g = MeasuredQuantity(Decimal("1500"), "g")
+    qty_kg = qty_g.convert_to("kg", MetricConverter())
+    assert qty_kg.value == Decimal("1.5")
+    assert qty_kg.unit == "kg"
 
-    # Act
-    item = StockItem(
+    qty_l = MeasuredQuantity(Decimal("2.5"), "l")
+    qty_ml = qty_l.convert_to("ml", MetricConverter())
+    assert qty_ml.value == Decimal("2500")
+    assert qty_ml.unit == "ml"
+
+
+def test_measured_quantity_arithmetic_same_unit() -> None:
+    q1 = MeasuredQuantity(Decimal("10"), "kg")
+    q2 = MeasuredQuantity(Decimal("5"), "kg")
+    added = q1.add(q2)
+    assert added.value == Decimal("15")
+    assert added.unit == "kg"
+
+    subtracted = q1.subtract(q2)
+    assert subtracted.value == Decimal("5")
+    assert subtracted.unit == "kg"
+
+
+def test_measured_quantity_arithmetic_different_unit() -> None:
+    q1 = MeasuredQuantity(Decimal("1"), "kg")
+    q2 = MeasuredQuantity(Decimal("500"), "g")
+
+    # Adding g to kg
+    res_add = q1.add(q2)
+    assert res_add.value == Decimal("1.5")
+    assert res_add.unit == "kg"
+
+    # Subtracting g from kg
+    res_sub = q1.subtract(q2)
+    assert res_sub.value == Decimal("0.5")
+    assert res_sub.unit == "kg"
+
+
+def test_simple_stock_item_ledger_balance() -> None:
+    item = SimpleStockItem(
         id=1,
-        tenant_id="franquia_001",
-        name="Farinha de Trigo",
+        tenant_id="t1",
+        name="Tomate",
         category="RAW_MATERIAL",
-        current_quantity=qty,
+        unit="kg",
         min_stock_level=5.0,
     )
+    assert item.get_balance().value == Decimal("0")
 
-    # Assert
-    assert item.id == 1
-    assert item.tenant_id == "franquia_001"
-    assert item.name == "Farinha de Trigo"
-    assert item.category == "RAW_MATERIAL"
-    assert item.current_quantity == qty
-    assert item.min_stock_level == 5.0
-    assert item.is_active is True
-
-
-def test_add_stock_when_positive_quantity_then_increases() -> None:
-    # Arrange
-    item = StockItem(
-        1,
-        "t1",
-        "Tomate",
-        "RAW_MATERIAL",
-        MeasuredQuantity(5.0, MeasurementUnit.KILOGRAM),
+    # Add INPUT transaction
+    item.add_transaction(
+        StockTransaction(
+            id=1, quantity=MeasuredQuantity(Decimal("10"), "kg"), type=TransactionType.INPUT
+        )
     )
+    assert item.get_balance().value == Decimal("10")
 
-    # Act
-    item.add_stock(3.0)
-
-    # Assert
-    assert item.current_quantity.amount == 8.0
-
-
-def test_add_stock_when_zero_or_negative_then_raises() -> None:
-    # Arrange
-    item = StockItem(
-        1,
-        "t1",
-        "Tomate",
-        "RAW_MATERIAL",
-        MeasuredQuantity(5.0, MeasurementUnit.KILOGRAM),
+    # Add OUTPUT transaction
+    item.add_transaction(
+        StockTransaction(
+            id=2, quantity=MeasuredQuantity(Decimal("3"), "kg"), type=TransactionType.OUTPUT
+        )
     )
+    assert item.get_balance().value == Decimal("7")
 
-    # Act & Assert
-    with pytest.raises(ValueError, match="Quantity to add must be positive"):
-        item.add_stock(0)
-
-    with pytest.raises(ValueError, match="Quantity to add must be positive"):
-        item.add_stock(-1)
-
-
-def test_deduct_stock_when_sufficient_then_decreases() -> None:
-    # Arrange
-    item = StockItem(
-        1,
-        "t1",
-        "Tomate",
-        "RAW_MATERIAL",
-        MeasuredQuantity(10.0, MeasurementUnit.KILOGRAM),
+    # Add ADJUSTMENT transaction (sets to 5)
+    item.add_transaction(
+        StockTransaction(
+            id=3, quantity=MeasuredQuantity(Decimal("5"), "kg"), type=TransactionType.ADJUSTMENT
+        )
     )
+    assert item.get_balance().value == Decimal("5")
 
-    # Act
-    item.deduct_stock(4.0)
-
-    # Assert
-    assert item.current_quantity.amount == 6.0
-
-
-def test_deduct_stock_when_insufficient_then_raises() -> None:
-    # Arrange
-    item = StockItem(
-        1,
-        "t1",
-        "Tomate",
-        "RAW_MATERIAL",
-        MeasuredQuantity(2.0, MeasurementUnit.KILOGRAM),
+    # Subsequent OUTPUT transaction (5 - 2 = 3)
+    item.add_transaction(
+        StockTransaction(
+            id=4, quantity=MeasuredQuantity(Decimal("2"), "kg"), type=TransactionType.OUTPUT
+        )
     )
-
-    # Act & Assert
-    with pytest.raises(InsufficientStockError):
-        item.deduct_stock(5.0)
-
-
-def test_deduct_stock_when_zero_or_negative_then_raises() -> None:
-    # Arrange
-    item = StockItem(
-        1,
-        "t1",
-        "Tomate",
-        "RAW_MATERIAL",
-        MeasuredQuantity(5.0, MeasurementUnit.KILOGRAM),
-    )
-
-    # Act & Assert
-    with pytest.raises(ValueError, match="Quantity to deduct must be positive"):
-        item.deduct_stock(0)
-
-    with pytest.raises(ValueError, match="Quantity to deduct must be positive"):
-        item.deduct_stock(-3)
-
-
-def test_adjust_stock_when_valid_then_sets_exact_quantity() -> None:
-    # Arrange
-    item = StockItem(
-        1,
-        "t1",
-        "Tomate",
-        "RAW_MATERIAL",
-        MeasuredQuantity(10.0, MeasurementUnit.KILOGRAM),
-    )
-
-    # Act
-    item.adjust_stock(7.5)
-
-    # Assert
-    assert item.current_quantity.amount == 7.5
-
-
-def test_adjust_stock_when_negative_then_raises() -> None:
-    # Arrange
-    item = StockItem(
-        1,
-        "t1",
-        "Tomate",
-        "RAW_MATERIAL",
-        MeasuredQuantity(5.0, MeasurementUnit.KILOGRAM),
-    )
-
-    # Act & Assert
-    with pytest.raises(ValueError, match="Quantity cannot be negative"):
-        item.adjust_stock(-1)
-
-
-def test_set_min_stock_level_when_valid_then_updates() -> None:
-    # Arrange
-    item = StockItem(
-        1,
-        "t1",
-        "Tomate",
-        "RAW_MATERIAL",
-        MeasuredQuantity(10.0, MeasurementUnit.KILOGRAM),
-    )
-
-    # Act
-    item.set_min_stock_level(8.0)
-
-    # Assert
-    assert item.min_stock_level == 8.0
-
-
-def test_set_min_stock_level_when_negative_then_raises() -> None:
-    # Arrange
-    item = StockItem(
-        1,
-        "t1",
-        "Tomate",
-        "RAW_MATERIAL",
-        MeasuredQuantity(10.0, MeasurementUnit.KILOGRAM),
-    )
-
-    # Act & Assert
-    with pytest.raises(ValueError, match="Minimum stock level cannot be negative"):
-        item.set_min_stock_level(-1)
-
-
-def test_is_low_stock_when_below_min_then_returns_true() -> None:
-    # Arrange
-    item = StockItem(
-        1,
-        "t1",
-        "Tomate",
-        "RAW_MATERIAL",
-        MeasuredQuantity(3.0, MeasurementUnit.KILOGRAM),
-        min_stock_level=5.0,
-    )
-
-    # Assert
+    assert item.get_balance().value == Decimal("3")
     assert item.is_low_stock is True
 
 
-def test_is_low_stock_when_above_min_then_returns_false() -> None:
-    # Arrange
-    item = StockItem(
-        1,
-        "t1",
-        "Tomate",
-        "RAW_MATERIAL",
-        MeasuredQuantity(7.0, MeasurementUnit.KILOGRAM),
-        min_stock_level=5.0,
+def test_composite_stock_item_balance() -> None:
+    # Components
+    c1 = SimpleStockItem(1, "t1", "Hambúrguer de Carne", "RAW_MATERIAL", "un")
+    c1.add_transaction(
+        StockTransaction(1, MeasuredQuantity(Decimal("10"), "un"), TransactionType.INPUT)
     )
 
-    # Assert
-    assert item.is_low_stock is False
-
-
-def test_activate_and_deactivate() -> None:
-    # Arrange
-    item = StockItem(
-        1,
-        "t1",
-        "Tomate",
-        "RAW_MATERIAL",
-        MeasuredQuantity(5.0, MeasurementUnit.KILOGRAM),
-    )
-    assert item.is_active is True
-
-    # Act
-    item.deactivate()
-
-    # Assert
-    assert item.is_active is False
-
-    # Act
-    item.activate()
-
-    # Assert
-    assert item.is_active is True
-
-
-def test_stock_movement_value_object() -> None:
-    # Act
-    movement = StockMovement(
-        id=1,
-        stock_item_id=1,
-        movement_type=MovementType.INBOUND,
-        quantity_changed=10.0,
-        reason="Initial stock",
+    c2 = SimpleStockItem(2, "t1", "Pão de Hambúrguer", "RAW_MATERIAL", "un")
+    c2.add_transaction(
+        StockTransaction(1, MeasuredQuantity(Decimal("8"), "un"), TransactionType.INPUT)
     )
 
-    # Assert
-    assert movement.id == 1
-    assert movement.stock_item_id == 1
-    assert movement.movement_type == MovementType.INBOUND
-    assert movement.quantity_changed == 10.0
-    assert movement.reason == "Initial stock"
-    assert movement.reference_type is None
-    assert movement.reference_id is None
+    composite = CompositeStockItem(
+        id=3,
+        tenant_id="t1",
+        name="Hamburguer Duplo",
+        category="RAW_MATERIAL",
+        unit="un",
+    )
+    composite.add_component(c1)
+    composite.add_component(c2)
+
+    # Combined balance = 10 + 8 = 18
+    assert composite.get_balance().value == Decimal("18")
+
+
+def test_recipe_ingredients() -> None:
+    item = SimpleStockItem(1, "t1", "Carne", "RAW_MATERIAL", "kg")
+    recipe = Recipe(id=1, menu_item_id=101, tenant_id="t1")
+    recipe.add_ingredient(item, MeasuredQuantity(Decimal("0.150"), "kg"))
+
+    ingredients = recipe.get_ingredients()
+    assert len(ingredients) == 1
+    assert ingredients[0].stock_item.id == 1
+    assert ingredients[0].quantity.value == Decimal("0.150")

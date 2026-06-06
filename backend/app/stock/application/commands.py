@@ -1,13 +1,17 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Final
+from decimal import Decimal
+from typing import TYPE_CHECKING, Final
 
-from app.shared.exceptions import ConflictError, NotFoundError
-from app.shared.value_objects import MeasuredQuantity, MeasurementUnit
-from app.stock.domain.enums import MovementType
-from app.stock.domain.stock_item import StockItem, StockItemRepository
-from app.stock.domain.stock_movement import StockMovement, StockMovementRepository
+from app.shared.exceptions import ConflictError, InsufficientStockError, NotFoundError
+from app.shared.value_objects import MeasuredQuantity
+from app.stock.domain.enums import TransactionType
+from app.stock.domain.stock_item import SimpleStockItem, StockItem, StockItemRepository
+from app.stock.domain.transaction import StockTransaction
+
+if TYPE_CHECKING:
+    from app.stock.domain.recipe import RecipeRepository
 
 
 @dataclass(frozen=True)
@@ -16,9 +20,9 @@ class CreateStockItemCommand:
     tenant_id: str
     name: str
     category: str
-    current_quantity: float
+    current_quantity: Decimal
     unit: str
-    min_stock_level: float = 0
+    min_stock_level: float = 0.0
 
 
 class CreateStockItemHandler:
@@ -30,202 +34,135 @@ class CreateStockItemHandler:
         if existing:
             raise ConflictError(f"Item de estoque '{command.name}' já existe.")
 
-        item = StockItem(
+        item = SimpleStockItem(
             id=command.id,
             tenant_id=command.tenant_id,
             name=command.name,
             category=command.category,
-            current_quantity=MeasuredQuantity(
-                command.current_quantity, MeasurementUnit(command.unit)
-            ),
+            unit=command.unit,
             min_stock_level=command.min_stock_level,
         )
-        await self._repo.save(item)
-        return item
-
-
-@dataclass(frozen=True)
-class AddStockCommand:
-    stock_item_id: int
-    tenant_id: str
-    quantity: float
-    reason: str = ""
-    reference_type: str | None = None
-    reference_id: int | None = None
-
-
-class AddStockHandler:
-    def __init__(
-        self,
-        item_repo: StockItemRepository,
-        movement_repo: StockMovementRepository,
-    ) -> None:
-        self._item_repo: Final[StockItemRepository] = item_repo
-        self._movement_repo: Final[StockMovementRepository] = movement_repo
-
-    async def handle(self, command: AddStockCommand) -> StockItem:
-        item = await self._item_repo.find_by_id(command.stock_item_id, command.tenant_id)
-        if not item:
-            raise NotFoundError("StockItem", command.stock_item_id)
-
-        item.add_stock(command.quantity)
-        await self._item_repo.save(item)
-
-        movement = StockMovement(
-            id=0,
-            stock_item_id=item.id,
-            movement_type=MovementType.INBOUND,
-            quantity_changed=command.quantity,
-            reason=command.reason,
-            reference_type=command.reference_type,
-            reference_id=command.reference_id,
-        )
-        await self._movement_repo.save(movement)
-
-        return item
-
-
-@dataclass(frozen=True)
-class DeductStockCommand:
-    stock_item_id: int
-    tenant_id: str
-    quantity: float
-    reason: str = ""
-    reference_type: str | None = None
-    reference_id: int | None = None
-
-
-class DeductStockHandler:
-    def __init__(
-        self,
-        item_repo: StockItemRepository,
-        movement_repo: StockMovementRepository,
-    ) -> None:
-        self._item_repo: Final[StockItemRepository] = item_repo
-        self._movement_repo: Final[StockMovementRepository] = movement_repo
-
-    async def handle(self, command: DeductStockCommand) -> StockItem:
-        item = await self._item_repo.find_by_id(command.stock_item_id, command.tenant_id)
-        if not item:
-            raise NotFoundError("StockItem", command.stock_item_id)
-
-        item.deduct_stock(command.quantity)
-        await self._item_repo.save(item)
-
-        movement = StockMovement(
-            id=0,
-            stock_item_id=item.id,
-            movement_type=MovementType.OUTBOUND,
-            quantity_changed=-command.quantity,
-            reason=command.reason,
-            reference_type=command.reference_type,
-            reference_id=command.reference_id,
-        )
-        await self._movement_repo.save(movement)
-
-        return item
-
-
-@dataclass(frozen=True)
-class AdjustStockCommand:
-    stock_item_id: int
-    tenant_id: str
-    new_quantity: float
-    reason: str = ""
-
-
-class AdjustStockHandler:
-    def __init__(
-        self,
-        item_repo: StockItemRepository,
-        movement_repo: StockMovementRepository,
-    ) -> None:
-        self._item_repo: Final[StockItemRepository] = item_repo
-        self._movement_repo: Final[StockMovementRepository] = movement_repo
-
-    async def handle(self, command: AdjustStockCommand) -> StockItem:
-        item = await self._item_repo.find_by_id(command.stock_item_id, command.tenant_id)
-        if not item:
-            raise NotFoundError("StockItem", command.stock_item_id)
-
-        old_amount = item.current_quantity.amount
-        item.adjust_stock(command.new_quantity)
-        await self._item_repo.save(item)
-
-        movement = StockMovement(
-            id=0,
-            stock_item_id=item.id,
-            movement_type=MovementType.ADJUSTMENT,
-            quantity_changed=command.new_quantity - old_amount,
-            reason=command.reason,
-        )
-        await self._movement_repo.save(movement)
-
-        return item
-
-
-@dataclass(frozen=True)
-class SetMinStockLevelCommand:
-    stock_item_id: int
-    tenant_id: str
-    min_stock_level: float
-
-
-class SetMinStockLevelHandler:
-    def __init__(self, repo: StockItemRepository) -> None:
-        self._repo: Final[StockItemRepository] = repo
-
-    async def handle(self, command: SetMinStockLevelCommand) -> StockItem:
-        item = await self._repo.find_by_id(command.stock_item_id, command.tenant_id)
-        if not item:
-            raise NotFoundError("StockItem", command.stock_item_id)
-
-        item.set_min_stock_level(command.min_stock_level)
+        if command.current_quantity > Decimal("0"):
+            item.add_transaction(
+                StockTransaction(
+                    id=0,
+                    quantity=MeasuredQuantity(command.current_quantity, command.unit),
+                    type=TransactionType.INPUT,
+                )
+            )
         await self._repo.save(item)
         return item
 
 
 class StockService:
-    """Facade exposing high-level stock operations."""
+    """Facade exposing high-level stock operations matching the UML diagram."""
 
     def __init__(
         self,
         item_repo: StockItemRepository,
-        movement_repo: StockMovementRepository,
+        recipe_repo: RecipeRepository,
     ) -> None:
         self._item_repo: Final[StockItemRepository] = item_repo
-        self._movement_repo: Final[StockMovementRepository] = movement_repo
+        self._recipe_repo: Final[RecipeRepository] = recipe_repo
 
-    async def add_stock(
-        self,
-        stock_item_id: int,
-        tenant_id: str,
-        quantity: float,
-        reason: str = "",
-    ) -> StockItem:
-        handler = AddStockHandler(self._item_repo, self._movement_repo)
-        return await handler.handle(
-            AddStockCommand(
-                stock_item_id=stock_item_id,
-                tenant_id=tenant_id,
-                quantity=quantity,
-                reason=reason,
-            )
-        )
+    async def add_input(self, item_id: int, quantity: Decimal, tenant_id: str) -> None:
+        item = await self._item_repo.find_by_id(item_id, tenant_id)
+        if not item:
+            raise NotFoundError("StockItem", item_id)
 
-    async def deduct_stock(
-        self,
-        stock_item_id: int,
-        tenant_id: str,
-        quantity: float,
-        reason: str = "",
-    ) -> StockItem:
-        handler = DeductStockHandler(self._item_repo, self._movement_repo)
-        return await handler.handle(
-            DeductStockCommand(
-                stock_item_id=stock_item_id,
-                tenant_id=tenant_id,
-                quantity=quantity,
-                reason=reason,
-            )
+        # Retrieve unit of simple or composite item
+        unit = getattr(item, "unit", "un")
+        tx = StockTransaction(
+            id=0,
+            quantity=MeasuredQuantity(quantity, unit),
+            type=TransactionType.INPUT,
         )
+        item.add_transaction(tx)
+        await self._item_repo.save(item)
+
+    async def register_output(
+        self,
+        item_id: int,
+        quantity: Decimal,
+        tenant_id: str,
+        reason: str = "",  # noqa: ARG002
+    ) -> None:
+        item = await self._item_repo.find_by_id(item_id, tenant_id)
+        if not item:
+            raise NotFoundError("StockItem", item_id)
+
+        current_balance = item.get_balance()
+        if current_balance.value < quantity:
+            raise InsufficientStockError(item.name, float(current_balance.value), float(quantity))
+
+        unit = getattr(item, "unit", "un")
+        tx = StockTransaction(
+            id=0,
+            quantity=MeasuredQuantity(quantity, unit),
+            type=TransactionType.OUTPUT,
+        )
+        item.add_transaction(tx)
+        await self._item_repo.save(item)
+
+    async def adjust(
+        self,
+        item_id: int,
+        quantity: Decimal,
+        reason: str | int,  # noqa: ARG002
+        tenant_id: str,
+    ) -> None:
+        item = await self._item_repo.find_by_id(item_id, tenant_id)
+        if not item:
+            raise NotFoundError("StockItem", item_id)
+
+        unit = getattr(item, "unit", "un")
+        tx = StockTransaction(
+            id=0,
+            quantity=MeasuredQuantity(quantity, unit),
+            type=TransactionType.ADJUSTMENT,
+        )
+        item.add_transaction(tx)
+        await self._item_repo.save(item)
+
+    async def register_waste(
+        self,
+        item_id: int,
+        quantity: Decimal,
+        tenant_id: str,
+        reason: str = "",  # noqa: ARG002
+    ) -> None:
+        item = await self._item_repo.find_by_id(item_id, tenant_id)
+        if not item:
+            raise NotFoundError("StockItem", item_id)
+
+        current_balance = item.get_balance()
+        if current_balance.value < quantity:
+            raise InsufficientStockError(item.name, float(current_balance.value), float(quantity))
+
+        unit = getattr(item, "unit", "un")
+        tx = StockTransaction(
+            id=0,
+            quantity=MeasuredQuantity(quantity, unit),
+            type=TransactionType.WASTE,
+        )
+        item.add_transaction(tx)
+        await self._item_repo.save(item)
+
+    async def deduct_by_recipe(self, menu_item_id: int, tenant_id: str) -> None:
+        recipe = await self._recipe_repo.find_by_menu_item(menu_item_id, tenant_id)
+        if not recipe:
+            return
+
+        for ing in recipe.get_ingredients():
+            await self.register_output(
+                ing.stock_item.id,
+                ing.quantity.value,
+                tenant_id,
+                reason=f"Recipe deduction for MenuItem {menu_item_id}",
+            )
+
+    async def get_balance(self, item_id: int, tenant_id: str) -> MeasuredQuantity:
+        item = await self._item_repo.find_by_id(item_id, tenant_id)
+        if not item:
+            raise NotFoundError("StockItem", item_id)
+        return item.get_balance()

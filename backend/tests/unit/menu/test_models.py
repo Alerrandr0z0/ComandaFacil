@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+from decimal import Decimal
+
 import pytest
 
 from app.menu.domain.category import Category
 from app.menu.domain.menu import Menu, MenuItem
+from app.shared.money import Money
 
 
 def test_category_creation() -> None:
@@ -20,25 +23,38 @@ def test_category_empty_name() -> None:
 
 
 def test_menu_item_creation() -> None:
-    cat = Category("Pratos")
     item = MenuItem(
         id=1,
+        tenant_id="test",
         name="Feijoada",
         description="Feijoada completa",
-        category=cat,
+        base_price=Money(Decimal("45.00")),
+        station_type="GRILL",
+        category_name="Pratos",
         image_url="http://img.com/feijoada.jpg",
         is_available=True,
     )
     assert item.id == 1
+    assert item.tenant_id == "test"
     assert item.name == "Feijoada"
     assert item.description == "Feijoada completa"
-    assert item.category == cat
+    assert item.base_price == Money(Decimal("45.00"))
+    assert item.station_type == "GRILL"
+    assert item.category_name == "Pratos"
     assert item.image_url == "http://img.com/feijoada.jpg"
     assert item.is_available is True
 
 
 def test_menu_item_update_availability() -> None:
-    item = MenuItem(id=1, name="Suco", description="Suco natural", category=Category("Bebidas"))
+    item = MenuItem(
+        id=1,
+        tenant_id="test",
+        name="Suco",
+        description="Suco natural",
+        base_price=Money(Decimal("10.00")),
+        station_type="BEVERAGE",
+        category_name="Bebidas",
+    )
     assert item.is_available is True
     item.update_availability(False)
     assert item.is_available is False
@@ -52,55 +68,37 @@ def test_menu_creation() -> None:
     assert menu.name == "Almoço"
     assert menu.description == "Cardápio do almoço"
     assert menu.is_active is True
-    assert len(menu.items) == 0
+    assert len(menu.categories) == 0
 
 
 def test_menu_add_item() -> None:
     menu = Menu(id=1, tenant_id="test", name="Jantar")
-    item = MenuItem(id=1, name="Pizza", description="Pizza margherita", category=Category("Pizzas"))
-    menu.add_item(item)
-    assert len(menu.items) == 1
-    assert menu.items[0].name == "Pizza"
+    menu.add_item_to_category("Pizzas", 101)
+    assert len(menu.categories) == 1
+    assert menu.categories[0].name == "Pizzas"
+    assert len(menu.categories[0].items) == 1
+    assert menu.categories[0].items[0].menu_item_id == 101
 
 
 def test_menu_add_duplicate_item_raises() -> None:
     menu = Menu(id=1, tenant_id="test", name="Jantar")
-    item = MenuItem(id=1, name="Pizza", description="Pizza margherita", category=Category("Pizzas"))
-    menu.add_item(item)
-    duplicate = MenuItem(
-        id=1, name="Pizza 2", description="Outra pizza", category=Category("Pizzas")
-    )
-    with pytest.raises(ValueError, match="Item com id 1 já existe no cardápio"):
-        menu.add_item(duplicate)
+    menu.add_item_to_category("Pizzas", 101)
+    with pytest.raises(ValueError, match="Item com id 101 já existe neste cardápio"):
+        menu.add_item_to_category("Pizzas", 101)
 
 
 def test_menu_remove_item() -> None:
     menu = Menu(id=1, tenant_id="test", name="Jantar")
-    item = MenuItem(id=1, name="Pizza", description="Pizza", category=Category("Pizzas"))
-    menu.add_item(item)
-    menu.remove_item(1)
-    assert len(menu.items) == 0
+    menu.add_item_to_category("Pizzas", 101)
+    menu.remove_item_from_category("Pizzas", 101)
+    # The empty category should be cleaned up automatically
+    assert len(menu.categories) == 0
 
 
 def test_menu_remove_nonexistent_item_raises() -> None:
     menu = Menu(id=1, tenant_id="test", name="Jantar")
-    with pytest.raises(ValueError, match="Item com id 99 não encontrado no cardápio"):
-        menu.remove_item(99)
-
-
-def test_menu_update_item() -> None:
-    menu = Menu(id=1, tenant_id="test", name="Jantar")
-    item = MenuItem(id=1, name="Pizza", description="Pizza margherita", category=Category("Pizzas"))
-    menu.add_item(item)
-    menu.update_item(1, name="Pizza Calabresa", description="Pizza de calabresa")
-    assert menu.items[0].name == "Pizza Calabresa"
-    assert menu.items[0].description == "Pizza de calabresa"
-
-
-def test_menu_update_nonexistent_item_raises() -> None:
-    menu = Menu(id=1, tenant_id="test", name="Jantar")
-    with pytest.raises(ValueError, match="Item com id 99 não encontrado no cardápio"):
-        menu.update_item(99, name="Test")
+    with pytest.raises(ValueError, match="Item com id 99 não encontrado na categoria 'Pizzas'"):
+        menu.remove_item_from_category("Pizzas", 99)
 
 
 def test_menu_activate_deactivate() -> None:
@@ -110,14 +108,6 @@ def test_menu_activate_deactivate() -> None:
     assert menu.is_active is False
     menu.activate()
     assert menu.is_active is True
-
-
-def test_menu_items_public_access() -> None:
-    menu = Menu(id=1, tenant_id="test", name="Jantar")
-    item = MenuItem(id=1, name="Pizza", description="Pizza", category=Category("Pizzas"))
-    menu.add_item(item)
-    assert len(menu.items) == 1
-    assert menu.items[0].name == "Pizza"
 
 
 def test_menu_equality() -> None:
@@ -131,9 +121,33 @@ def test_menu_equality() -> None:
 
 
 def test_menu_item_equality() -> None:
-    item1 = MenuItem(id=1, name="A", description="", category=Category("Cat"))
-    item2 = MenuItem(id=1, name="B", description="", category=Category("Cat"))
-    item3 = MenuItem(id=2, name="A", description="", category=Category("Cat"))
+    item1 = MenuItem(
+        id=1,
+        tenant_id="test",
+        name="A",
+        description="",
+        base_price=Money(Decimal("10")),
+        station_type="GRILL",
+        category_name="Cat",
+    )
+    item2 = MenuItem(
+        id=1,
+        tenant_id="test",
+        name="B",
+        description="",
+        base_price=Money(Decimal("12")),
+        station_type="GRILL",
+        category_name="Cat",
+    )
+    item3 = MenuItem(
+        id=2,
+        tenant_id="test",
+        name="A",
+        description="",
+        base_price=Money(Decimal("10")),
+        station_type="GRILL",
+        category_name="Cat",
+    )
     assert item1 == item2
     assert item1 != item3
 
@@ -149,10 +163,7 @@ def test_menu_representation() -> None:
 
 
 def test_price_list_item_creation() -> None:
-    from decimal import Decimal
-
     from app.menu.domain.price_list import PriceListItem
-    from app.shared.money import Money
 
     money = Money(amount=Decimal("29.90"))
     item = PriceListItem(id=1, price_list_id=10, menu_item_id=5, price=money)
@@ -163,10 +174,7 @@ def test_price_list_item_creation() -> None:
 
 
 def test_price_list_item_update_price() -> None:
-    from decimal import Decimal
-
     from app.menu.domain.price_list import PriceListItem
-    from app.shared.money import Money
 
     item = PriceListItem(id=1, price_list_id=10, menu_item_id=5, price=Money(Decimal("10.00")))
     item.update_price(Money(Decimal("15.50")))
@@ -189,10 +197,7 @@ def test_price_list_creation() -> None:
 
 
 def test_price_list_add_item() -> None:
-    from decimal import Decimal
-
     from app.menu.domain.price_list import PriceList, PriceListItem
-    from app.shared.money import Money
 
     pl = PriceList(id=1, tenant_id="test", name="Regular")
     item = PriceListItem(id=1, price_list_id=1, menu_item_id=10, price=Money(Decimal("25.00")))
@@ -201,10 +206,7 @@ def test_price_list_add_item() -> None:
 
 
 def test_price_list_add_duplicate_item_raises() -> None:
-    from decimal import Decimal
-
     from app.menu.domain.price_list import PriceList, PriceListItem
-    from app.shared.money import Money
 
     pl = PriceList(id=1, tenant_id="test", name="Regular")
     item = PriceListItem(id=1, price_list_id=1, menu_item_id=10, price=Money(Decimal("25.00")))
@@ -215,10 +217,7 @@ def test_price_list_add_duplicate_item_raises() -> None:
 
 
 def test_price_list_remove_item() -> None:
-    from decimal import Decimal
-
     from app.menu.domain.price_list import PriceList, PriceListItem
-    from app.shared.money import Money
 
     pl = PriceList(id=1, tenant_id="test", name="Regular")
     pl.add_item(
@@ -237,10 +236,7 @@ def test_price_list_remove_nonexistent_raises() -> None:
 
 
 def test_price_list_get_price() -> None:
-    from decimal import Decimal
-
     from app.menu.domain.price_list import PriceList, PriceListItem
-    from app.shared.money import Money
 
     pl = PriceList(id=1, tenant_id="test", name="Regular")
     pl.add_item(
@@ -301,10 +297,6 @@ def test_price_list_equality() -> None:
 
 
 def test_money_value_object() -> None:
-    from decimal import Decimal
-
-    from app.shared.money import Money
-
     m = Money(amount=Decimal("10.50"), currency="BRL")
     assert m.amount == Decimal("10.50")
     assert m.currency == "BRL"
@@ -312,10 +304,6 @@ def test_money_value_object() -> None:
 
 
 def test_money_addition() -> None:
-    from decimal import Decimal
-
-    from app.shared.money import Money
-
     a = Money(Decimal("10.00"))
     b = Money(Decimal("5.50"))
     result = a + b
@@ -323,38 +311,22 @@ def test_money_addition() -> None:
 
 
 def test_money_multiplication() -> None:
-    from decimal import Decimal
-
-    from app.shared.money import Money
-
     m = Money(Decimal("10.00"))
     result = m * 3
     assert result.amount == Decimal("30.00")
 
 
 def test_money_negative_raises() -> None:
-    from decimal import Decimal
-
-    from app.shared.money import Money
-
     with pytest.raises(ValueError, match="Valor monetário não pode ser negativo"):
         Money(Decimal("-1.00"))
 
 
 def test_money_zero() -> None:
-    from decimal import Decimal
-
-    from app.shared.money import Money
-
     z = Money.zero()
     assert z.amount == Decimal("0.00")
     assert z.currency == "BRL"
 
 
 def test_money_from_float() -> None:
-    from decimal import Decimal
-
-    from app.shared.money import Money
-
     m = Money.from_float(10.506)
     assert m.amount == Decimal("10.51")

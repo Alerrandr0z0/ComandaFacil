@@ -110,7 +110,7 @@ def test_state_transitions_from_open_to_paid_and_closed() -> None:
     order.deliver()
 
     assert order.state.name == "CLOSED"
-    assert table_strat.get_status() == FulfillmentStatus.SUCCESS
+    assert table_strat.get_status() == FulfillmentStatus.DELIVERED
 
 
 def test_add_item_when_paid_or_closed_state_then_raises_value_error() -> None:
@@ -157,18 +157,18 @@ def test_delivery_state_transitions_when_happy_path_then_success() -> None:
     addr = Address("Rua A", "100", "Bairro X", "São Paulo", "SP", "01001-000")
     delivery = Delivery(address=addr)
     assert delivery.state.name == "AWAITING_PICKUP"
-    assert delivery.get_status() == FulfillmentStatus.PENDING
+    assert delivery.get_status() == FulfillmentStatus.READY_FOR_PICKUP
 
     # Act 1: Despachar
     delivery.dispatch()
     assert delivery.state.name == "IN_TRANSIT"
-    assert delivery.get_status() == FulfillmentStatus.IN_PROGRESS
+    assert delivery.get_status() == FulfillmentStatus.SHIPPED
 
     # Act 2: Entregar (usa stub de OrderForm pois deliver exige)
     order = OrderForm(id=1, tenant_id="franquia_001")
     delivery.deliver(order)
     assert delivery.state.name == "DELIVERED"
-    assert delivery.get_status() == FulfillmentStatus.SUCCESS
+    assert delivery.get_status() == FulfillmentStatus.DELIVERED
 
 
 def test_delivery_state_transitions_when_failure_and_retry_then_success() -> None:
@@ -181,16 +181,16 @@ def test_delivery_state_transitions_when_failure_and_retry_then_success() -> Non
     delivery.dispatch()
     delivery.fail()
     assert delivery.state.name == "FAILED_DELIVERY"
-    assert delivery.get_status() == FulfillmentStatus.FAILED
+    assert delivery.get_status() == FulfillmentStatus.RETURNED
 
     # Act 2: Re-despacha e entrega
     delivery.dispatch()
     assert delivery.state.name == "IN_TRANSIT"
-    assert delivery.get_status() == FulfillmentStatus.IN_PROGRESS
+    assert delivery.get_status() == FulfillmentStatus.SHIPPED
 
     delivery.deliver(order)
     assert delivery.state.name == "DELIVERED"
-    assert delivery.get_status() == FulfillmentStatus.SUCCESS
+    assert delivery.get_status() == FulfillmentStatus.DELIVERED
 
 
 def test_delivery_state_transitions_when_invalid_then_raises_value_error() -> None:
