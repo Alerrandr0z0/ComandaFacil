@@ -265,9 +265,6 @@ async def test_delete_employee_endpoint_success(
     )
 
     # Act - Delete employee role from tenant
-    response = await api_client.delete(
-        "/api/v1/auth/employees/1", headers={"X-Tenant-ID": "10"}
-    )
+    response = await api_client.delete("/api/v1/auth/employees/1", headers={"X-Tenant-ID": "10"})
     assert response.status_code == 200
     assert response.json() == {"detail": "Colaborador removido da franquia com sucesso."}
-

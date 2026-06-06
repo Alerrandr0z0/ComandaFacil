@@ -303,7 +303,9 @@ async def update_menu_item_price(
     if existing_item:
         existing_item.update_price(Money(schema.price))
     else:
-        new_pi_id = int(datetime.datetime.now(datetime.UTC).timestamp() * 1000) + int(item_id % 1000) + 1
+        new_pi_id = (
+            int(datetime.datetime.now(datetime.UTC).timestamp() * 1000) + int(item_id % 1000) + 1
+        )
         new_item = PriceListItem(
             id=new_pi_id,
             price_list_id=price_list.id,

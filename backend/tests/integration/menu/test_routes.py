@@ -250,9 +250,7 @@ async def test_update_menu_item_price_endpoint_success(
     await sqlite_session.commit()
 
     # Act - update price
-    response = await api_client.patch(
-        "/api/v1/menu/1/items/10/price", json={"price": 49.90}
-    )
+    response = await api_client.patch("/api/v1/menu/1/items/10/price", json={"price": 49.90})
 
     # Assert
     assert response.status_code == 200
@@ -260,6 +258,7 @@ async def test_update_menu_item_price_endpoint_success(
 
     # Verify database override
     from app.menu.infrastructure.repositories import SQLAlchemyPriceListRepository
+
     pl_repo = SQLAlchemyPriceListRepository(sqlite_session)
     updated_menu = await repo.find_by_id(1, "test_franchise")
     assert updated_menu is not None

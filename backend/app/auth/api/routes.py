@@ -263,7 +263,9 @@ async def toggle_active_employee(
 
     role = next((r for r in employee.roles if r.tenant_id == t_id), None)
     if not role:
-        raise HTTPException(status_code=400, detail="Colaborador não possui cargo associado a esta franquia.")
+        raise HTTPException(
+            status_code=400, detail="Colaborador não possui cargo associado a esta franquia."
+        )
 
     # Toggle active status
     if role.is_active:
