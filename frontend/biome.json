@@ -8,6 +8,7 @@
     "includes": [
       "**",
       "!**/dist",
+      "!**/dev-dist",
       "!**/node_modules",
       "!**/src/shared/types/api.ts",
       "!**/playwright-report",

@@ -10,8 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 from app.dependencies import db_session
 from app.main import app
 from app.shared.base_orm import Base
-from app.shared.value_objects import MeasuredQuantity
 from app.stock.domain.enums import StockCategory
+from app.stock.domain.measured_quantity import MeasuredQuantity
 from app.stock.domain.stock_item import SimpleStockItem
 from app.stock.infrastructure.pg_repository import SQLAlchemyStockItemRepository
 from tests.integration.conftest_helpers import make_mock_db

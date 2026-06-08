@@ -15,7 +15,6 @@ from app.order.domain.order_item import OrderFormItem
 from app.order.infrastructure.pg_repository import SQLAlchemyOrderRepository
 from app.shared.base_orm import Base
 from app.shared.money import Money
-from app.shared.value_objects import TableNum
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -122,7 +121,7 @@ async def test_get_order_endpoint_success(
     # Arrange
     repo = SQLAlchemyOrderRepository(sqlite_session)
     order = OrderForm(id=101, tenant_id="franquia_001")
-    order.set_fulfillment_strategy(Table(TableNum(4)))
+    order.set_fulfillment_strategy(Table(4))
     await repo.save(order)
     await sqlite_session.commit()
 
@@ -143,7 +142,7 @@ async def test_add_order_item_endpoint_success(
     # Arrange
     repo = SQLAlchemyOrderRepository(sqlite_session)
     order = OrderForm(id=102, tenant_id="franquia_001")
-    order.set_fulfillment_strategy(Table(TableNum(4)))
+    order.set_fulfillment_strategy(Table(4))
     await repo.save(order)
     await sqlite_session.commit()
 
@@ -182,7 +181,7 @@ async def test_order_full_payment_and_delivery_flow_success(
     # Arrange - Setup order with item
     repo = SQLAlchemyOrderRepository(sqlite_session)
     order = OrderForm(id=103, tenant_id="franquia_001")
-    order.set_fulfillment_strategy(Table(TableNum(5)))
+    order.set_fulfillment_strategy(Table(5))
     item = OrderFormItem(
         id=1,
         menu_item_id=200,

@@ -202,12 +202,6 @@ omit = [
     "app/dependencies.py",
     "app/shared/database.py",
     "app/shared/logging.py",
-    "app/menu/*",
-    "app/order/*",
-    "app/kitchen/*",
-    "app/payment/*",
-    "app/stock/*",
-    "app/analytics/*",
 ]
 
 [tool.coverage.report]

@@ -5,8 +5,8 @@ from decimal import Decimal
 from typing import TYPE_CHECKING, Final
 
 from app.shared.exceptions import ConflictError, InsufficientStockError, NotFoundError
-from app.shared.value_objects import MeasuredQuantity
 from app.stock.domain.enums import TransactionType
+from app.stock.domain.measured_quantity import MeasuredQuantity
 from app.stock.domain.stock_item import SimpleStockItem, StockItem, StockItemRepository
 from app.stock.domain.transaction import StockTransaction
 

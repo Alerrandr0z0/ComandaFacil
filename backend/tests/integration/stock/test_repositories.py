@@ -7,8 +7,8 @@ import pytest
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.shared.base_orm import Base
-from app.shared.value_objects import MeasuredQuantity
 from app.stock.domain.enums import StockCategory, TransactionType
+from app.stock.domain.measured_quantity import MeasuredQuantity
 from app.stock.domain.recipe import Recipe
 from app.stock.domain.stock_item import CompositeStockItem, SimpleStockItem
 from app.stock.domain.transaction import StockTransaction

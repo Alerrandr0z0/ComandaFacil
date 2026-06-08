@@ -4,7 +4,7 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.kitchen.domain.kitchen_item import KitchenOrder_Item
+    from app.kitchen.domain.kitchen_item import KitchenOrderItem
 
 
 class IKitchenItemState(ABC):
@@ -16,15 +16,15 @@ class IKitchenItemState(ABC):
         """String representation of the state name."""
 
     @abstractmethod
-    def prepare(self, item: KitchenOrder_Item) -> None:
+    def prepare(self, item: KitchenOrderItem) -> None:
         """Transitions item to preparing state."""
 
     @abstractmethod
-    def mark_as_ready(self, item: KitchenOrder_Item) -> None:
+    def mark_as_ready(self, item: KitchenOrderItem) -> None:
         """Transitions item to ready/completed state."""
 
     @abstractmethod
-    def cancel(self, item: KitchenOrder_Item) -> None:
+    def cancel(self, item: KitchenOrderItem) -> None:
         """Transitions item to cancelled state."""
 
 
@@ -35,13 +35,13 @@ class Waiting(IKitchenItemState):
     def name(self) -> str:
         return "WAITING"
 
-    def prepare(self, item: KitchenOrder_Item) -> None:
+    def prepare(self, item: KitchenOrderItem) -> None:
         item._state = Preparing()  # type: ignore[reportPrivateUsage]
 
-    def mark_as_ready(self, item: KitchenOrder_Item) -> None:  # noqa: ARG002
+    def mark_as_ready(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
         raise ValueError("Cannot mark item as ready in WAITING state.")
 
-    def cancel(self, item: KitchenOrder_Item) -> None:
+    def cancel(self, item: KitchenOrderItem) -> None:
         item._state = Cancelled()  # type: ignore[reportPrivateUsage]
 
 
@@ -52,13 +52,13 @@ class Preparing(IKitchenItemState):
     def name(self) -> str:
         return "PREPARING"
 
-    def prepare(self, item: KitchenOrder_Item) -> None:  # noqa: ARG002
+    def prepare(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
         raise ValueError("Item is already being prepared.")
 
-    def mark_as_ready(self, item: KitchenOrder_Item) -> None:
+    def mark_as_ready(self, item: KitchenOrderItem) -> None:
         item._state = Ready()  # type: ignore[reportPrivateUsage]
 
-    def cancel(self, item: KitchenOrder_Item) -> None:
+    def cancel(self, item: KitchenOrderItem) -> None:
         item._state = Cancelled()  # type: ignore[reportPrivateUsage]
 
 
@@ -69,13 +69,13 @@ class Ready(IKitchenItemState):
     def name(self) -> str:
         return "READY"
 
-    def prepare(self, item: KitchenOrder_Item) -> None:  # noqa: ARG002
+    def prepare(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
         raise ValueError("Cannot prepare a ready item.")
 
-    def mark_as_ready(self, item: KitchenOrder_Item) -> None:  # noqa: ARG002
+    def mark_as_ready(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
         raise ValueError("Item already ready.")
 
-    def cancel(self, item: KitchenOrder_Item) -> None:  # noqa: ARG002
+    def cancel(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
         raise ValueError("Cannot cancel a ready item.")
 
 
@@ -86,11 +86,11 @@ class Cancelled(IKitchenItemState):
     def name(self) -> str:
         return "CANCELLED"
 
-    def prepare(self, item: KitchenOrder_Item) -> None:  # noqa: ARG002
+    def prepare(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
         raise ValueError("Cannot prepare a cancelled item.")
 
-    def mark_as_ready(self, item: KitchenOrder_Item) -> None:  # noqa: ARG002
+    def mark_as_ready(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
         raise ValueError("Cannot mark a cancelled item as ready.")
 
-    def cancel(self, item: KitchenOrder_Item) -> None:  # noqa: ARG002
+    def cancel(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
         raise ValueError("Item already cancelled.")

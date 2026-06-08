@@ -19,6 +19,7 @@ from app.kitchen.infrastructure.kitchen_read_sync import KitchenReadModelSync
 from app.kitchen.infrastructure.mongo_read_repository import MongoKitchenReadRepository
 from app.kitchen.infrastructure.pg_repository import SQLAlchemyKitchenOrderItemRepository
 from app.kitchen.infrastructure.websocket_manager import kds_ws_manager
+from app.shared.database import get_mongo_db
 
 router = APIRouter(prefix="/kitchen", tags=["Kitchen"])
 
@@ -96,8 +97,39 @@ async def websocket_endpoint(
     """Established a persistent WebSocket connection for real-time KDS updates.
 
     Segregated by tenant_id and filtered by the prep station_type.
+    On connect, sends any existing READY items as ITEM_READY events
+    so that recently-ready items appear as alerts on the orders page.
     """
     await kds_ws_manager.connect(websocket, tenant_id=tenant_id, station_type=station_type)
+
+    # Send existing READY items to the newly connected client
+    try:
+        mongo_db = get_mongo_db()
+        cursor = mongo_db["kitchen_read"].find(
+            {
+                "tenant_id": tenant_id,
+                "station_type_cpy": station_type,
+                "state": "READY",
+            },
+            {"_id": 0},
+        )
+        ready_items = await cursor.to_list(length=None)
+        for item in ready_items:
+            await websocket.send_json(
+                {
+                    "event": "ITEM_READY",
+                    "item": {
+                        "id": item["kitchen_item_id"],
+                        "correlation_id": item.get("correlation_id"),
+                        "name_cpy": item.get("name_cpy", ""),
+                        "station_type_cpy": item.get("station_type_cpy", ""),
+                        "state": "READY",
+                    },
+                }
+            )
+    except Exception:  # noqa: S110
+        pass
+
     try:
         while True:
             # We keep the connection alive and listen for any incoming keepalive/pings

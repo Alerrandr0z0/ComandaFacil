@@ -7,8 +7,7 @@ import PaymentModal from './payment_modal'
 import QuickSearch from './quick_search'
 
 interface OrderDrawerProps {
-  tableNumber: number
-  activeOrder: OrderForm | null
+  order: OrderForm | null
   draft: DraftItem[]
   activeMenu: { items: MenuItem[] } | null | undefined
   isLoading: boolean
@@ -18,8 +17,9 @@ interface OrderDrawerProps {
   isCancelling: boolean
   isDelivering: boolean
   onClose: () => void
-  onOpenTable: (options?: {
+  onCreateOrder: (options?: {
     fulfillment_type: 'TABLE' | 'TAKEAWAY' | 'DELIVERY'
+    table_number?: number | null
     customer_name?: string
     delivery_street?: string
     delivery_number?: string
@@ -393,28 +393,52 @@ function ConfirmedItemsList({
 }
 
 interface OrderDrawerHeaderProps {
-  tableNumber: number
+  order: OrderForm | null
   isOccupied: boolean
   isPaid: boolean
   isPaymentRequested: boolean
   onClose: () => void
 }
 
+function getHeaderTitle(order: OrderForm | null): { title: string; subtitle: string } {
+  if (!order) return { title: 'Nova Comanda', subtitle: 'Preencha os detalhes para iniciar' }
+
+  const f = order.fulfillment
+  if (f.type === 'TABLE' && f.table_number) {
+    return {
+      title: `Mesa ${f.table_number < 10 ? `0${f.table_number}` : f.table_number}`,
+      subtitle: `Comanda #${order.id}`,
+    }
+  }
+  if (f.type === 'TAKEAWAY') {
+    return {
+      title: f.customer_name || 'Retirada',
+      subtitle: `Comanda #${order.id} · Retirada`,
+    }
+  }
+  if (f.type === 'DELIVERY') {
+    return {
+      title: `Delivery #${order.id}`,
+      subtitle: [f.delivery_street, f.delivery_number].filter(Boolean).join(', ') || 'Entrega',
+    }
+  }
+  return { title: `Comanda #${order.id}`, subtitle: '' }
+}
+
 function OrderDrawerHeader({
-  tableNumber,
+  order,
   isOccupied,
   isPaid,
   isPaymentRequested,
   onClose,
 }: OrderDrawerHeaderProps) {
+  const { title, subtitle } = getHeaderTitle(order)
   return (
     <div className="flex items-center justify-between px-6 py-4.5 border-b border-gray-900/60">
       <div>
         <div className="flex items-center gap-2">
-          <h2 className="text-base font-black text-white">
-            Mesa {tableNumber < 10 ? `0${tableNumber}` : tableNumber}
-          </h2>
-          {isOccupied && (
+          <h2 className="text-base font-black text-white">{title}</h2>
+          {isOccupied && order && (
             <span
               className={`px-2 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider border ${
                 isPaid
@@ -429,7 +453,7 @@ function OrderDrawerHeader({
           )}
         </div>
         <p className="text-[10px] text-gray-550 font-medium mt-0.5">
-          {isOccupied ? 'Comanda aberta' : 'Mesa desocupada'}
+          {subtitle || (isOccupied ? 'Comanda aberta' : 'Nova comanda')}
         </p>
       </div>
       <button
@@ -444,8 +468,9 @@ function OrderDrawerHeader({
 }
 
 interface OrderDrawerLivreStateProps {
-  onOpenTable: (options: {
+  onCreateOrder: (options: {
     fulfillment_type: 'TABLE' | 'TAKEAWAY' | 'DELIVERY'
+    table_number?: number | null
     customer_name?: string
     delivery_street?: string
     delivery_number?: string
@@ -458,8 +483,9 @@ interface OrderDrawerLivreStateProps {
   }) => void
 }
 
-function OrderDrawerLivreState({ onOpenTable }: OrderDrawerLivreStateProps) {
+function OrderDrawerLivreState({ onCreateOrder }: OrderDrawerLivreStateProps) {
   const [fulfillmentType, setFulfillmentType] = useState<'TABLE' | 'TAKEAWAY' | 'DELIVERY'>('TABLE')
+  const [tableNumber, setTableNumber] = useState('1')
   const [customerName, setCustomerName] = useState('')
   const [street, setStreet] = useState('')
   const [number, setNumber] = useState('')
@@ -491,6 +517,7 @@ function OrderDrawerLivreState({ onOpenTable }: OrderDrawerLivreStateProps) {
 
     const payload: {
       fulfillment_type: 'TABLE' | 'TAKEAWAY' | 'DELIVERY'
+      table_number?: number | null
       customer_name?: string
       delivery_street?: string
       delivery_number?: string
@@ -499,11 +526,14 @@ function OrderDrawerLivreState({ onOpenTable }: OrderDrawerLivreStateProps) {
       delivery_state?: string
       delivery_postal_code?: string
       delivery_estimated_time?: number
+      delivery_tracking_code?: number
     } = {
       fulfillment_type: fulfillmentType,
     }
 
-    if (fulfillmentType === 'TAKEAWAY') {
+    if (fulfillmentType === 'TABLE') {
+      payload.table_number = Number.parseInt(tableNumber, 10) || 1
+    } else if (fulfillmentType === 'TAKEAWAY') {
       payload.customer_name = customerName
     } else if (fulfillmentType === 'DELIVERY') {
       payload.delivery_street = street
@@ -515,7 +545,7 @@ function OrderDrawerLivreState({ onOpenTable }: OrderDrawerLivreStateProps) {
       payload.delivery_estimated_time = Number.parseInt(estTime, 10) || 40
     }
 
-    onOpenTable(payload)
+    onCreateOrder(payload)
   }
 
   return (
@@ -553,6 +583,23 @@ function OrderDrawerLivreState({ onOpenTable }: OrderDrawerLivreStateProps) {
               <option value="DELIVERY">Entrega (Delivery)</option>
             </select>
           </div>
+
+          {fulfillmentType === 'TABLE' && (
+            <div className="space-y-1.5 animate-fade-in">
+              <span className="block text-[10px] uppercase font-extrabold text-gray-400">
+                Número da Mesa
+              </span>
+              <input
+                type="number"
+                required
+                min="1"
+                placeholder="Ex: 1"
+                value={tableNumber}
+                onChange={(e) => setTableNumber(e.target.value)}
+                className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+              />
+            </div>
+          )}
 
           {fulfillmentType === 'TAKEAWAY' && (
             <div className="space-y-1.5 animate-fade-in">
@@ -688,8 +735,7 @@ function OrderDrawerLivreState({ onOpenTable }: OrderDrawerLivreStateProps) {
 }
 
 export default function OrderDrawer({
-  tableNumber,
-  activeOrder,
+  order: activeOrder,
   draft,
   activeMenu,
   isLoading,
@@ -699,7 +745,7 @@ export default function OrderDrawer({
   isCancelling,
   isDelivering,
   onClose,
-  onOpenTable,
+  onCreateOrder,
   onSelectItem,
   onUpdateDraftQuantity,
   onUpdateDraftNotes,
@@ -768,7 +814,7 @@ export default function OrderDrawer({
   return (
     <div className="flex flex-col h-full bg-gray-950/95 border-l border-gray-900 glass-elevated animate-slide-in-right select-none">
       <OrderDrawerHeader
-        tableNumber={tableNumber}
+        order={activeOrder}
         isOccupied={isOccupied}
         isPaid={isPaid}
         isPaymentRequested={isPaymentRequested}
@@ -780,7 +826,7 @@ export default function OrderDrawer({
           <div className="h-8 w-8 animate-spin rounded-full border-4 border-brand-500 border-t-transparent" />
         </div>
       ) : !isOccupied ? (
-        <OrderDrawerLivreState onOpenTable={onOpenTable} />
+        <OrderDrawerLivreState onCreateOrder={onCreateOrder} />
       ) : (
         <div className="flex-1 flex flex-col overflow-hidden min-h-0">
           {!isPaymentRequested && !isPaid && (

@@ -4,16 +4,16 @@ import datetime
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from app.kitchen.domain.kitchen_item import KitchenOrder_Item
+    from app.kitchen.domain.kitchen_item import KitchenOrderItem
 
 
 class KitchenReadModelSync:
-    """Syncs KitchenOrder_Item aggregate to MongoDB 'kitchen_read' collection for analytics."""
+    """Syncs KitchenOrderItem aggregate to MongoDB 'kitchen_read' collection for analytics."""
 
     def __init__(self, mongo_db: Any) -> None:
         self._collection = mongo_db["kitchen_read"]
 
-    async def sync(self, item: KitchenOrder_Item) -> None:
+    async def sync(self, item: KitchenOrderItem) -> None:
         now = datetime.datetime.now(datetime.UTC)
         started_at: datetime.datetime | None = None
         completed_at: datetime.datetime | None = None

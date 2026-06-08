@@ -16,8 +16,10 @@ def test_category_creation() -> None:
 
 
 def test_category_empty_name() -> None:
-    with pytest.raises(ValueError, match="Nome da categoria não pode ser vazio"):
-        Category("")
+    # Empty string is allowed for flat/uncategorized layouts
+    cat = Category("")
+    assert cat.name == ""
+    # Whitespace-only string should still raise ValueError
     with pytest.raises(ValueError, match="Nome da categoria não pode ser vazio"):
         Category("   ")
 

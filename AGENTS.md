@@ -5,7 +5,7 @@
 ```bash
 make setup           # uv sync + npm install + pre-commit hooks
 make start           # docker compose up -d (Postgres 5432, MongoDB 27017)
-make dev             # backend :8000 + frontend :5173 in parallel
+make dev             # backend :8000 + frontend :5180 in parallel
 ```
 
 ## Toolchain

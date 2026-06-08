@@ -9,7 +9,7 @@ from app.order.domain.order_form import OrderForm
 from app.order.domain.order_item import OrderFormItem
 from app.shared.exceptions import ConflictError, NotFoundError
 from app.shared.money import Money
-from app.shared.value_objects import Address, TableNum
+from app.shared.value_objects import Address
 
 if TYPE_CHECKING:
     from app.order.domain.repository import OrderRepository
@@ -18,9 +18,9 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class CreateOrderCommand:
-    id: int
     tenant_id: str
     fulfillment_type: str
+    id: int | None = None
     table_number: int | None = None
     customer_name: str | None = None
     delivery_street: str | None = None
@@ -40,21 +40,16 @@ class CreateOrderHandler:
     def __init__(self, order_repo: OrderRepository) -> None:
         self._order_repo: Final[OrderRepository] = order_repo
 
-    async def handle(self, command: CreateOrderCommand) -> OrderForm:
-        existing = await self._order_repo.find_by_id(command.id, command.tenant_id)
-        if existing:
-            if existing.state.name == "CLOSED":
-                await self._order_repo.delete(command.id, command.tenant_id)
-            else:
-                raise ConflictError(f"Comanda com id {command.id} já existe.")
+    def _generate_order_id(
+        self, all_orders: list[OrderForm], requested_id: int | None
+    ) -> int:
+        return requested_id if requested_id is not None else (max((o.id for o in all_orders), default=0) + 1)
 
-        order = OrderForm(id=command.id, tenant_id=command.tenant_id)
-
-        # Set fulfillment strategy based on type
+    def _build_fulfillment(self, command: CreateOrderCommand, order: OrderForm) -> None:
         if command.fulfillment_type == "TABLE":
             if command.table_number is None:
                 raise ValueError("Table number is required for Table strategy.")
-            order.set_fulfillment_strategy(Table(TableNum(command.table_number)))
+            order.set_fulfillment_strategy(Table(command.table_number))
         elif command.fulfillment_type == "TAKEAWAY":
             if command.customer_name is None:
                 raise ValueError("Customer name is required for Takeaway strategy.")
@@ -69,7 +64,6 @@ class CreateOrderHandler:
                 and command.delivery_postal_code
             ):
                 raise ValueError("Full address fields are required for Delivery strategy.")
-
             addr = Address(
                 street=command.delivery_street,
                 number=command.delivery_number,
@@ -79,15 +73,24 @@ class CreateOrderHandler:
                 postal_code=command.delivery_postal_code,
             )
             order.set_fulfillment_strategy(
-                Delivery(
-                    address=addr,
-                    estimated_time=command.delivery_estimated_time,
-                    tracking_code=command.delivery_tracking_code,
-                )
+                Delivery(address=addr, estimated_time=command.delivery_estimated_time,
+                         tracking_code=command.delivery_tracking_code)
             )
         else:
             raise ValueError(f"Fulfillment type '{command.fulfillment_type}' inválido.")
 
+    async def handle(self, command: CreateOrderCommand) -> OrderForm:
+        all_tenant_orders = await self._order_repo.find_all_by_tenant(command.tenant_id)
+        order_id = self._generate_order_id(all_tenant_orders, command.id)
+        existing = await self._order_repo.find_by_id(order_id, command.tenant_id)
+        if existing:
+            if existing.state.name == "CLOSED":
+                await self._order_repo.delete(order_id, command.tenant_id)
+            else:
+                raise ConflictError(f"Comanda com id {order_id} já existe.")
+
+        order = OrderForm(id=order_id, tenant_id=command.tenant_id)
+        self._build_fulfillment(command, order)
         await self._order_repo.save(order)
         return order
 

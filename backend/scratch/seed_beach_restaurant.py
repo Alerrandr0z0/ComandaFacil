@@ -27,7 +27,7 @@ from app.shared.database import (
     init_mongo,
     init_postgres,
 )
-from app.shared.value_objects import MeasuredQuantity
+from app.stock.domain.measured_quantity import MeasuredQuantity
 from app.stock.domain.enums import TransactionType
 from app.stock.domain.stock_item import SimpleStockItem
 from app.stock.domain.transaction import StockTransaction

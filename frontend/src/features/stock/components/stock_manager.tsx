@@ -572,7 +572,7 @@ export default function StockManager() {
     minLevel: number
   }) => {
     try {
-      const itemId = Date.now() + Math.floor(Math.random() * 1000)
+      const itemId = Math.floor(Math.random() * 1000000000)
       await httpClient.post('/v1/stock/items', {
         id: itemId,
         name: data.name,

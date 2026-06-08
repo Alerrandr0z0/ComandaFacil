@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from app.kitchen.domain.kitchen_item import KitchenOrder_Item
+from app.kitchen.domain.kitchen_item import KitchenOrderItem
 from app.kitchen.domain.kitchen_station import Beverage, Grill
 
 
@@ -15,7 +15,7 @@ def test_create_kitchen_item_when_valid_params_then_initializes_with_waiting_sta
     tenant = "franquia_001"
 
     # Act
-    item = KitchenOrder_Item(
+    item = KitchenOrderItem(
         id=item_id,
         correlation_id=correlation_id,
         name_cpy=name,
@@ -34,7 +34,7 @@ def test_create_kitchen_item_when_valid_params_then_initializes_with_waiting_sta
 
 def test_kitchen_item_prepare_when_waiting_then_transitions_to_preparing() -> None:
     # Arrange
-    item = KitchenOrder_Item(1, 42, "Burguer", "Grill", "franquia_001")
+    item = KitchenOrderItem(1, 42, "Burguer", "Grill", "franquia_001")
 
     # Act
     item.prepare()
@@ -45,7 +45,7 @@ def test_kitchen_item_prepare_when_waiting_then_transitions_to_preparing() -> No
 
 def test_kitchen_item_ready_when_preparing_then_transitions_to_ready() -> None:
     # Arrange
-    item = KitchenOrder_Item(1, 42, "Burguer", "Grill", "franquia_001")
+    item = KitchenOrderItem(1, 42, "Burguer", "Grill", "franquia_001")
     item.prepare()
 
     # Act
@@ -57,12 +57,12 @@ def test_kitchen_item_ready_when_preparing_then_transitions_to_ready() -> None:
 
 def test_kitchen_item_cancel_when_waiting_or_preparing_then_transitions_to_cancelled() -> None:
     # Arrange 1: cancel from waiting
-    item1 = KitchenOrder_Item(1, 42, "Burguer", "Grill", "franquia_001")
+    item1 = KitchenOrderItem(1, 42, "Burguer", "Grill", "franquia_001")
     item1.cancel()
     assert item1.state.name == "CANCELLED"
 
     # Arrange 2: cancel from preparing
-    item2 = KitchenOrder_Item(2, 43, "Burguer", "Grill", "franquia_001")
+    item2 = KitchenOrderItem(2, 43, "Burguer", "Grill", "franquia_001")
     item2.prepare()
     item2.cancel()
     assert item2.state.name == "CANCELLED"
@@ -70,7 +70,7 @@ def test_kitchen_item_cancel_when_waiting_or_preparing_then_transitions_to_cance
 
 def test_kitchen_item_invalid_transitions_then_raises_value_error() -> None:
     # Arrange
-    item = KitchenOrder_Item(1, 42, "Burguer", "Grill", "franquia_001")
+    item = KitchenOrderItem(1, 42, "Burguer", "Grill", "franquia_001")
 
     # Act & Assert 1: cannot mark ready from waiting
     with pytest.raises(ValueError, match="Cannot mark item as ready in WAITING state"):

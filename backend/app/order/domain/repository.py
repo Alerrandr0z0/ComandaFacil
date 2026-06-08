@@ -19,6 +19,10 @@ class OrderRepository(ABC):
         """Finds all OrderForms belonging to a specific tenant."""
 
     @abstractmethod
+    async def find_all_active_by_tenant(self, tenant_id: str) -> list[OrderForm]:
+        """Finds all active (non-CLOSED) OrderForms belonging to a specific tenant."""
+
+    @abstractmethod
     async def save(self, order: OrderForm) -> None:
         """Persists or updates an OrderForm aggregate root."""
 

@@ -11,7 +11,11 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        get?: never;
+        /**
+         * Get all employees in the current tenant franchise
+         * @description Lists all registered employees and resolves their active role for the tenant.
+         */
+        get: operations["list_employees_api_v1_auth_employees_get"];
         put?: never;
         /**
          * Register a new Employee
@@ -104,6 +108,40 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/employees/{employee_id}/toggle-active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Toggle active status of a franchise employee */
+        post: operations["toggle_active_employee_api_v1_auth_employees__employee_id__toggle_active_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/employees/{employee_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove an employee from the franchise */
+        delete: operations["delete_employee_api_v1_auth_employees__employee_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/menu": {
         parameters: {
             query?: never;
@@ -172,6 +210,23 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/menu/{menu_id}/items/{item_id}/price": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Update the price of a menu item in a menu's price list */
+        patch: operations["update_menu_item_price_api_v1_menu__menu_id__items__item_id__price_patch"];
         trace?: never;
     };
     "/api/v1/menu/{menu_id}/toggle": {
@@ -732,6 +787,13 @@ export interface components {
             name: string;
             /** Email */
             email: string;
+            /** Role */
+            role?: string | null;
+            /**
+             * Is Active
+             * @default true
+             */
+            is_active: boolean;
         };
         /** FulfillmentResponseSchema */
         FulfillmentResponseSchema: {
@@ -832,6 +894,18 @@ export interface components {
              */
             category: string;
             /**
+             * Base Price
+             * @description Base price fallback
+             * @default 0.00
+             */
+            base_price: number | string;
+            /**
+             * Station Type
+             * @description Preparation station type
+             * @default GRILL
+             */
+            station_type: string;
+            /**
              * Image Url
              * @description Optional image URL
              */
@@ -843,6 +917,14 @@ export interface components {
              */
             is_available: boolean;
         };
+        /** MenuItemPriceUpdateSchema */
+        MenuItemPriceUpdateSchema: {
+            /**
+             * Price
+             * @description New price of the menu item
+             */
+            price: number | string;
+        };
         /** MenuItemSchema */
         MenuItemSchema: {
             /** Id */
@@ -853,6 +935,8 @@ export interface components {
             description: string;
             /** Category */
             category: string;
+            /** Price */
+            price?: string | null;
             /** Image Url */
             image_url?: string | null;
             /**
@@ -871,6 +955,8 @@ export interface components {
             description: string;
             /** Is Active */
             is_active: boolean;
+            /** Price List Id */
+            price_list_id?: number | null;
             /**
              * Items
              * @default []
@@ -1015,6 +1101,8 @@ export interface components {
             notes: string;
             /** Subtotal */
             subtotal: string;
+            /** Status */
+            status: string;
         };
         /** OrderResponseSchema */
         OrderResponseSchema: {
@@ -1268,6 +1356,26 @@ export interface components {
 }
 export type $defs = Record<string, never>;
 export interface operations {
+    list_employees_api_v1_auth_employees_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EmployeeResponseSchema"][];
+                };
+            };
+        };
+    };
     register_employee_api_v1_auth_employees_post: {
         parameters: {
             query?: never;
@@ -1409,6 +1517,72 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["EmployeeResponseSchema"];
+                };
+            };
+        };
+    };
+    toggle_active_employee_api_v1_auth_employees__employee_id__toggle_active_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: boolean;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_employee_api_v1_auth_employees__employee_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                employee_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -1576,6 +1750,44 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": {
+                        [key: string]: string;
+                    };
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_menu_item_price_api_v1_menu__menu_id__items__item_id__price_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                menu_id: number;
+                item_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MenuItemPriceUpdateSchema"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {

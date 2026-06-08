@@ -5,8 +5,8 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.shared.value_objects import MeasuredQuantity
     from app.stock.domain.enums import TransactionType
+    from app.stock.domain.measured_quantity import MeasuredQuantity
 
 
 @dataclass(frozen=True)

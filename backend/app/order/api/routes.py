@@ -47,7 +47,7 @@ router = APIRouter(prefix="/order", tags=["Order"])
 
 
 class OrderCreateSchema(BaseModel):
-    id: int = Field(..., description="Unique order identifier")
+    id: int | None = Field(default=None, description="Unique order identifier (auto-generated if omitted)")
     fulfillment_type: str = Field(
         ..., description="Type of fulfillment: TABLE, TAKEAWAY, or DELIVERY"
     )
@@ -90,6 +90,7 @@ class OrderItemResponseSchema(BaseModel):
     quantity: int
     notes: str
     subtotal: Decimal
+    status: str
 
     model_config = ConfigDict(from_attributes=True, frozen=True)
 
@@ -162,6 +163,21 @@ async def create_order(
         return _order_to_response(order)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+
+@router.get(
+    "",
+    response_model=list[OrderResponseSchema],
+    status_code=status.HTTP_200_OK,
+    summary="List all active Order Forms",
+    dependencies=[Depends(require_permission("CREATE_ORDER"))],
+)
+async def list_active_orders(
+    db: DbSession, tenant_id: CurrentTenantId
+) -> list[OrderResponseSchema]:
+    repo = SQLAlchemyOrderRepository(db)
+    orders = await repo.find_all_active_by_tenant(tenant_id)
+    return [_order_to_response(o) for o in orders]
 
 
 @router.get(
@@ -265,6 +281,7 @@ async def add_order_item(
             quantity=item.quantity,
             notes=item.notes,
             subtotal=item.calculate_subtotal().amount,
+            status=item.status.value,
         )
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
@@ -390,7 +407,7 @@ def _order_to_response(order: OrderForm) -> OrderResponseSchema:
         fulfillment_response["fee"] = fee_val
 
         if isinstance(strat, Table):
-            fulfillment_response["table_number"] = strat.table_num.value
+            fulfillment_response["table_number"] = strat.table_num
         elif isinstance(strat, Takeaway):
             fulfillment_response["customer_name"] = strat.customer_name
         elif isinstance(strat, Delivery):
@@ -421,6 +438,7 @@ def _order_to_response(order: OrderForm) -> OrderResponseSchema:
                 quantity=item.quantity,
                 notes=item.notes,
                 subtotal=item.calculate_subtotal().amount,
+                status=item.status.value,
             )
             for item in order.items
         ],

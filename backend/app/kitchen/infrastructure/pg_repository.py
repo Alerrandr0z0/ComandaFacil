@@ -4,7 +4,7 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import select
 
-from app.kitchen.domain.kitchen_item import KitchenOrder_Item
+from app.kitchen.domain.kitchen_item import KitchenOrderItem
 from app.kitchen.domain.kitchen_station import Beverage, Grill, KitchenStation
 from app.kitchen.domain.repository import KitchenOrderItemRepository, KitchenStationRepository
 from app.kitchen.domain.states import Cancelled, Preparing, Ready, Waiting
@@ -25,7 +25,7 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def find_by_id(self, id: int, tenant_id: str) -> KitchenOrder_Item | None:
+    async def find_by_id(self, id: int, tenant_id: str) -> KitchenOrderItem | None:
         stmt = select(KitchenOrderItemORM).where(
             KitchenOrderItemORM.id == id, KitchenOrderItemORM.tenant_id == tenant_id
         )
@@ -37,7 +37,7 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
 
     async def find_by_correlation(
         self, correlation_id: int, tenant_id: str
-    ) -> KitchenOrder_Item | None:
+    ) -> KitchenOrderItem | None:
         stmt = select(KitchenOrderItemORM).where(
             KitchenOrderItemORM.correlation_id == correlation_id,
             KitchenOrderItemORM.tenant_id == tenant_id,
@@ -48,7 +48,7 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
             return None
         return self._map_to_domain(orm)
 
-    async def find_by_station(self, station_type: str, tenant_id: str) -> list[KitchenOrder_Item]:
+    async def find_by_station(self, station_type: str, tenant_id: str) -> list[KitchenOrderItem]:
         stmt = select(KitchenOrderItemORM).where(
             KitchenOrderItemORM.station_type_cpy == station_type,
             KitchenOrderItemORM.tenant_id == tenant_id,
@@ -57,7 +57,7 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
         orms = result.scalars().all()
         return [self._map_to_domain(o) for o in orms]
 
-    async def save(self, item: KitchenOrder_Item) -> None:
+    async def save(self, item: KitchenOrderItem) -> None:
         stmt = select(KitchenOrderItemORM).where(KitchenOrderItemORM.id == item.id)
         result = await self._session.execute(stmt)
         orm = result.scalar_one_or_none()
@@ -81,8 +81,8 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
 
         await self._session.flush()
 
-    def _map_to_domain(self, orm: KitchenOrderItemORM) -> KitchenOrder_Item:
-        item = KitchenOrder_Item(
+    def _map_to_domain(self, orm: KitchenOrderItemORM) -> KitchenOrderItem:
+        item = KitchenOrderItem(
             id=orm.id,
             correlation_id=orm.correlation_id,
             name_cpy=orm.name_cpy,

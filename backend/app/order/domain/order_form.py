@@ -6,7 +6,7 @@ from app.order.domain.states import Closed, IOrderState, Open
 from app.shared.money import Money
 
 if TYPE_CHECKING:
-    from app.order.domain.fulfillment import IFulfillmentStratrgy
+    from app.order.domain.fulfillment import IFulfillmentStrategy
     from app.order.domain.order_item import OrderFormItem
 
 
@@ -16,7 +16,7 @@ class OrderForm:
         self.tenant_id: str = tenant_id
         self._items: list[OrderFormItem] = []
         self._state: IOrderState = Open()
-        self.fulfillment_strategy: IFulfillmentStratrgy | None = None
+        self.fulfillment_strategy: IFulfillmentStrategy | None = None
         self._payment_requested: bool = False
 
     @property
@@ -27,7 +27,7 @@ class OrderForm:
     def state(self) -> IOrderState:
         return self._state
 
-    def set_fulfillment_strategy(self, strategy: IFulfillmentStratrgy) -> None:
+    def set_fulfillment_strategy(self, strategy: IFulfillmentStrategy) -> None:
         self.fulfillment_strategy = strategy
 
     def add_item(self, item: OrderFormItem) -> None:

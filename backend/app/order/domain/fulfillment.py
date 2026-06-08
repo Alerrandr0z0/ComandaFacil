@@ -4,16 +4,22 @@ from abc import ABC, abstractmethod
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
-from app.order.domain.delivery_states import AwaitingPickup, IDeliveryState
+from app.order.domain.delivery_states import (
+    AwaitingPickup,
+    Delivered,
+    FailedDelivery,
+    IDeliveryState,
+    InTransit,
+)
 from app.order.domain.enums import FulfillmentStatus
 from app.shared.money import Money
 
 if TYPE_CHECKING:
     from app.order.domain.order_form import OrderForm
-    from app.shared.value_objects import Address, TableNum
+    from app.shared.value_objects import Address
 
 
-class IFulfillmentStratrgy(ABC):
+class IFulfillmentStrategy(ABC):
     @property
     @abstractmethod
     def name(self) -> str:
@@ -36,9 +42,11 @@ class IFulfillmentStratrgy(ABC):
         pass
 
 
-class Table(IFulfillmentStratrgy):
-    def __init__(self, table_num: TableNum) -> None:
-        self.table_num: TableNum = table_num
+class Table(IFulfillmentStrategy):
+    def __init__(self, table_num: int) -> None:
+        if table_num < 1:
+            raise ValueError(f"Table number must be at least 1, got: {table_num}")
+        self.table_num: int = table_num
         self._status: FulfillmentStatus = FulfillmentStatus.READY_FOR_PICKUP
 
     @property
@@ -46,21 +54,19 @@ class Table(IFulfillmentStratrgy):
         return "TABLE"
 
     def deliver(self, order: OrderForm) -> None:  # noqa: ARG002
-        # Entrega imediata na mesa: muda status para DELIVERED
         self._status = FulfillmentStatus.DELIVERED
 
     def validate(self) -> bool:
-        return self.table_num is not None  # type: ignore[reportUnnecessaryComparison]
+        return self.table_num >= 1
 
     def get_status(self) -> FulfillmentStatus:
         return self._status
 
     def calculate_fee(self) -> Money:
-        # Mesa não tem taxa extra de entrega
         return Money.zero()
 
 
-class Takeaway(IFulfillmentStratrgy):
+class Takeaway(IFulfillmentStrategy):
     def __init__(self, customer_name: str) -> None:
         if not customer_name or not customer_name.strip():
             raise ValueError("Customer name cannot be empty for takeaway orders.")
@@ -72,7 +78,6 @@ class Takeaway(IFulfillmentStratrgy):
         return "TAKEAWAY"
 
     def deliver(self, order: OrderForm) -> None:  # noqa: ARG002
-        # Entrega por retirada: muda status para DELIVERED
         self._status = FulfillmentStatus.DELIVERED
 
     def validate(self) -> bool:
@@ -85,13 +90,12 @@ class Takeaway(IFulfillmentStratrgy):
         return Money.zero()
 
 
-class Delivery(IFulfillmentStratrgy):
+class Delivery(IFulfillmentStrategy):
     def __init__(self, address: Address, estimated_time: int = 40, tracking_code: int = 0) -> None:
         self.address: Address = address
         self.estimated_time: int = estimated_time
         self.tracking_code: int = tracking_code
         self._state: IDeliveryState = AwaitingPickup()
-        self._status: FulfillmentStatus = FulfillmentStatus.READY_FOR_PICKUP
 
     @property
     def name(self) -> str:
@@ -103,21 +107,26 @@ class Delivery(IFulfillmentStratrgy):
 
     def dispatch(self) -> None:
         self._state.dispatch(self)
-        self._status = FulfillmentStatus.SHIPPED
 
     def deliver(self, order: OrderForm) -> None:  # noqa: ARG002
         self._state.deliver(self)
-        self._status = FulfillmentStatus.DELIVERED
 
     def fail(self) -> None:
         self._state.fail(self)
-        self._status = FulfillmentStatus.RETURNED
 
     def validate(self) -> bool:
         return self.address is not None  # type: ignore[reportUnnecessaryComparison]
 
     def get_status(self) -> FulfillmentStatus:
-        return self._status
+        if isinstance(self._state, AwaitingPickup):
+            return FulfillmentStatus.READY_FOR_PICKUP
+        if isinstance(self._state, InTransit):
+            return FulfillmentStatus.SHIPPED
+        if isinstance(self._state, Delivered):
+            return FulfillmentStatus.DELIVERED
+        if isinstance(self._state, FailedDelivery):
+            return FulfillmentStatus.RETURNED
+        raise ValueError(f"Unknown delivery state: {self._state}")
 
     def calculate_fee(self) -> Money:
         # Taxa de entrega fixa do ComandaFácil

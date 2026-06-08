@@ -10,7 +10,9 @@ class CategoryItem:
 
 class Category:
     def __init__(self, name: str, items: list[CategoryItem] | None = None) -> None:
-        if not name or not name.strip():
+        # Permitimos string vazia "" para representar itens sem categoria (layout flat),
+        # mas lançamos erro para strings contendo apenas espaços.
+        if name != "" and (not name or not name.strip()):
             raise ValueError("Nome da categoria não pode ser vazio.")
         self.name: str = name
         self.items: list[CategoryItem] = items or []

@@ -8,7 +8,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
 from app.dependencies import db_session
-from app.kitchen.domain.kitchen_item import KitchenOrder_Item
+from app.kitchen.domain.kitchen_item import KitchenOrderItem
 from app.kitchen.domain.kitchen_station import Beverage, Grill
 from app.kitchen.infrastructure.pg_repository import (
     SQLAlchemyKitchenOrderItemRepository,
@@ -19,7 +19,6 @@ from app.order.domain.fulfillment import Table
 from app.order.domain.order_form import OrderForm
 from app.order.infrastructure.pg_repository import SQLAlchemyOrderRepository
 from app.shared.base_orm import Base
-from app.shared.value_objects import TableNum
 from tests.integration.conftest_helpers import make_mock_db
 
 _KITCHEN_MOCK: list[object] = []
@@ -108,7 +107,7 @@ async def test_kitchen_station_persistence_and_query_success(sqlite_session: Asy
 async def test_kitchen_order_item_persistence_success(sqlite_session: AsyncSession) -> None:
     # Arrange
     repo = SQLAlchemyKitchenOrderItemRepository(sqlite_session)
-    item = KitchenOrder_Item(
+    item = KitchenOrderItem(
         id=42,
         correlation_id=42,
         name_cpy="Classic Burger",
@@ -139,7 +138,7 @@ async def test_kds_http_lifecycle_endpoints_success(
 ) -> None:
     # Arrange
     repo = SQLAlchemyKitchenOrderItemRepository(sqlite_session)
-    item = KitchenOrder_Item(
+    item = KitchenOrderItem(
         id=99,
         correlation_id=99,
         name_cpy="Orange Juice",
@@ -172,9 +171,11 @@ async def test_kds_http_lifecycle_endpoints_success(
     assert ready_res.status_code == 200
     assert ready_res.json()["state"] == "READY"
 
-    # Act & Assert 4: Verify terminal states are filtered from active items list
-    get_res_empty = await api_client.get("/api/v1/kitchen/items?station_type=BEVERAGE")
-    assert len(get_res_empty.json()) == 0
+    # Act & Assert 4: Verify recently completed terminal states are still returned (for front-end KDS display)
+    get_res_ready = await api_client.get("/api/v1/kitchen/items?station_type=BEVERAGE")
+    items_after = get_res_ready.json()
+    assert len(items_after) == 1
+    assert items_after[0]["state"] == "READY"
 
 
 @pytest.mark.asyncio
@@ -184,7 +185,7 @@ async def test_kds_websocket_and_background_task_dispatch_flow_success(
     # Arrange: Setup OrderForm
     order_repo = SQLAlchemyOrderRepository(sqlite_session)
     order = OrderForm(id=200, tenant_id="franquia_001")
-    order.set_fulfillment_strategy(Table(TableNum(12)))
+    order.set_fulfillment_strategy(Table(12))
     await order_repo.save(order)
     await sqlite_session.commit()
 

@@ -10,6 +10,7 @@ interface KitchenItem {
   station_type_cpy: string
   state: 'WAITING' | 'PREPARING' | 'READY' | 'CANCELLED'
   tenant_id: string
+  kitchen_item_id?: number
 }
 
 interface KdsColumnProps {
@@ -177,11 +178,16 @@ export default function KdsBoard() {
         params: { station_type: stationType },
       })
 
+      const data = res.data.map((item: KitchenItem) => ({
+        ...item,
+        id: item.id || (item.kitchen_item_id as number),
+      }))
+
       // Update seen timestamps dictionary
       setSeenTimestamps((prev) => {
         const updated = { ...prev }
         const now = Date.now()
-        for (const item of res.data) {
+        for (const item of data) {
           if (!updated[item.id]) {
             updated[item.id] = now
           }
@@ -189,7 +195,7 @@ export default function KdsBoard() {
         return updated
       })
 
-      setItems(res.data)
+      setItems(data)
     } catch (_err) {
       setError('Erro ao carregar itens da cozinha.')
     } finally {
@@ -267,6 +273,7 @@ export default function KdsBoard() {
   const waitingItems = items.filter((item) => item.state === 'WAITING')
   const preparingItems = items.filter((item) => item.state === 'PREPARING')
   const readyItems = items.filter((item) => item.state === 'READY')
+  const cancelledItems = items.filter((item) => item.state === 'CANCELLED')
 
   return (
     <div className="space-y-6">
@@ -280,7 +287,7 @@ export default function KdsBoard() {
               title={connected ? 'Conectado em tempo real' : 'Sem conexão WebSocket'}
             />
           </h2>
-          <p className="text-xs text-gray-500 font-medium mt-0.5">
+          <p className="text-xs text-gray-550 font-medium mt-0.5">
             Gerenciamento operacional e preparo de pedidos em tempo real
           </p>
         </div>
@@ -331,7 +338,7 @@ export default function KdsBoard() {
           {error}
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-3">
+        <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
           <KdsColumn
             title="Fila de Espera"
             count={waitingItems.length}
@@ -359,6 +366,13 @@ export default function KdsBoard() {
             count={readyItems.length}
             colorClass="text-emerald-400"
             items={readyItems}
+            seenTimestamps={seenTimestamps}
+          />
+          <KdsColumn
+            title="Cancelados (15 min)"
+            count={cancelledItems.length}
+            colorClass="text-rose-450"
+            items={cancelledItems}
             seenTimestamps={seenTimestamps}
           />
         </div>

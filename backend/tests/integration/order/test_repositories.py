@@ -14,7 +14,7 @@ from app.order.infrastructure.mongo_repository import OrderHistoryMongoRepositor
 from app.order.infrastructure.pg_repository import SQLAlchemyOrderRepository
 from app.shared.base_orm import Base
 from app.shared.money import Money
-from app.shared.value_objects import Address, TableNum
+from app.shared.value_objects import Address
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator
@@ -42,7 +42,7 @@ async def test_order_repository_lifecycle_with_table(db_session: AsyncSession) -
     # Arrange
     repo = SQLAlchemyOrderRepository(db_session)
     order = OrderForm(id=42, tenant_id="franquia_001")
-    order.set_fulfillment_strategy(Table(TableNum(5)))
+    order.set_fulfillment_strategy(Table(5))
 
     item = OrderFormItem(
         id=1,
@@ -74,7 +74,7 @@ async def test_order_repository_lifecycle_with_table(db_session: AsyncSession) -
     # Verify strategy mappings
     strat = retrieved.fulfillment_strategy
     assert isinstance(strat, Table)
-    assert strat.table_num.value == 5
+    assert strat.table_num == 5
     assert strat.get_status() == FulfillmentStatus.READY_FOR_PICKUP
 
     # 3. Update order state and strategy

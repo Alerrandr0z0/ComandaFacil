@@ -9,7 +9,7 @@ from app.order.domain.fulfillment import Delivery, Table, Takeaway
 from app.order.domain.order_form import OrderForm
 from app.order.domain.order_item import OrderFormItem
 from app.shared.money import Money
-from app.shared.value_objects import Address, TableNum
+from app.shared.value_objects import Address
 
 
 def test_create_order_when_valid_params_then_initializes_with_open_state_and_empty_items() -> None:
@@ -105,7 +105,7 @@ def test_state_transitions_from_open_to_paid_and_closed() -> None:
     assert order.state.name == "PAID"
 
     # Act 3: Deliver Order (muda estado para CLOSED se todos os itens entregues)
-    table_strat = Table(TableNum(5))
+    table_strat = Table(5)
     order.set_fulfillment_strategy(table_strat)
     order.deliver()
 

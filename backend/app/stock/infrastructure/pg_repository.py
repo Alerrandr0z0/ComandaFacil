@@ -4,8 +4,8 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, select
 
-from app.shared.value_objects import MeasuredQuantity
 from app.stock.domain.enums import TransactionType
+from app.stock.domain.measured_quantity import MeasuredQuantity
 from app.stock.domain.recipe import Recipe, RecipeIngredient
 from app.stock.domain.stock_item import CompositeStockItem, SimpleStockItem, StockItem
 from app.stock.domain.transaction import StockTransaction

@@ -2,9 +2,9 @@ from __future__ import annotations
 
 from decimal import Decimal
 
-from app.shared.value_objects import MeasuredQuantity
 from app.stock.domain.converters import MetricConverter
 from app.stock.domain.enums import TransactionType
+from app.stock.domain.measured_quantity import MeasuredQuantity
 from app.stock.domain.recipe import Recipe
 from app.stock.domain.stock_item import CompositeStockItem, SimpleStockItem
 from app.stock.domain.transaction import StockTransaction

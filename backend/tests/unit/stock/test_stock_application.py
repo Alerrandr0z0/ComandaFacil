@@ -5,13 +5,13 @@ from decimal import Decimal
 import pytest
 
 from app.shared.exceptions import ConflictError
-from app.shared.value_objects import MeasuredQuantity
 from app.stock.application.commands import (
     CreateStockItemCommand,
     CreateStockItemHandler,
     StockService,
 )
 from app.stock.domain.enums import TransactionType
+from app.stock.domain.measured_quantity import MeasuredQuantity
 from app.stock.domain.recipe import Recipe
 from app.stock.domain.stock_item import SimpleStockItem, StockItem
 

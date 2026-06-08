@@ -62,6 +62,7 @@ class OrderFormItemORM(Base):
     station_type_cpy: Mapped[str] = mapped_column(String(100), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String(50), nullable=False, default="WAITING")
 
     # Relationships
     order: Mapped[OrderFormORM] = relationship("OrderFormORM", back_populates="items")

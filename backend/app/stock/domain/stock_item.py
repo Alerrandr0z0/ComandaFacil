@@ -4,8 +4,8 @@ from abc import ABC, abstractmethod
 from decimal import Decimal
 from typing import TYPE_CHECKING, Final, Protocol, runtime_checkable
 
-from app.shared.value_objects import MeasuredQuantity
 from app.stock.domain.enums import TransactionType
+from app.stock.domain.measured_quantity import MeasuredQuantity
 
 if TYPE_CHECKING:
     from app.stock.domain.transaction import StockTransaction

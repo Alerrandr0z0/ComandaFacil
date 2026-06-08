@@ -7,6 +7,16 @@ export interface OrderFulfillment {
   type: string | null
   fee: string
   table_number?: number | null
+  customer_name?: string | null
+  delivery_street?: string | null
+  delivery_number?: string | null
+  delivery_neighborhood?: string | null
+  delivery_city?: string | null
+  delivery_state?: string | null
+  delivery_postal_code?: string | null
+  delivery_estimated_time?: number | null
+  delivery_tracking_code?: number | null
+  delivery_state_name?: string | null
 }
 
 export interface OrderItem {
@@ -31,6 +41,7 @@ export interface OrderForm {
 
 export interface OpenTableOptions {
   fulfillment_type: 'TABLE' | 'TAKEAWAY' | 'DELIVERY'
+  table_number?: number | null
   customer_name?: string
   delivery_street?: string
   delivery_number?: string
@@ -42,43 +53,33 @@ export interface OpenTableOptions {
   delivery_tracking_code?: number
 }
 
-function buildOpenTablePayload(tableNum: number, options?: OpenTableOptions) {
-  const base = {
-    id: tableNum + Math.floor(Math.random() * 1000000),
-    fulfillment_type: 'TABLE',
-    table_number: tableNum as number | null,
-    customer_name: null as string | null,
-    delivery_street: null as string | null,
-    delivery_number: null as string | null,
-    delivery_neighborhood: null as string | null,
-    delivery_city: null as string | null,
-    delivery_state: null as string | null,
-    delivery_postal_code: null as string | null,
-    delivery_estimated_time: 40,
-    delivery_tracking_code: 0,
-  }
+function buildTablePayload(options: OpenTableOptions): Record<string, unknown> {
+  return { fulfillment_type: 'TABLE', table_number: options.table_number ?? null }
+}
 
-  if (options) {
-    base.fulfillment_type = options.fulfillment_type
-    if (options.fulfillment_type !== 'TABLE') {
-      base.table_number = null
-    }
-    if (options.customer_name) {
-      base.customer_name = options.customer_name
-    }
-    if (options.delivery_street) {
-      base.delivery_street = options.delivery_street
-      base.delivery_number = options.delivery_number || null
-      base.delivery_neighborhood = options.delivery_neighborhood || null
-      base.delivery_city = options.delivery_city || null
-      base.delivery_state = options.delivery_state || null
-      base.delivery_postal_code = options.delivery_postal_code || null
-      base.delivery_estimated_time = options.delivery_estimated_time || 40
-      base.delivery_tracking_code = options.delivery_tracking_code || 0
-    }
-  }
+function buildTakeawayPayload(options: OpenTableOptions): Record<string, unknown> {
+  return { fulfillment_type: 'TAKEAWAY', customer_name: options.customer_name || null }
+}
 
-  return base
+function buildDeliveryPayload(options: OpenTableOptions): Record<string, unknown> {
+  return {
+    fulfillment_type: 'DELIVERY',
+    delivery_street: options.delivery_street || null,
+    delivery_number: options.delivery_number || null,
+    delivery_neighborhood: options.delivery_neighborhood || null,
+    delivery_city: options.delivery_city || null,
+    delivery_state: options.delivery_state || null,
+    delivery_postal_code: options.delivery_postal_code || null,
+    delivery_estimated_time: options.delivery_estimated_time || 40,
+    delivery_tracking_code: options.delivery_tracking_code || 0,
+  }
+}
+
+function buildCreatePayload(options?: OpenTableOptions): Record<string, unknown> {
+  if (!options) return { fulfillment_type: 'TABLE' }
+  if (options.fulfillment_type === 'TABLE') return buildTablePayload(options)
+  if (options.fulfillment_type === 'TAKEAWAY') return buildTakeawayPayload(options)
+  return buildDeliveryPayload(options)
 }
 
 export interface DraftItem {
@@ -121,7 +122,7 @@ const getStationType = (item: MenuItem): string => {
 
 export function useOrderDrawer() {
   const { data: activeMenu } = useActiveMenu()
-  const [selectedTableNumber, setSelectedTableNumber] = useState<number | null>(null)
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null)
   const [activeOrder, setActiveOrder] = useState<OrderForm | null>(null)
   const [draft, setDraft] = useState<DraftItem[]>([])
 
@@ -132,11 +133,11 @@ export function useOrderDrawer() {
   const [isCancelling, setIsCancelling] = useState(false)
   const [isDelivering, setIsDelivering] = useState(false)
 
-  // Fetch active order for the selected table
-  const fetchActiveOrder = useCallback(async (tableNum: number) => {
+  // Fetch active order by ID
+  const fetchActiveOrder = useCallback(async (orderId: number) => {
     setIsLoading(true)
     try {
-      const res = await httpClient.get<OrderForm>(`/v1/order/${tableNum}`)
+      const res = await httpClient.get<OrderForm>(`/v1/order/${orderId}`)
       if (res.data.state === 'CLOSED') {
         setActiveOrder(null)
       } else {
@@ -146,43 +147,48 @@ export function useOrderDrawer() {
       const errorObj = err as { response?: { status: number } }
       if (errorObj.response && errorObj.response.status === 404) {
         setActiveOrder(null)
-      } else {
       }
     } finally {
       setIsLoading(false)
     }
   }, [])
 
-  const selectTable = useCallback(
-    (tableNum: number, existingOrder: OrderForm | null) => {
-      setSelectedTableNumber(tableNum)
+  const selectOrder = useCallback(
+    (orderId: number, existingOrder: OrderForm | null) => {
+      setSelectedOrderId(orderId)
       setDraft([])
       if (existingOrder) {
         setActiveOrder(existingOrder)
       } else {
-        fetchActiveOrder(tableNum)
+        fetchActiveOrder(orderId)
       }
     },
     [fetchActiveOrder],
   )
 
-  const closeDrawer = useCallback(() => {
-    setSelectedTableNumber(null)
+  const openNewOrderDrawer = useCallback(() => {
+    setSelectedOrderId(0)
     setActiveOrder(null)
     setDraft([])
   }, [])
 
-  const openTable = async (tableNum: number, options?: OpenTableOptions) => {
+  const closeDrawer = useCallback(() => {
+    setSelectedOrderId(null)
+    setActiveOrder(null)
+    setDraft([])
+  }, [])
+
+  const createOrder = async (options?: OpenTableOptions) => {
     setIsLoading(true)
-    const payload = buildOpenTablePayload(tableNum, options)
+    const payload = buildCreatePayload(options)
     try {
       const res = await httpClient.post<OrderForm>('/v1/order', payload)
       setActiveOrder(res.data)
-      setSelectedTableNumber(tableNum)
+      setSelectedOrderId(res.data.id)
       setDraft([])
       return res.data
     } catch (err) {
-      alert('Falha ao abrir o pedido. Tente novamente.')
+      alert('Falha ao criar a comanda. Tente novamente.')
       throw err
     } finally {
       setIsLoading(false)
@@ -224,7 +230,7 @@ export function useOrderDrawer() {
     try {
       for (const item of draft) {
         // Unique random ID for item instance
-        const itemInstanceId = Date.now() + Math.floor(Math.random() * 10000)
+        const itemInstanceId = Math.floor(Math.random() * 1000000000)
 
         await httpClient.post(`/v1/order/${activeOrder.id}/items`, {
           id: itemInstanceId,
@@ -272,11 +278,14 @@ export function useOrderDrawer() {
     if (!activeOrder) return
     setIsProcessingPayment(true)
     try {
+      const backendMethod =
+        method === 'CREDIT' ? 'CREDIT_CARD' : method === 'DEBIT' ? 'DEBIT_CARD' : method
+
       // 1. Process payment via endpoint
       await httpClient.post(`/v1/payments/request`, {
         order_id: activeOrder.id,
         amount: activeOrder.total,
-        payment_method: method,
+        method: backendMethod,
       })
 
       // 2. Confirm order transition to PAID
@@ -297,7 +306,7 @@ export function useOrderDrawer() {
     try {
       const res = await httpClient.post<OrderForm>(`/v1/order/${activeOrder.id}/deliver`)
       setActiveOrder(null)
-      setSelectedTableNumber(null)
+      setSelectedOrderId(null)
       setDraft([])
       return res.data
     } catch (err) {
@@ -314,7 +323,7 @@ export function useOrderDrawer() {
     try {
       const res = await httpClient.post<OrderForm>(`/v1/order/${activeOrder.id}/cancel`)
       setActiveOrder(null)
-      setSelectedTableNumber(null)
+      setSelectedOrderId(null)
       setDraft([])
       return res.data
     } catch (err) {
@@ -326,7 +335,7 @@ export function useOrderDrawer() {
   }
 
   return {
-    selectedTableNumber,
+    selectedOrderId,
     activeOrder,
     draft,
     activeMenu,
@@ -336,9 +345,10 @@ export function useOrderDrawer() {
     isProcessingPayment,
     isCancelling,
     isDelivering,
-    selectTable,
+    selectOrder,
+    openNewOrderDrawer,
     closeDrawer,
-    openTable,
+    createOrder,
     handleSelectItem,
     updateDraftQuantity,
     updateDraftNotes,

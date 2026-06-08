@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
-from app.kitchen.domain.kitchen_item import KitchenOrder_Item
+from app.kitchen.domain.kitchen_item import KitchenOrderItem
 from app.kitchen.infrastructure.websocket_manager import kds_ws_manager
 from app.shared.exceptions import NotFoundError
 
@@ -29,7 +29,7 @@ class ReceiveKitchenItemHandler:
     def __init__(self, item_repo: KitchenOrderItemRepository) -> None:
         self._item_repo: Final[KitchenOrderItemRepository] = item_repo
 
-    async def handle(self, command: ReceiveKitchenItemCommand) -> KitchenOrder_Item:
+    async def handle(self, command: ReceiveKitchenItemCommand) -> KitchenOrderItem:
         existing = await self._item_repo.find_by_correlation(
             command.correlation_id, command.tenant_id
         )
@@ -37,7 +37,7 @@ class ReceiveKitchenItemHandler:
             return existing
 
         # We can map correlation_id directly as the primary ID (since it's a 1-to-1 aggregate snapshot)
-        item = KitchenOrder_Item(
+        item = KitchenOrderItem(
             id=command.correlation_id,
             correlation_id=command.correlation_id,
             name_cpy=command.name_cpy,
@@ -77,7 +77,7 @@ class PrepareKitchenItemHandler:
     def __init__(self, item_repo: KitchenOrderItemRepository) -> None:
         self._item_repo: Final[KitchenOrderItemRepository] = item_repo
 
-    async def handle(self, command: PrepareKitchenItemCommand) -> KitchenOrder_Item:
+    async def handle(self, command: PrepareKitchenItemCommand) -> KitchenOrderItem:
         item = await self._item_repo.find_by_id(command.item_id, command.tenant_id)
         if not item:
             raise NotFoundError("Kitchen Item", command.item_id)
@@ -116,7 +116,7 @@ class MarkKitchenItemReadyHandler:
     def __init__(self, item_repo: KitchenOrderItemRepository) -> None:
         self._item_repo: Final[KitchenOrderItemRepository] = item_repo
 
-    async def handle(self, command: MarkKitchenItemReadyCommand) -> KitchenOrder_Item:
+    async def handle(self, command: MarkKitchenItemReadyCommand) -> KitchenOrderItem:
         item = await self._item_repo.find_by_id(command.item_id, command.tenant_id)
         if not item:
             raise NotFoundError("Kitchen Item", command.item_id)
@@ -155,7 +155,7 @@ class CancelKitchenItemHandler:
     def __init__(self, item_repo: KitchenOrderItemRepository) -> None:
         self._item_repo: Final[KitchenOrderItemRepository] = item_repo
 
-    async def handle(self, command: CancelKitchenItemCommand) -> KitchenOrder_Item:
+    async def handle(self, command: CancelKitchenItemCommand) -> KitchenOrderItem:
         item = await self._item_repo.find_by_id(command.item_id, command.tenant_id)
         if not item:
             raise NotFoundError("Kitchen Item", command.item_id)
@@ -193,7 +193,7 @@ class KitchenService:
 
     async def receive_item(
         self, correlation_id: int, name_cpy: str, station_type_cpy: str, tenant_id: str
-    ) -> KitchenOrder_Item:
+    ) -> KitchenOrderItem:
         cmd = ReceiveKitchenItemCommand(
             correlation_id=correlation_id,
             name_cpy=name_cpy,
@@ -202,14 +202,14 @@ class KitchenService:
         )
         return await self._receive_handler.handle(cmd)
 
-    async def prepare_item(self, item_id: int, tenant_id: str) -> KitchenOrder_Item:
+    async def prepare_item(self, item_id: int, tenant_id: str) -> KitchenOrderItem:
         cmd = PrepareKitchenItemCommand(item_id=item_id, tenant_id=tenant_id)
         return await self._prepare_handler.handle(cmd)
 
-    async def mark_item_ready(self, item_id: int, tenant_id: str) -> KitchenOrder_Item:
+    async def mark_item_ready(self, item_id: int, tenant_id: str) -> KitchenOrderItem:
         cmd = MarkKitchenItemReadyCommand(item_id=item_id, tenant_id=tenant_id)
         return await self._ready_handler.handle(cmd)
 
-    async def cancel_item(self, item_id: int, tenant_id: str) -> KitchenOrder_Item:
+    async def cancel_item(self, item_id: int, tenant_id: str) -> KitchenOrderItem:
         cmd = CancelKitchenItemCommand(item_id=item_id, tenant_id=tenant_id)
         return await self._cancel_handler.handle(cmd)

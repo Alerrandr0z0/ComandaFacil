@@ -4,30 +4,30 @@ from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from app.kitchen.domain.kitchen_item import KitchenOrder_Item
+    from app.kitchen.domain.kitchen_item import KitchenOrderItem
     from app.kitchen.domain.kitchen_station import KitchenStation
 
 
 class KitchenOrderItemRepository(ABC):
-    """Abstract Repository interface for KitchenOrder_Item aggregate root."""
+    """Abstract Repository interface for KitchenOrderItem aggregate root."""
 
     @abstractmethod
-    async def find_by_id(self, id: int, tenant_id: str) -> KitchenOrder_Item | None:
-        """Finds a KitchenOrder_Item by its unique ID scoped to a tenant."""
+    async def find_by_id(self, id: int, tenant_id: str) -> KitchenOrderItem | None:
+        """Finds a KitchenOrderItem by its unique ID scoped to a tenant."""
 
     @abstractmethod
     async def find_by_correlation(
         self, correlation_id: int, tenant_id: str
-    ) -> KitchenOrder_Item | None:
-        """Finds a KitchenOrder_Item by its original OrderFormItem correlation ID scoped to a tenant."""
+    ) -> KitchenOrderItem | None:
+        """Finds a KitchenOrderItem by its original OrderFormItem correlation ID scoped to a tenant."""
 
     @abstractmethod
-    async def find_by_station(self, station_type: str, tenant_id: str) -> list[KitchenOrder_Item]:
-        """Finds all active KitchenOrder_Items destined for a specific station type and tenant."""
+    async def find_by_station(self, station_type: str, tenant_id: str) -> list[KitchenOrderItem]:
+        """Finds all active KitchenOrderItems destined for a specific station type and tenant."""
 
     @abstractmethod
-    async def save(self, item: KitchenOrder_Item) -> None:
-        """Persists or updates a KitchenOrder_Item aggregate root."""
+    async def save(self, item: KitchenOrderItem) -> None:
+        """Persists or updates a KitchenOrderItem aggregate root."""
 
 
 class KitchenStationRepository(ABC):

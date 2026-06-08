@@ -95,7 +95,7 @@ dev:
 	@make -j2 dev-back dev-front
 
 dev-back:
-	cd backend && uv run uvicorn app.main:app --reload --reload-dir app
+	cd backend && uv run uvicorn app.main:app --port 8080 --reload --reload-dir app
 
 dev-front:
 	cd frontend && npm run dev
@@ -228,7 +228,7 @@ migrate-down:
 
 types-gen:
 	@echo "Gerando tipos TypeScript a partir do schema OpenAPI..."
-	cd frontend && npx openapi-typescript http://localhost:8000/openapi.json \
+	cd frontend && npx openapi-typescript http://localhost:8080/openapi.json \
 		-o src/shared/types/api.ts
 	@echo "✅ src/shared/types/api.ts atualizado!"
 

@@ -26,7 +26,7 @@ export function useActiveMenu() {
   return useQuery<Menu | null>({
     queryKey: ['active-menu'],
     queryFn: async () => {
-      const response = await httpClient.get<Menu[]>('/menu')
+      const response = await httpClient.get<Menu[]>('/v1/menu')
       // Find the active menu for this tenant
       const active = response.data.find((m) => m.is_active)
       return active || null

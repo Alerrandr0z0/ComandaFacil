@@ -73,7 +73,7 @@ export default function MenuManagerPage() {
     e.preventDefault()
     if (!newMenuName.trim()) return
 
-    const newId = Date.now() + Math.floor(Math.random() * 1000)
+    const newId = Math.floor(Math.random() * 1000000000)
     try {
       await httpClient.post('/v1/menu', {
         id: newId,
@@ -115,8 +115,12 @@ export default function MenuManagerPage() {
     e.preventDefault()
     if (!selectedMenu || !newItemName.trim() || !newItemCategory.trim()) return
 
-    const newId = Date.now() + Math.floor(Math.random() * 1000)
+    const newId = Math.floor(Math.random() * 1000000000)
     const priceNum = parseFloat(newItemPrice)
+    const stationType =
+      newItemCategory === 'Bebidas' || newItemCategory === 'Bebidas Alcoólicas'
+        ? 'BEVERAGE'
+        : 'GRILL'
 
     try {
       await httpClient.post(`/v1/menu/${selectedMenu.id}/items`, {
@@ -124,6 +128,8 @@ export default function MenuManagerPage() {
         name: newItemName,
         description: newItemDesc,
         category: newItemCategory,
+        base_price: priceNum,
+        station_type: stationType,
         image_url: newItemImageUrl.trim() || null,
         is_available: true,
       })

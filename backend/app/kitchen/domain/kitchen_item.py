@@ -3,7 +3,7 @@ from __future__ import annotations
 from app.kitchen.domain.states import IKitchenItemState, Waiting
 
 
-class KitchenOrder_Item:  # noqa: N801
+class KitchenOrderItem:
     """Aggregate Root representing an item sent to be prepared in the kitchen (KDS)."""
 
     def __init__(
@@ -40,6 +40,6 @@ class KitchenOrder_Item:  # noqa: N801
 
     def __repr__(self) -> str:
         return (
-            f"KitchenOrder_Item(id={self.id}, correlation_id={self.correlation_id}, "
+            f"KitchenOrderItem(id={self.id}, correlation_id={self.correlation_id}, "
             f"name_cpy={self.name_cpy!r}, state={self.state.name})"
         )

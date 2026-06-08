@@ -6,15 +6,15 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.order.domain.delivery_states import AwaitingPickup, Delivered, FailedDelivery, InTransit
-from app.order.domain.enums import FulfillmentStatus
-from app.order.domain.fulfillment import Delivery, IFulfillmentStratrgy, Table, Takeaway
+from app.order.domain.enums import FulfillmentStatus, OrderItemStatus
+from app.order.domain.fulfillment import Delivery, IFulfillmentStrategy, Table, Takeaway
 from app.order.domain.order_form import OrderForm
 from app.order.domain.order_item import OrderFormItem
 from app.order.domain.repository import OrderRepository
 from app.order.domain.states import Closed, Open, Paid
 from app.order.infrastructure.orm_models import OrderFormItemORM, OrderFormORM
 from app.shared.money import Money
-from app.shared.value_objects import Address, TableNum
+from app.shared.value_objects import Address
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -42,6 +42,16 @@ class SQLAlchemyOrderRepository(OrderRepository):
         stmt = (
             select(OrderFormORM)
             .where(OrderFormORM.tenant_id == tenant_id)
+            .options(selectinload(OrderFormORM.items))
+        )
+        result = await self._session.execute(stmt)
+        orms = result.scalars().all()
+        return [self._map_to_domain(o) for o in orms]
+
+    async def find_all_active_by_tenant(self, tenant_id: str) -> list[OrderForm]:
+        stmt = (
+            select(OrderFormORM)
+            .where(OrderFormORM.tenant_id == tenant_id, OrderFormORM.state != "CLOSED")
             .options(selectinload(OrderFormORM.items))
         )
         result = await self._session.execute(stmt)
@@ -84,6 +94,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
                 station_type_cpy=item.station_type_cpy,
                 quantity=item.quantity,
                 notes=item.notes,
+                status=item.status.value,
             )
             orm.items.append(item_orm)
 
@@ -99,7 +110,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
             await self._session.delete(orm)
             await self._session.flush()
 
-    def _map_strategy_to_orm(self, orm: OrderFormORM, strat: IFulfillmentStratrgy | None) -> None:
+    def _map_strategy_to_orm(self, orm: OrderFormORM, strat: IFulfillmentStrategy | None) -> None:
         """Helper to map fulfillment strategy to ORM fields."""
         if strat is None:
             orm.fulfillment_type = None
@@ -108,7 +119,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
             self._clear_delivery_orm_fields(orm)
         elif isinstance(strat, Table):
             orm.fulfillment_type = "TABLE"
-            orm.table_number = strat.table_num.value
+            orm.table_number = strat.table_num
             orm.customer_name = None
             self._clear_delivery_orm_fields(orm)
         elif isinstance(strat, Takeaway):
@@ -167,16 +178,17 @@ class SQLAlchemyOrderRepository(OrderRepository):
                 station_type_cpy=item_orm.station_type_cpy,
                 quantity=item_orm.quantity,
                 notes=item_orm.notes or "",
+                status=OrderItemStatus(item_orm.status),
             )
             order._items.append(item)  # type: ignore[reportPrivateUsage]
 
         return order
 
-    def _map_strategy_to_domain(self, orm: OrderFormORM) -> IFulfillmentStratrgy | None:
+    def _map_strategy_to_domain(self, orm: OrderFormORM) -> IFulfillmentStrategy | None:
         """Helper to reconstruct fulfillment strategy from ORM."""
         if orm.fulfillment_type == "TABLE":
             assert orm.table_number is not None
-            table = Table(TableNum(orm.table_number))
+            table = Table(orm.table_number)
             if orm.state == "CLOSED":
                 table._status = FulfillmentStatus.DELIVERED  # type: ignore[reportPrivateUsage]
             return table
@@ -221,15 +233,11 @@ class SQLAlchemyOrderRepository(OrderRepository):
         # Reconstruct delivery state and status
         if orm.delivery_state_name == "AWAITING_PICKUP":
             delivery._state = AwaitingPickup()  # type: ignore[reportPrivateUsage]
-            delivery._status = FulfillmentStatus.READY_FOR_PICKUP  # type: ignore[reportPrivateUsage]
         elif orm.delivery_state_name == "IN_TRANSIT":
             delivery._state = InTransit()  # type: ignore[reportPrivateUsage]
-            delivery._status = FulfillmentStatus.SHIPPED  # type: ignore[reportPrivateUsage]
         elif orm.delivery_state_name == "DELIVERED":
             delivery._state = Delivered()  # type: ignore[reportPrivateUsage]
-            delivery._status = FulfillmentStatus.DELIVERED  # type: ignore[reportPrivateUsage]
         elif orm.delivery_state_name == "FAILED_DELIVERY":
             delivery._state = FailedDelivery()  # type: ignore[reportPrivateUsage]
-            delivery._status = FulfillmentStatus.RETURNED  # type: ignore[reportPrivateUsage]
 
         return delivery

@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
-    from app.shared.value_objects import MeasuredQuantity
+    from app.stock.domain.measured_quantity import MeasuredQuantity
     from app.stock.domain.stock_item import StockItem
 
 

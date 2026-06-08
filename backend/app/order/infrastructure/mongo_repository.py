@@ -29,7 +29,7 @@ class OrderHistoryMongoRepository:
 
             if isinstance(strat, Table):
                 fulfillment_data["table"] = {
-                    "table_number": strat.table_num.value,
+                    "table_number": strat.table_num,
                 }
             elif isinstance(strat, Takeaway):
                 fulfillment_data["takeaway"] = {
