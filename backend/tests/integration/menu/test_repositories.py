@@ -125,6 +125,7 @@ async def test_price_list_repository_lifecycle(db_session: AsyncSession) -> None
         tenant_id="test",
         name="Preços Padrão",
         description="Tabela regular",
+        menu_id=1,
         is_active=True,
         valid_from=valid_from,
         valid_until=valid_until,

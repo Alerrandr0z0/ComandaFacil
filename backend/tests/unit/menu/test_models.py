@@ -190,7 +190,7 @@ def test_price_list_creation() -> None:
 
     now = datetime.datetime.now(datetime.UTC)
     pl = PriceList(
-        id=1, tenant_id="test", name="Happy Hour", description="Preços promocionais", valid_from=now
+        id=1, tenant_id="test", menu_id=1, name="Happy Hour", description="Preços promocionais", valid_from=now
     )
     assert pl.id == 1
     assert pl.name == "Happy Hour"
@@ -201,7 +201,7 @@ def test_price_list_creation() -> None:
 def test_price_list_add_item() -> None:
     from app.menu.domain.price_list import PriceList, PriceListItem
 
-    pl = PriceList(id=1, tenant_id="test", name="Regular")
+    pl = PriceList(id=1, tenant_id="test", menu_id=1, name="Regular")
     item = PriceListItem(id=1, price_list_id=1, menu_item_id=10, price=Money(Decimal("25.00")))
     pl.add_item(item)
     assert len(pl.items) == 1
@@ -210,7 +210,7 @@ def test_price_list_add_item() -> None:
 def test_price_list_add_duplicate_item_raises() -> None:
     from app.menu.domain.price_list import PriceList, PriceListItem
 
-    pl = PriceList(id=1, tenant_id="test", name="Regular")
+    pl = PriceList(id=1, tenant_id="test", menu_id=1, name="Regular")
     item = PriceListItem(id=1, price_list_id=1, menu_item_id=10, price=Money(Decimal("25.00")))
     pl.add_item(item)
     duplicate = PriceListItem(id=2, price_list_id=1, menu_item_id=10, price=Money(Decimal("30.00")))
@@ -221,7 +221,7 @@ def test_price_list_add_duplicate_item_raises() -> None:
 def test_price_list_remove_item() -> None:
     from app.menu.domain.price_list import PriceList, PriceListItem
 
-    pl = PriceList(id=1, tenant_id="test", name="Regular")
+    pl = PriceList(id=1, tenant_id="test", menu_id=1, name="Regular")
     pl.add_item(
         PriceListItem(id=1, price_list_id=1, menu_item_id=10, price=Money(Decimal("25.00")))
     )
@@ -232,7 +232,7 @@ def test_price_list_remove_item() -> None:
 def test_price_list_remove_nonexistent_raises() -> None:
     from app.menu.domain.price_list import PriceList
 
-    pl = PriceList(id=1, tenant_id="test", name="Regular")
+    pl = PriceList(id=1, tenant_id="test", menu_id=1, name="Regular")
     with pytest.raises(ValueError, match="Item de menu 99 não encontrado nesta lista de preços"):
         pl.remove_item(99)
 
@@ -240,7 +240,7 @@ def test_price_list_remove_nonexistent_raises() -> None:
 def test_price_list_get_price() -> None:
     from app.menu.domain.price_list import PriceList, PriceListItem
 
-    pl = PriceList(id=1, tenant_id="test", name="Regular")
+    pl = PriceList(id=1, tenant_id="test", menu_id=1, name="Regular")
     pl.add_item(
         PriceListItem(id=1, price_list_id=1, menu_item_id=10, price=Money(Decimal("25.00")))
     )
@@ -258,18 +258,19 @@ def test_price_list_is_valid_now() -> None:
 
     now = datetime.datetime.now(datetime.UTC)
     pl = PriceList(
-        id=1, tenant_id="test", name="Happy Hour", valid_from=now - datetime.timedelta(hours=1)
+        id=1, tenant_id="test", menu_id=1, name="Happy Hour", valid_from=now - datetime.timedelta(hours=1)
     )
     assert pl.is_valid_now() is True
 
     future = PriceList(
-        id=2, tenant_id="test", name="Futuro", valid_from=now + datetime.timedelta(days=30)
+        id=2, tenant_id="test", menu_id=1, name="Futuro", valid_from=now + datetime.timedelta(days=30)
     )
     assert future.is_valid_now() is False
 
     expired = PriceList(
         id=3,
         tenant_id="test",
+        menu_id=1,
         name="Expirado",
         valid_from=now - datetime.timedelta(days=10),
         valid_until=now - datetime.timedelta(days=1),
@@ -280,7 +281,7 @@ def test_price_list_is_valid_now() -> None:
 def test_price_list_activate_deactivate() -> None:
     from app.menu.domain.price_list import PriceList
 
-    pl = PriceList(id=1, tenant_id="test", name="Regular", is_active=True)
+    pl = PriceList(id=1, tenant_id="test", menu_id=1, name="Regular", is_active=True)
     assert pl.is_active is True
     pl.deactivate()
     assert pl.is_active is False
@@ -291,9 +292,9 @@ def test_price_list_activate_deactivate() -> None:
 def test_price_list_equality() -> None:
     from app.menu.domain.price_list import PriceList
 
-    pl1 = PriceList(id=1, tenant_id="test", name="A")
-    pl2 = PriceList(id=1, tenant_id="test", name="B")
-    pl3 = PriceList(id=2, tenant_id="test", name="A")
+    pl1 = PriceList(id=1, tenant_id="test", menu_id=1, name="A")
+    pl2 = PriceList(id=1, tenant_id="test", menu_id=1, name="B")
+    pl3 = PriceList(id=2, tenant_id="test", menu_id=1, name="A")
     assert pl1 == pl2
     assert pl1 != pl3
 
