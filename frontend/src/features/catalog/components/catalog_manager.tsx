@@ -1,5 +1,6 @@
-import { Plus, Search, Sparkles, Trash2, Utensils, X } from 'lucide-react'
+import { BookOpen, Plus, Search, Sparkles, Trash2, Utensils, X } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
+import RecipeManager from '@/features/stock/components/recipe_manager'
 import { httpClient } from '@/shared/lib/http_client'
 
 interface CatalogItem {
@@ -31,6 +32,7 @@ export default function CatalogManager() {
   const [search, setSearch] = useState('')
   const [isCreating, setIsCreating] = useState(false)
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null)
+  const [recipeItem, setRecipeItem] = useState<CatalogItem | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
 
   const fetchItems = useCallback(async () => {
@@ -267,6 +269,14 @@ export default function CatalogManager() {
                 <div className="ml-auto flex gap-1">
                   <button
                     type="button"
+                    onClick={() => setRecipeItem(item)}
+                    className="text-gray-600 hover:text-emerald-400 p-1 rounded transition"
+                    title="Gerenciar Receita"
+                  >
+                    <BookOpen className="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => openEdit(item)}
                     className="text-gray-600 hover:text-brand-400 p-1 rounded transition"
                     title="Editar Produto"
@@ -448,6 +458,15 @@ export default function CatalogManager() {
             </div>
           </form>
         </div>
+      )}
+
+      {/* Modal: Recipe Manager */}
+      {recipeItem && (
+        <RecipeManager
+          menuItemId={recipeItem.id}
+          menuItemName={recipeItem.name}
+          onClose={() => setRecipeItem(null)}
+        />
       )}
 
       {/* Modal: Edit Product */}

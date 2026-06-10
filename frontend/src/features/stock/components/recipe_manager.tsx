@@ -1,12 +1,4 @@
-import {
-  AlertTriangle,
-  ChevronDown,
-  ChevronUp,
-  Minus,
-  Plus,
-  Sparkles,
-  Utensils,
-} from 'lucide-react'
+import { AlertTriangle, Minus, Plus, Sparkles, Utensils } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { httpClient } from '@/shared/lib/http_client'
 
@@ -42,9 +34,7 @@ export default function RecipeManager({ menuItemId, menuItemName, onClose }: Rec
   const [savedRecipe, setSavedRecipe] = useState<Recipe | null>(null)
   const [isLoadingStock, setIsLoadingStock] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
-  const [isProducing, setIsProducing] = useState(false)
-  const [produceQty, setProduceQty] = useState(1)
-  const [produceResult, setProduceResult] = useState<string | null>(null)
+  const [successMessage, setSuccessMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const searchRef = useRef<HTMLInputElement>(null)
@@ -109,38 +99,11 @@ export default function RecipeManager({ menuItemId, menuItemName, onClose }: Rec
     try {
       await httpClient.put(`/v1/stock/recipes/${menuItemId}`, { ingredients })
       setSavedRecipe({ menu_item_id: menuItemId, ingredients })
-      setProduceResult('✅ Receita salva com sucesso!')
+      setSuccessMessage('✅ Receita salva com sucesso!')
     } catch {
       setError('Falha ao salvar receita.')
     } finally {
       setIsSaving(false)
-    }
-  }
-
-  const handleProduce = async () => {
-    setIsProducing(true)
-    setError(null)
-    setProduceResult(null)
-    try {
-      const res = await httpClient.post(
-        `/v1/stock/recipes/${menuItemId}/produce?quantity=${produceQty}`,
-      )
-      const data = res.data as {
-        detail: string
-        deducted_ingredients: Array<{ name: string; quantity_deducted: number; unit: string }>
-      }
-      const details = data.deducted_ingredients
-        .map((d) => `${d.name}: ${d.quantity_deducted} ${d.unit}`)
-        .join(', ')
-      setProduceResult(`✅ ${data.detail} (${details})`)
-      fetchStock()
-    } catch (err) {
-      const msg =
-        (err as { response?: { data?: { detail?: string } } }).response?.data?.detail ||
-        'Erro ao produzir.'
-      setError(msg)
-    } finally {
-      setIsProducing(false)
     }
   }
 
@@ -179,9 +142,9 @@ export default function RecipeManager({ menuItemId, menuItemName, onClose }: Rec
           </div>
         )}
 
-        {produceResult && (
+        {successMessage && (
           <div className="rounded-xl border border-emerald-900/40 bg-emerald-950/10 p-3 text-[10px] text-emerald-400">
-            {produceResult}
+            {successMessage}
           </div>
         )}
 
@@ -290,36 +253,7 @@ export default function RecipeManager({ menuItemId, menuItemName, onClose }: Rec
           </div>
         </div>
 
-        <div className="flex items-center justify-between border-t border-gray-900 pt-4">
-          <div className="flex items-center gap-3">
-            <span className="text-[10px] text-gray-500 font-medium">Produzir</span>
-            <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setProduceQty((p) => Math.max(1, p - 1))}
-                className="rounded-lg border border-gray-800 hover:bg-white/[0.03] p-1.5 transition"
-              >
-                <ChevronDown className="h-3 w-3 text-gray-400" />
-              </button>
-              <span className="w-6 text-center text-xs font-bold text-white">{produceQty}</span>
-              <button
-                type="button"
-                onClick={() => setProduceQty((p) => p + 1)}
-                className="rounded-lg border border-gray-800 hover:bg-white/[0.03] p-1.5 transition"
-              >
-                <ChevronUp className="h-3 w-3 text-gray-400" />
-              </button>
-            </div>
-            <span className="text-[10px] text-gray-500">porção(ões)</span>
-            <button
-              type="button"
-              onClick={handleProduce}
-              disabled={isProducing || ingredients.length === 0}
-              className="rounded-lg bg-brand-500 hover:bg-brand-600 disabled:opacity-40 px-3 py-1.5 text-[10px] font-bold text-white transition flex items-center gap-1"
-            >
-              {isProducing ? 'Produzindo...' : 'Produzir'}
-            </button>
-          </div>
+        <div className="flex items-center justify-end border-t border-gray-900 pt-4">
           <button
             type="button"
             onClick={handleSave}

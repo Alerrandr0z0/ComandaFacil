@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from fastapi import APIRouter, BackgroundTasks, Depends, WebSocket, WebSocketDisconnect
+from sqlalchemy import select
 
 from app.dependencies import CurrentTenantId, DbSession, MongoDB, require_permission
 from app.kitchen.application.commands import (
@@ -19,7 +20,13 @@ from app.kitchen.infrastructure.kitchen_read_sync import KitchenReadModelSync
 from app.kitchen.infrastructure.mongo_read_repository import MongoKitchenReadRepository
 from app.kitchen.infrastructure.pg_repository import SQLAlchemyKitchenOrderItemRepository
 from app.kitchen.infrastructure.websocket_manager import kds_ws_manager
+from app.order.infrastructure.orm_models import OrderFormItemORM
 from app.shared.database import get_mongo_db
+from app.stock.application.commands import StockService
+from app.stock.infrastructure.pg_repository import (
+    SQLAlchemyRecipeRepository,
+    SQLAlchemyStockItemRepository,
+)
 
 router = APIRouter(prefix="/kitchen", tags=["Kitchen"])
 
@@ -48,12 +55,30 @@ async def mark_item_ready(
     mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> dict[str, str]:
-    """Transitions a kitchen order item to the READY state, scoped to tenant."""
+    """Transitions a kitchen order item to the READY state, scoped to tenant.
+    Auto-deducts stock ingredients via recipe if one exists."""
     repo = SQLAlchemyKitchenOrderItemRepository(session)
     handler = MarkKitchenItemReadyHandler(repo)
     updated_item = await handler.handle(
         MarkKitchenItemReadyCommand(item_id=id, tenant_id=tenant_id)
     )
+
+    # Auto-deduct stock via recipe
+    try:
+        stmt = select(OrderFormItemORM.menu_item_id).where(
+            OrderFormItemORM.id == updated_item.correlation_id,
+        )
+        res = await session.execute(stmt)
+        menu_item_id = res.scalar_one_or_none()
+        if menu_item_id:
+            item_repo = SQLAlchemyStockItemRepository(session)
+            recipe_repo = SQLAlchemyRecipeRepository(session, item_repo)
+            stock_service = StockService(item_repo, recipe_repo)
+            await stock_service.deduct_by_recipe(menu_item_id, tenant_id)
+            await session.commit()
+    except Exception:
+        pass  # Stock deduction is best-effort (e.g., no recipe or insufficient stock)
+
     background_tasks.add_task(KitchenReadModelSync(mongo).sync, updated_item)
     return {"status": "success", "state": updated_item.state.name}
 

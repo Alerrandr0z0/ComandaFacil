@@ -9,6 +9,7 @@ import {
   Search,
   Sliders,
   TrendingDown,
+  Utensils,
   X,
 } from 'lucide-react'
 import { useCallback, useEffect, useState } from 'react'
@@ -474,16 +475,27 @@ async function submitStockAction(
   }
 }
 
+interface ConsumedByItem {
+  menu_item_id: number
+  menu_item_name: string
+  quantity_value: number
+  quantity_unit: string
+}
+
 interface HistoryPanelProps {
   activeHistoryItem: StockItem | null
   isLoadingHistory: boolean
   historyMovements: StockMovement[]
+  consumedBy: ConsumedByItem[]
+  isLoadingConsumedBy: boolean
 }
 
 function HistoryPanel({
   activeHistoryItem,
   isLoadingHistory,
   historyMovements,
+  consumedBy,
+  isLoadingConsumedBy,
 }: HistoryPanelProps) {
   if (!activeHistoryItem) {
     return (
@@ -560,6 +572,39 @@ function HistoryPanel({
           })}
         </div>
       )}
+
+      {/* Consumed-By Section */}
+      {activeHistoryItem && (
+        <div className="border-t border-gray-900/40 pt-4 mt-4">
+          <h4 className="text-[10px] font-extrabold uppercase tracking-widest text-gray-500 flex items-center gap-2 mb-3">
+            <Utensils className="h-3.5 w-3.5 text-emerald-400" />
+            Consumido por ({consumedBy.length} receitas)
+          </h4>
+          {isLoadingConsumedBy ? (
+            <div className="text-center py-4 text-[10px] text-gray-500 animate-pulse">
+              Carregando...
+            </div>
+          ) : consumedBy.length === 0 ? (
+            <div className="text-center py-4 text-[10px] text-gray-600 italic">
+              Nenhuma receita consome este insumo.
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {consumedBy.map((cb) => (
+                <div
+                  key={cb.menu_item_id}
+                  className="flex items-center justify-between rounded-xl border border-gray-900/60 bg-gray-950/20 p-3"
+                >
+                  <span className="text-xs font-bold text-gray-200">{cb.menu_item_name}</span>
+                  <span className="text-[10px] text-gray-400 font-mono">
+                    {cb.quantity_value} {cb.quantity_unit} por porção
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -575,6 +620,8 @@ export default function StockManager() {
   const [activeHistoryItem, setActiveHistoryItem] = useState<StockItem | null>(null)
   const [historyMovements, setHistoryMovements] = useState<StockMovement[]>([])
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
+  const [consumedBy, setConsumedBy] = useState<ConsumedByItem[]>([])
+  const [isLoadingConsumedBy, setIsLoadingConsumedBy] = useState(false)
 
   const [actionItemId, setActionItemId] = useState<number | null>(null)
   const [actionType, setActionType] = useState<'ADD' | 'DEDUCT' | 'ADJUST' | 'MIN_LEVEL' | null>(
@@ -664,13 +711,19 @@ export default function StockManager() {
   const handleViewHistory = async (item: StockItem) => {
     setActiveHistoryItem(item)
     setIsLoadingHistory(true)
+    setIsLoadingConsumedBy(true)
     try {
-      const res = await httpClient.get<StockMovement[]>(`/v1/stock/items/${item.id}/movements`)
-      setHistoryMovements(res.data)
+      const [movRes, consumedRes] = await Promise.all([
+        httpClient.get<StockMovement[]>(`/v1/stock/items/${item.id}/movements`),
+        httpClient.get<ConsumedByItem[]>(`/v1/stock/items/${item.id}/consumed-by`),
+      ])
+      setHistoryMovements(movRes.data)
+      setConsumedBy(consumedRes.data)
     } catch (_err) {
-      alert('Erro ao carregar histórico de movimentações.')
+      alert('Erro ao carregar dados do insumo.')
     } finally {
       setIsLoadingHistory(false)
+      setIsLoadingConsumedBy(false)
     }
   }
 
@@ -811,6 +864,8 @@ export default function StockManager() {
                 activeHistoryItem={activeHistoryItem}
                 isLoadingHistory={isLoadingHistory}
                 historyMovements={historyMovements}
+                consumedBy={consumedBy}
+                isLoadingConsumedBy={isLoadingConsumedBy}
               />
             </div>
           </div>

@@ -7,6 +7,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
 from app.dependencies import CurrentTenantId, DbSession, MongoDB, require_permission
+from app.menu.infrastructure.orm_models import MenuItemORM
 from app.stock.application.commands import (
     CreateStockItemCommand,
     CreateStockItemHandler,
@@ -23,7 +24,12 @@ from app.stock.domain.measured_quantity import MeasuredQuantity
 from app.stock.domain.recipe import Recipe, RecipeIngredient
 from app.stock.domain.stock_item import StockItem
 from app.stock.infrastructure.mongo_read_repository import MongoStockReadRepository
-from app.stock.infrastructure.orm_models import StockItemORM, StockTransactionORM
+from app.stock.infrastructure.orm_models import (
+    RecipeIngredientORM,
+    RecipeORM,
+    StockItemORM,
+    StockTransactionORM,
+)
 from app.stock.infrastructure.pg_repository import (
     SQLAlchemyRecipeRepository,
     SQLAlchemyStockItemRepository,
@@ -354,6 +360,18 @@ async def get_stock_movements(
     ]
 
 
+# ─── Consumed-By Schema ────────────────────────────────────────────────────────
+
+
+class ConsumedByItemSchema(BaseModel):
+    menu_item_id: int
+    menu_item_name: str
+    quantity_value: float
+    quantity_unit: str
+
+    model_config = ConfigDict(frozen=True)
+
+
 # ─── Recipe Schemas ────────────────────────────────────────────────────────────
 
 
@@ -383,6 +401,52 @@ class RecipeProduceResponseSchema(BaseModel):
     deducted_ingredients: list[dict[str, object]]
 
     model_config = ConfigDict(frozen=True)
+
+
+# ─── Consumed-By Endpoint ─────────────────────────────────────────────────────
+
+
+@router.get(
+    "/items/{item_id}/consumed-by",
+    response_model=list[ConsumedByItemSchema],
+    status_code=status.HTTP_200_OK,
+    summary="List menu items that consume this stock item",
+    dependencies=[Depends(require_permission("ADJUST_STOCK"))],
+)
+async def get_consumed_by(
+    item_id: int,
+    db: DbSession,
+    tenant_id: CurrentTenantId,
+) -> list[ConsumedByItemSchema]:
+    """Returns all recipes (menu items) that use this stock item as an ingredient."""
+    stmt = (
+        select(
+            RecipeORM.menu_item_id,
+            MenuItemORM.name,
+            RecipeIngredientORM.quantity_value,
+            RecipeIngredientORM.quantity_unit,
+        )
+        .select_from(RecipeIngredientORM)
+        .join(RecipeORM, RecipeIngredientORM.recipe_id == RecipeORM.id)
+        .join(MenuItemORM, RecipeORM.menu_item_id == MenuItemORM.id)
+        .where(
+            RecipeIngredientORM.stock_item_id == item_id,
+            RecipeORM.tenant_id == tenant_id,
+            MenuItemORM.tenant_id == tenant_id,
+        )
+        .order_by(MenuItemORM.name)
+    )
+    res = await db.execute(stmt)
+    rows = res.all()
+    return [
+        ConsumedByItemSchema(
+            menu_item_id=row.menu_item_id,
+            menu_item_name=row.name,
+            quantity_value=float(row.quantity_value),
+            quantity_unit=row.quantity_unit,
+        )
+        for row in rows
+    ]
 
 
 # ─── Recipe Endpoints ─────────────────────────────────────────────────────────
