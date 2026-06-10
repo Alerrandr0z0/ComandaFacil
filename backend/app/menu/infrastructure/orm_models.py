@@ -17,9 +17,7 @@ class MenuORM(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    active_price_list_id: Mapped[int | None] = mapped_column(
-        Integer, nullable=True
-    )
+    active_price_list_id: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
     category_items: Mapped[list[CategoryItemORM]] = relationship(
         "CategoryItemORM", back_populates="menu", cascade="all, delete-orphan"
@@ -70,9 +68,7 @@ class PriceListORM(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
-    menu_id: Mapped[int] = mapped_column(
-        ForeignKey("menus.id", ondelete="CASCADE"), nullable=False
-    )
+    menu_id: Mapped[int] = mapped_column(ForeignKey("menus.id", ondelete="CASCADE"), nullable=False)
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

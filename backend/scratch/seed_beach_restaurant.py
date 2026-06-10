@@ -171,6 +171,8 @@ async def seed() -> None:
             (116, "Pudim de Leite", "Pudim de leite condensado tradicional com calda de caramelo.", 12.00, "Sobremesas", "GRILL"),
         ]
 
+        # Override preparation_profile per item (only ready-to-serve drinks skip prep)
+        no_prep_ids = {111, 114}  # Água de Coco, Cerveja Heineken
         menu_items = []
         for mid, name, desc, price, cat_name, station in menu_items_data:
             mi = MenuItemORM(
@@ -182,7 +184,7 @@ async def seed() -> None:
                 category_name=cat_name,
                 station_type=station,
                 is_available=True,
-                preparation_profile="NO_PREP" if station == "BEVERAGE" else "STANDARD",
+                preparation_profile="NO_PREP" if mid in no_prep_ids else "STANDARD",
             )
             db.add(mi)
             menu_items.append(mi)
@@ -376,7 +378,7 @@ async def seed() -> None:
         # In the frontend, the order_id for Table 2 is 2, Table 3 is 3, Table 4 is 4
 
         # Mesa 2 (OPEN)
-        order_m2 = OrderFormORM(id=2, tenant_id="1", state="OPEN", table_number=2, fulfillment_type="TABLE")
+        order_m2 = OrderFormORM(id=2, tenant_id="1", display_code="MESA-02", state="OPEN", table_number=2, fulfillment_type="TABLE")
         db.add(order_m2)
         await db.flush()
 
@@ -389,7 +391,7 @@ async def seed() -> None:
         await db.flush()
 
         # Mesa 3 (OPEN)
-        order_m3 = OrderFormORM(id=3, tenant_id="1", state="OPEN", table_number=3, fulfillment_type="TABLE")
+        order_m3 = OrderFormORM(id=3, tenant_id="1", state="OPEN", display_code="MESA-03", table_number=3, fulfillment_type="TABLE")
         db.add(order_m3)
         await db.flush()
 
@@ -400,7 +402,7 @@ async def seed() -> None:
         await db.flush()
 
         # Mesa 4 (PAYMENT_REQUESTED)
-        order_m4 = OrderFormORM(id=4, tenant_id="1", state="OPEN", table_number=4, fulfillment_type="TABLE", payment_requested=True)
+        order_m4 = OrderFormORM(id=4, tenant_id="1", state="OPEN", display_code="MESA-04", table_number=4, fulfillment_type="TABLE", payment_requested=True)
         db.add(order_m4)
         await db.flush()
 
@@ -423,7 +425,7 @@ async def seed() -> None:
             KitchenOrderItemORM(id=7002, correlation_id=60023, name_cpy="Isca de Peixe Crocante", station_type_cpy="GRILL", tenant_id="1", state="WAITING", preparation_profile="STANDARD"),
             KitchenOrderItemORM(id=7003, correlation_id=60032, name_cpy="Queijo Coalho na Brasa", station_type_cpy="GRILL", tenant_id="1", state="READY", preparation_profile="STANDARD"),
             # Missing beverage items (Mesa 2 - Caipirinha, Mesa 3 - Agua de Coco, Mesa 4 - Heineken)
-            KitchenOrderItemORM(id=7004, correlation_id=60021, name_cpy="Caipirinha de Limão", station_type_cpy="BEVERAGE", tenant_id="1", state="WAITING", preparation_profile="NO_PREP"),
+            KitchenOrderItemORM(id=7004, correlation_id=60021, name_cpy="Caipirinha de Limão", station_type_cpy="BEVERAGE", tenant_id="1", state="WAITING", preparation_profile="STANDARD"),
             KitchenOrderItemORM(id=7005, correlation_id=60031, name_cpy="Água de Coco", station_type_cpy="BEVERAGE", tenant_id="1", state="WAITING", preparation_profile="NO_PREP"),
             KitchenOrderItemORM(id=7006, correlation_id=60043, name_cpy="Cerveja Heineken Long Neck", station_type_cpy="BEVERAGE", tenant_id="1", state="WAITING", preparation_profile="NO_PREP"),
             # Missing Mesa 4 GRILL items
@@ -562,6 +564,7 @@ async def seed() -> None:
             order_hist = OrderFormORM(
                 id=order_seq,
                 tenant_id="1",
+                display_code=str(order_seq),
                 state="CLOSED",
                 table_number=(i % 10) + 5,
                 fulfillment_type="TABLE"

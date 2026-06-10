@@ -585,9 +585,7 @@ async def clear_menu_item_price(
     if not price_list:
         raise HTTPException(status_code=404, detail="Lista de preços não encontrada.")
 
-    existing_item = next(
-        (pi for pi in price_list.items if pi.menu_item_id == item_id), None
-    )
+    existing_item = next((pi for pi in price_list.items if pi.menu_item_id == item_id), None)
     if not existing_item:
         raise HTTPException(status_code=404, detail="Item não possui preço especial.")
 

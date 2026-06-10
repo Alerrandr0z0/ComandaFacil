@@ -54,7 +54,8 @@ class OrderCreateSchema(BaseModel):
         default=None, description="Unique order identifier (auto-generated if omitted)"
     )
     display_code: str | None = Field(
-        default=None, description="Manual code displayed on the order (e.g. MESA-004). Auto-generated if omitted."
+        default=None,
+        description="Manual code displayed on the order (e.g. MESA-004). Auto-generated if omitted.",
     )
     fulfillment_type: str = Field(
         ..., description="Type of fulfillment: TABLE, TAKEAWAY, or DELIVERY"
