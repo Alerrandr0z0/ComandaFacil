@@ -54,18 +54,9 @@ export default function QuickSearch({
           )
           .slice(0, 5) // Limit to top 5 results for fast touch targeting
 
-  // Deterministic helper to get a menu item's price
   const getItemPrice = (item: MenuItem): number => {
-    try {
-      const pricesStr = localStorage.getItem('cf_menu_item_prices')
-      if (pricesStr) {
-        const prices = JSON.parse(pricesStr)
-        if (prices[item.id] !== undefined) {
-          return Number(prices[item.id])
-        }
-      }
-    } catch (_e) {
-      // Ignore and fallback
+    if (item.price !== undefined && item.price !== null) {
+      return Number(item.price)
     }
     const base = 12.0
     const offset = (item.id % 6) * 5.5

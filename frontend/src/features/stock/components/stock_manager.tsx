@@ -188,10 +188,13 @@ interface StockActionCardProps {
   actionType: 'ADD' | 'DEDUCT' | 'ADJUST' | 'MIN_LEVEL'
   actionValue: string
   actionReason: string
+  adjustTransactionType: string
   onChangeValue: (val: string) => void
   onChangeReason: (val: string) => void
+  onChangeAdjustType: (val: string) => void
   onClose: () => void
   onSubmit: () => void
+  isSubmitting: boolean
 }
 
 function StockActionCard({
@@ -199,10 +202,13 @@ function StockActionCard({
   actionType,
   actionValue,
   actionReason,
+  adjustTransactionType,
   onChangeValue,
   onChangeReason,
+  onChangeAdjustType,
   onClose,
   onSubmit,
+  isSubmitting,
 }: StockActionCardProps) {
   return (
     <div className="rounded-2xl border border-brand-500/20 bg-brand-500/5 p-5 backdrop-blur-md space-y-4">
@@ -229,6 +235,24 @@ function StockActionCard({
       </div>
 
       <div className="space-y-4 text-xs">
+        {/* Transaction type selector — only for ADJUST */}
+        {actionType === 'ADJUST' && (
+          <div className="space-y-1.5">
+            <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
+              Tipo de Lançamento
+            </span>
+            <select
+              value={adjustTransactionType}
+              onChange={(e) => onChangeAdjustType(e.target.value)}
+              className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input bg-[#0c0c12]"
+            >
+              <option value="ADJUSTMENT">📋 Ajuste de Inventário (contagem física)</option>
+              <option value="WASTE">🗑️ Perda / Desperdício</option>
+              <option value="PRODUCTION">🏭 Produção Interna (item fabricado)</option>
+            </select>
+          </div>
+        )}
+
         <div className="space-y-1.5">
           <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
             {actionType === 'MIN_LEVEL' ? 'Novo Mínimo de Alerta' : 'Quantidade'}
@@ -255,7 +279,13 @@ function StockActionCard({
             </span>
             <input
               type="text"
-              placeholder="Ex: Reposição semanal de carga"
+              placeholder={
+                actionType === 'ADJUST' && adjustTransactionType === 'WASTE'
+                  ? 'Ex: Produto vencido, queda acidental...'
+                  : actionType === 'ADJUST' && adjustTransactionType === 'PRODUCTION'
+                    ? 'Ex: Lote produzido em 08/06/2026'
+                    : 'Ex: Reposição semanal de carga'
+              }
               value={actionReason}
               onChange={(e) => onChangeReason(e.target.value)}
               className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
@@ -266,9 +296,10 @@ function StockActionCard({
         <button
           type="button"
           onClick={onSubmit}
-          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 active:scale-[0.98] py-3 text-xs font-bold text-white transition duration-200 shadow-lg shadow-brand-500/10 animate-pulse-glow"
+          disabled={isSubmitting}
+          className="flex w-full items-center justify-center gap-1.5 rounded-xl bg-brand-500 hover:bg-brand-600 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98] py-3 text-xs font-bold text-white transition duration-200 shadow-lg shadow-brand-500/10 animate-pulse-glow"
         >
-          Confirmar Lançamento
+          {isSubmitting ? 'Processando...' : 'Confirmar Lançamento'}
         </button>
       </div>
     </div>
@@ -423,6 +454,7 @@ async function submitStockAction(
   type: 'ADD' | 'DEDUCT' | 'ADJUST' | 'MIN_LEVEL',
   value: number,
   reason: string,
+  adjustTransactionType = 'ADJUSTMENT',
 ) {
   if (type === 'ADD') {
     return httpClient.post(`/v1/stock/items/${itemId}/add`, { quantity: value, reason })
@@ -431,7 +463,11 @@ async function submitStockAction(
     return httpClient.post(`/v1/stock/items/${itemId}/deduct`, { quantity: value, reason })
   }
   if (type === 'ADJUST') {
-    return httpClient.post(`/v1/stock/items/${itemId}/adjust`, { new_quantity: value, reason })
+    return httpClient.post(`/v1/stock/items/${itemId}/adjust`, {
+      new_quantity: value,
+      reason,
+      transaction_type: adjustTransactionType,
+    })
   }
   if (type === 'MIN_LEVEL') {
     return httpClient.put(`/v1/stock/items/${itemId}/min-level`, { min_stock_level: value })
@@ -546,6 +582,8 @@ export default function StockManager() {
   )
   const [actionValue, setActionValue] = useState('')
   const [actionReason, setActionReason] = useState('')
+  const [adjustTransactionType, setAdjustTransactionType] = useState('ADJUSTMENT')
+  const [isSubmittingAction, setIsSubmittingAction] = useState(false)
 
   const fetchStock = useCallback(async () => {
     setError(null)
@@ -572,9 +610,7 @@ export default function StockManager() {
     minLevel: number
   }) => {
     try {
-      const itemId = Math.floor(Math.random() * 1000000000)
       await httpClient.post('/v1/stock/items', {
-        id: itemId,
         name: data.name,
         category: data.category,
         current_quantity: data.quantity,
@@ -605,13 +641,23 @@ export default function StockManager() {
     if (!actionItemId || !actionType || !actionValue) return
     const valueNum = Number(actionValue)
     if (Number.isNaN(valueNum)) return
+    if (isSubmittingAction) return
 
+    setIsSubmittingAction(true)
     try {
-      await submitStockAction(actionItemId, actionType, valueNum, actionReason || 'Operação manual')
+      await submitStockAction(
+        actionItemId,
+        actionType,
+        valueNum,
+        actionReason || 'Operação manual',
+        adjustTransactionType,
+      )
       handleCloseAction()
       fetchStock()
     } catch (_err) {
       alert('Operação falhou. Verifique se a quantidade é válida.')
+    } finally {
+      setIsSubmittingAction(false)
     }
   }
 
@@ -744,10 +790,13 @@ export default function StockManager() {
                 actionType={actionType}
                 actionValue={actionValue}
                 actionReason={actionReason}
+                adjustTransactionType={adjustTransactionType}
                 onChangeValue={setActionValue}
                 onChangeReason={setActionReason}
+                onChangeAdjustType={setAdjustTransactionType}
                 onClose={handleCloseAction}
                 onSubmit={handleSubmitAction}
+                isSubmitting={isSubmittingAction}
               />
             )}
 

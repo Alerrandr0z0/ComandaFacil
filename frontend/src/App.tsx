@@ -2,6 +2,7 @@ import type React from 'react'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { useAuth } from '@/features/auth/auth_context'
 import AnalyticsPage from '@/pages/analytics'
+import CatalogPage from '@/pages/catalog'
 import EmployeesPage from '@/pages/employees'
 import HistoryPage from '@/pages/history'
 import KitchenPage from '@/pages/kitchen'
@@ -108,6 +109,15 @@ export default function App() {
         element={
           <ProtectedRoute allowedRoles={['MANAGER']}>
             <MenuManagerPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/catalog"
+        element={
+          <ProtectedRoute allowedRoles={['MANAGER']}>
+            <CatalogPage />
           </ProtectedRoute>
         }
       />

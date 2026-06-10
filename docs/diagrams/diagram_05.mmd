@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> Waiting : receive_item()
+    Waiting --> Preparing : prepare()
+    Preparing --> Ready : mark_as_ready()
+    Waiting --> Cancelled : cancel()
+    Preparing --> Cancelled : cancel()
+
+    note right of Waiting : STANDARD: aguarda prepare()
+    note right of Waiting : NO_PREP: mark_as_ready() direto
+
+    Waiting --> Ready : mark_as_ready()<br/>[NO_PREP only]

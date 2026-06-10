@@ -72,8 +72,8 @@ def test_kitchen_item_invalid_transitions_then_raises_value_error() -> None:
     # Arrange
     item = KitchenOrderItem(1, 42, "Burguer", "Grill", "franquia_001")
 
-    # Act & Assert 1: cannot mark ready from waiting
-    with pytest.raises(ValueError, match="Cannot mark item as ready in WAITING state"):
+    # Act & Assert 1: cannot mark ready from waiting (STANDARD profile requires PREPARING first)
+    with pytest.raises(ValueError, match="Item requires preparation"):
         item.mark_as_ready()
 
     # Act & Assert 2: cannot prepare from preparing

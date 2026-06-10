@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> AwaitingPickup : create_delivery()
+    AwaitingPickup --> InTransit : dispatch()
+    InTransit --> Delivered : complete()
+    InTransit --> FailedDelivery : fail()
+    FailedDelivery --> InTransit : retry()
+    Delivered --> [*]

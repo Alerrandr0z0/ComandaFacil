@@ -69,12 +69,14 @@ class SQLAlchemyOrderRepository(OrderRepository):
 
         if orm:
             orm.state = order.state.name
+            orm.display_code = order.display_code
             orm.payment_requested = order._payment_requested  # type: ignore[reportPrivateUsage]
             orm.items.clear()
         else:
             orm = OrderFormORM(
                 id=order.id,
                 tenant_id=order.tenant_id,
+                display_code=order.display_code,
                 state=order.state.name,
                 payment_requested=order._payment_requested,  # type: ignore[reportPrivateUsage]
             )
@@ -84,21 +86,30 @@ class SQLAlchemyOrderRepository(OrderRepository):
         self._map_strategy_to_orm(orm, order.fulfillment_strategy)
 
         # Re-populate items
+        new_item_orms: list[OrderFormItemORM] = []
         for item in order.items:
-            item_orm = OrderFormItemORM(
-                id=item.id,
-                order_id=order.id,
-                menu_item_id=item.menu_item_id,
-                name_cpy=item.name_cpy,
-                price_cpy=item.price_cpy.amount,
-                station_type_cpy=item.station_type_cpy,
-                quantity=item.quantity,
-                notes=item.notes,
-                status=item.status.value,
-            )
+            item_kwargs: dict[str, object] = {
+                "order_id": order.id,
+                "menu_item_id": item.menu_item_id,
+                "name_cpy": item.name_cpy,
+                "price_cpy": item.price_cpy.amount,
+                "station_type_cpy": item.station_type_cpy,
+                "quantity": item.quantity,
+                "notes": item.notes,
+                "status": item.status.value,
+            }
+            if item.id != 0:
+                item_kwargs["id"] = item.id
+            item_orm = OrderFormItemORM(**item_kwargs)
             orm.items.append(item_orm)
+            new_item_orms.append(item_orm)
 
         await self._session.flush()
+
+        # Update domain item IDs from auto-generated ORM IDs
+        for domain_item, item_orm in zip(order.items, new_item_orms, strict=True):
+            if domain_item.id == 0:
+                domain_item.id = item_orm.id
 
     async def delete(self, id: int, tenant_id: str) -> None:
         stmt = select(OrderFormORM).where(
@@ -154,7 +165,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
         orm.delivery_state_name = None
 
     def _map_to_domain(self, orm: OrderFormORM) -> OrderForm:
-        order = OrderForm(id=orm.id, tenant_id=orm.tenant_id)
+        order = OrderForm(id=orm.id, tenant_id=orm.tenant_id, display_code=orm.display_code)
         order._payment_requested = orm.payment_requested  # type: ignore[reportPrivateUsage]
 
         # Map state

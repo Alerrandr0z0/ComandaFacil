@@ -1,0 +1,35 @@
+sequenceDiagram
+    participant Cook as Cook (KDS Screen)
+    participant WS as WebSocket
+    participant MGR as KdsWebSocketManager
+    participant Handler as Command Handler
+    participant PG as PostgreSQL
+    participant Mongo as MongoDB
+
+    Note over Cook,Mongo: 1. Conexão Inicial
+    Cook->>WS: Connect ws://host/ws?station=GRILL&tenant_id=X
+    WS->>MGR: register(tenant_id, "GRILL", ws)
+    MGR->>Mongo: find({state: "WAITING", station: "GRILL"})
+    MGR-->>WS: ITEM_READY (itens existentes)
+    WS-->>Cook: Render items in WAITING column
+
+    Note over Cook,Mongo: 2. Novo Item Recebido
+    Handler->>PG: INSERT kitchen_order_items
+    Handler->>MGR: broadcast(tenant, "GRILL", ITEM_RECEIVED)
+    MGR->>WS: Send JSON
+    WS-->>Cook: Novo card aparece na coluna WAITING
+
+    Note over Cook,Mongo: 3. Item Preparando
+    Cook->>WS: Click "Preparar" → PATCH /kitchen/items/{id}/prepare
+    Handler->>PG: UPDATE state='PREPARING'
+    Handler->>MGR: broadcast(tenant, "GRILL", ITEM_PREPARING)
+    MGR->>WS: Send JSON
+    WS-->>Cook: Card move para coluna PREPARING
+
+    Note over Cook,Mongo: 4. Item Pronto
+    Cook->>WS: Click "Pronto" → PATCH /kitchen/items/{id}/ready
+    Handler->>PG: UPDATE state='READY'
+    Handler->>MGR: broadcast(tenant, "GRILL", ITEM_READY)
+    Handler->>Mongo: upsert(kitchen_read, {state: "READY"})
+    MGR->>WS: Send JSON
+    WS-->>Cook: Card move para coluna READY + Alerta sonoro no Salão

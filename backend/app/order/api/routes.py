@@ -1,16 +1,17 @@
 from __future__ import annotations
 
+import logging
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 
-import app.shared.database
 from app.dependencies import CurrentTenantId, DbSession, MongoDB, require_permission
 from app.kitchen.application.commands import KitchenService
 from app.kitchen.infrastructure.kitchen_read_sync import KitchenReadModelSync
 from app.kitchen.infrastructure.pg_repository import SQLAlchemyKitchenOrderItemRepository
+from app.menu.infrastructure.repositories import SQLAlchemyMenuItemRepository
 from app.order.application.commands import (
     AddOrderItemCommand,
     AddOrderItemHandler,
@@ -35,10 +36,12 @@ from app.order.domain.fulfillment import Delivery, Table, Takeaway
 from app.order.infrastructure.mongo_repository import OrderHistoryMongoRepository
 from app.order.infrastructure.order_read_sync import OrderReadModelSync
 from app.order.infrastructure.pg_repository import SQLAlchemyOrderRepository
-from app.shared.database import get_async_session
+from app.shared import database
 
 if TYPE_CHECKING:
     from app.order.domain.order_form import OrderForm
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/order", tags=["Order"])
 
@@ -47,7 +50,12 @@ router = APIRouter(prefix="/order", tags=["Order"])
 
 
 class OrderCreateSchema(BaseModel):
-    id: int | None = Field(default=None, description="Unique order identifier (auto-generated if omitted)")
+    id: int | None = Field(
+        default=None, description="Unique order identifier (auto-generated if omitted)"
+    )
+    display_code: str | None = Field(
+        default=None, description="Manual code displayed on the order (e.g. MESA-004). Auto-generated if omitted."
+    )
     fulfillment_type: str = Field(
         ..., description="Type of fulfillment: TABLE, TAKEAWAY, or DELIVERY"
     )
@@ -116,6 +124,7 @@ class FulfillmentResponseSchema(BaseModel):
 class OrderResponseSchema(BaseModel):
     id: int
     tenant_id: str
+    display_code: str
     state: str
     payment_requested: bool
     total: Decimal
@@ -145,6 +154,7 @@ async def create_order(
     command = CreateOrderCommand(
         id=schema.id,
         tenant_id=tenant_id,
+        display_code=schema.display_code,
         fulfillment_type=schema.fulfillment_type,
         table_number=schema.table_number,
         customer_name=schema.customer_name,
@@ -203,31 +213,46 @@ async def get_order(
 
 async def _notify_kitchen(
     correlation_id: int,
-    name_cpy: str,
-    station_type_cpy: str,
+    menu_item_id: int,
+    notes: str,
     tenant_id: str,
     mongo: MongoDB | None = None,
 ) -> None:
-    """Helper background task to asynchronously send new order items to the kitchen."""
-    # Gracefully return in test environments that do not initialize PostgreSQL
-    if app.shared.database.session_factory is None:
+    """Helper to synchronously send new order items to the kitchen (called from endpoint)."""
+    sf = database.session_factory
+    if sf is None:
+        logger.warning("session_factory is None, skipping kitchen notification")
         return
 
-    async for session in get_async_session():
-        repo = SQLAlchemyKitchenOrderItemRepository(session)
-        service = KitchenService(repo)
+    async for session in database.get_async_session():
+        item_repo = SQLAlchemyMenuItemRepository(session)
+        menu_item = await item_repo.find_by_id(menu_item_id, tenant_id)
+        if not menu_item:
+            logger.warning("Menu item %s not found for tenant %s", menu_item_id, tenant_id)
+            return
+
+        kitchen_repo = SQLAlchemyKitchenOrderItemRepository(session)
+        service = KitchenService(kitchen_repo)
         try:
             item = await service.receive_item(
                 correlation_id=correlation_id,
-                name_cpy=name_cpy,
-                station_type_cpy=station_type_cpy,
+                name_cpy=menu_item.name,
+                station_type_cpy=menu_item.station_type,
                 tenant_id=tenant_id,
+                preparation_profile=menu_item.preparation_profile.value,
+                notes=notes,
             )
             await session.commit()
+            logger.info("Kitchen item created for correlation_id=%s", correlation_id)
             if mongo is not None:
                 await KitchenReadModelSync(mongo).sync(item)
-        except Exception:  # noqa: S110
-            pass
+                logger.info("Kitchen item synced to MongoDB for correlation_id=%s", correlation_id)
+        except Exception:
+            logger.exception(
+                "Failed to notify kitchen for correlation_id=%s menu_item_id=%s",
+                correlation_id,
+                menu_item_id,
+            )
 
 
 @router.post(
@@ -241,7 +266,6 @@ async def add_order_item(
     order_id: int,
     schema: OrderItemAddSchema,
     db: DbSession,
-    background_tasks: BackgroundTasks,
     mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> OrderItemResponseSchema:
@@ -262,12 +286,11 @@ async def add_order_item(
         item = await handler.handle(command)
         await db.commit()
 
-        # Dispatch background task to notify the KDS context
-        background_tasks.add_task(
-            _notify_kitchen,
+        # Notify the KDS context synchronously
+        await _notify_kitchen(
             correlation_id=item.id,
-            name_cpy=item.name_cpy,
-            station_type_cpy=item.station_type_cpy,
+            menu_item_id=item.menu_item_id,
+            notes=item.notes,
             tenant_id=tenant_id,
             mongo=mongo,
         )
@@ -424,6 +447,7 @@ def _order_to_response(order: OrderForm) -> OrderResponseSchema:
     return OrderResponseSchema(
         id=order.id,
         tenant_id=order.tenant_id,
+        display_code=order.display_code,
         state=order.state.name,
         payment_requested=order._payment_requested,  # type: ignore[reportPrivateUsage]
         total=order.total().amount,

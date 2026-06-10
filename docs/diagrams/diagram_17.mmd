@@ -1,0 +1,23 @@
+graph TB
+    subgraph "Service Worker (Workbox)"
+        SW["service-worker.ts"]
+        CACHE["Cache Strategies"]
+    end
+
+    subgraph "Caching Rules"
+        MENU["StaleWhileRevalidate<br/>Menu data"]
+        ORDER["NetworkFirst<br/>Order operations"]
+        STATIC["CacheFirst<br/>Static assets"]
+        BGSYNC["BackgroundSync<br/>Offline writes"]
+    end
+
+    subgraph "IndexedDB"
+        IDB["Offline Queue"]
+    end
+
+    SW --> CACHE
+    CACHE --> MENU
+    CACHE --> ORDER
+    CACHE --> STATIC
+    CACHE --> BGSYNC
+    BGSYNC --> IDB

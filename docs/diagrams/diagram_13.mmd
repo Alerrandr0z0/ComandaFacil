@@ -1,0 +1,19 @@
+sequenceDiagram
+    participant Client as Frontend
+    participant API as FastAPI Route
+    participant DB as PostgreSQL
+    participant BT as BackgroundTasks
+    participant Sync as Sync Class
+    participant Mongo as MongoDB
+
+    Client->>API: POST /stock/items
+    API->>DB: INSERT stock_items + stock_transactions
+    DB-->>API: commit OK (ACID)
+    API->>BT: add_task(StockReadModelSync(mongo).sync, item)
+    API-->>Client: 201 Created (resposta imediata)
+
+    Note over BT,Mongo: Execução assíncrona (milissegundos depois)
+    BT->>Sync: sync(item)
+    Sync->>Sync: Mapeia domain → dict JSON
+    Sync->>Mongo: update_one(upsert=True)
+    Mongo-->>Sync: OK

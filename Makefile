@@ -2,7 +2,7 @@
 
 .PHONY: help setup setup-back setup-front \
         start stop status \
-        dev dev-back dev-front \
+        dev dev-back dev-front dev-stop \
         lint lint-back lint-front \
         fix fix-back fix-front \
         typecheck typecheck-back \
@@ -30,6 +30,7 @@ help:
 	@echo "  dev               Sobe backend + frontend em paralelo"
 	@echo "  dev-back          Sobe apenas o backend (FastAPI hot-reload)"
 	@echo "  dev-front         Sobe apenas o frontend (Vite HMR)"
+	@echo "  dev-stop          Para dev-back + dev-front"
 	@echo "  start             Sobe infraestrutura (Postgres + MongoDB via Docker)"
 	@echo "  stop              Para a infraestrutura"
 	@echo "  status            Status dos serviços Docker"
@@ -99,6 +100,12 @@ dev-back:
 
 dev-front:
 	cd frontend && npm run dev
+
+dev-stop:
+	@echo "Parando servidores de desenvolvimento..."
+	-pkill -f "uvicorn app.main" 2>/dev/null
+	-pkill -f "vite" 2>/dev/null
+	@echo "✅ Servidores de desenvolvimento parados."
 
 # ─── Lint & Format ────────────────────────────────────────────────────────────
 

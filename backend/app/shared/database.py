@@ -20,7 +20,7 @@ async def init_postgres(settings: Settings) -> None:
     global _engine, session_factory
     _engine = create_async_engine(
         settings.database_url,
-        echo=settings.app_debug,
+        echo=False,
         pool_size=10,
         max_overflow=20,
     )

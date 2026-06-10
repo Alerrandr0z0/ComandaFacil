@@ -1,0 +1,57 @@
+graph TB
+    subgraph Frontend["Frontend (React 19)"]
+        SPA["SPA / PWA"]
+    end
+
+    subgraph API["API Layer (FastAPI)"]
+        MW["TenantMiddleware<br/>X-Tenant-ID → ContextVar"]
+        AUTH["Auth Layer<br/>Session + Permission Check"]
+        ROUTES["Route Handlers<br/>(thin controllers)"]
+    end
+
+    subgraph WritePath["Write Path (Commands)"]
+        CMD["Command Handlers<br/>Domain Logic"]
+        AGG["Aggregate Roots<br/>Business Rules"]
+        REPO_W["Repository<br/>(SQLAlchemy)"]
+    end
+
+    subgraph PostgreSQL["PostgreSQL (Write DB)"]
+        PG[("PostgreSQL<br/>Fonte da Verdade<br/>ACID Transactions")]
+    end
+
+    subgraph Sync["Synchronization Bridge"]
+        BG["BackgroundTasks<br/>(FastAPI)"]
+        SYNC["Sync Classes<br/>*_sync.py"]
+    end
+
+    subgraph MongoDB["MongoDB (Read DB)"]
+        MONGO[("MongoDB<br/>Motor de Performance<br/>Denormalized Docs")]
+    end
+
+    subgraph ReadPath["Read Path (Queries)"]
+        QR["Query Handlers<br/>(MongoMenuReadRepository)"]
+    end
+
+    subgraph WebSocket["Real-time"]
+        WS["WebSocket Manager<br/>(KDS Push)"]
+    end
+
+    SPA -->|"Commands<br/>(POST/PUT/DELETE)"| MW
+    MW --> AUTH
+    AUTH --> ROUTES
+    ROUTES --> CMD
+    CMD --> AGG
+    AGG --> REPO_W
+    REPO_W --> PG
+
+    PG -.->|"trigger"| BG
+    BG --> SYNC
+    SYNC -->|"upsert/delete"| MONGO
+
+    SPA -->|"Queries<br/>(GET)"| MW
+    MW --> AUTH
+    AUTH --> QR
+    QR -->|"read"| MONGO
+
+    PG -.->|"state change"| WS
+    WS -->|"push events"| SPA

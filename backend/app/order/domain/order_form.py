@@ -11,9 +11,10 @@ if TYPE_CHECKING:
 
 
 class OrderForm:
-    def __init__(self, id: int, tenant_id: str) -> None:
+    def __init__(self, id: int, tenant_id: str, display_code: str = "") -> None:
         self.id: int = id
         self.tenant_id: str = tenant_id
+        self.display_code: str = display_code or str(id)
         self._items: list[OrderFormItem] = []
         self._state: IOrderState = Open()
         self.fulfillment_strategy: IFulfillmentStrategy | None = None
@@ -64,4 +65,4 @@ class OrderForm:
         return subtotal
 
     def __repr__(self) -> str:
-        return f"OrderForm(id={self.id}, tenant_id={self.tenant_id!r}, state={self.state.name})"
+        return f"OrderForm(id={self.id}, tenant_id={self.tenant_id!r}, display_code={self.display_code!r}, state={self.state.name})"

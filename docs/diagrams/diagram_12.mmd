@@ -1,0 +1,38 @@
+graph LR
+    subgraph "Order Context"
+        O[OrderForm]
+        OI[OrderFormItem]
+    end
+
+    subgraph "Kitchen Context"
+        K[KitchenOrderItem]
+        KS[KitchenService]
+    end
+
+    subgraph "Menu Context"
+        MI[MenuItem]
+    end
+
+    subgraph "Stock Context"
+        S[StockItem]
+        R[Recipe]
+        RI[RecipeIngredient]
+    end
+
+    subgraph "Payment Context"
+        P[Payment]
+    end
+
+    OI -->|"BackgroundTask<br/>_notify_kitchen()"| KS
+    KS -->|"Busca MenuItem<br/>para station_type"| MI
+    KS -->|"Cria KitchenOrderItem<br/>com preparation_profile"| K
+    O -->|"RequestPayment"| P
+    MI -->|"Recipe vincula"| R
+    R -->|"contém"| RI
+    RI -->|"referência"| S
+
+    style OI fill:#4CAF50,color:#fff
+    style KS fill:#FF9800,color:#fff
+    style MI fill:#2196F3,color:#fff
+    style S fill:#9C27B0,color:#fff
+    style P fill:#F44336,color:#fff

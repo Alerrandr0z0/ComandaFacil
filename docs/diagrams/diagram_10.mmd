@@ -1,0 +1,20 @@
+sequenceDiagram
+    participant Chef as Chef (Frontend)
+    participant API as FastAPI
+    participant StockCtx as Stock Context
+    participant PG as PostgreSQL
+    participant Mongo as MongoDB
+
+    Note over Chef,Mongo: Produzir N porções de um item
+    Chef->>API: POST /stock/recipes/{menu_item_id}/produce?quantity=10
+    API->>StockCtx: StockService.deduct_by_recipe()
+    StockCtx->>PG: SELECT recipe WHERE menu_item_id = X
+    StockCtx->>PG: SELECT recipe_ingredients WHERE recipe_id = Y
+    loop Para cada ingrediente
+        StockCtx->>StockCtx: register_output(stock_item, quantity * N)
+        StockCtx->>StockCtx: Valida saldo >= quantity * N
+        StockCtx->>PG: INSERT stock_transactions (type=OUTPUT)
+    end
+    StockCtx->>Mongo: upsert(stock_read, {current_quantity: new_balance})
+    StockCtx-->>API: OK
+    API-->>Chef: 200 OK

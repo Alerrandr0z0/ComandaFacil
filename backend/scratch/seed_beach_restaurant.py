@@ -1,4 +1,4 @@
-# ruff: noqa: PLR0915
+# ruff: noqa: PLR0915, C901, PLR0912, PLR2004
 # pyright: reportPrivateUsage=false
 from __future__ import annotations
 
@@ -15,7 +15,13 @@ from app.kitchen.infrastructure.orm_models import KitchenOrderItemORM
 from app.menu.api.routes import _resolve_menu_doc
 from app.menu.domain.menu import Menu
 from app.menu.infrastructure.mongo_sync import MenuReadModelSync
-from app.menu.infrastructure.orm_models import CategoryItemORM, MenuItemORM, MenuORM
+from app.menu.infrastructure.orm_models import (
+    CategoryItemORM,
+    MenuItemORM,
+    MenuORM,
+    PriceListItemORM,
+    PriceListORM,
+)
 from app.order.infrastructure.orm_models import OrderFormItemORM, OrderFormORM
 from app.payment.infrastructure.orm_models import PaymentORM
 from app.settings import get_settings
@@ -27,8 +33,8 @@ from app.shared.database import (
     init_mongo,
     init_postgres,
 )
-from app.stock.domain.measured_quantity import MeasuredQuantity
 from app.stock.domain.enums import TransactionType
+from app.stock.domain.measured_quantity import MeasuredQuantity
 from app.stock.domain.stock_item import SimpleStockItem
 from app.stock.domain.transaction import StockTransaction
 from app.stock.infrastructure.orm_models import (
@@ -176,6 +182,7 @@ async def seed() -> None:
                 category_name=cat_name,
                 station_type=station,
                 is_available=True,
+                preparation_profile="NO_PREP" if station == "BEVERAGE" else "STANDARD",
             )
             db.add(mi)
             menu_items.append(mi)
@@ -236,7 +243,7 @@ async def seed() -> None:
                 min_stock_level=min_stock,
                 is_active=True,
                 transactions=[
-                    StockTransaction(id=tx_orm.id, quantity=MeasuredQuantity(Decimal(str(initial_qty)), unit), type=TransactionType.INPUT)
+                    StockTransaction(id=tx_orm.id, quantity=MeasuredQuantity(Decimal(str(initial_qty)), unit), type=TransactionType.INPUT, reason="Seed initial stock")
                 ]
             )
             await stock_sync.sync(domain_item)
@@ -283,7 +290,6 @@ async def seed() -> None:
             name="Cardápio Barraca do Sol",
             description="Sabores tropicais e delícias à beira-mar.",
             is_active=True,
-            price_list_id=None,
         )
         db.add(menu_orm)
         await db.flush()
@@ -312,6 +318,59 @@ async def seed() -> None:
                     menu_domain.add_item_to_category(cat, mi.id)
         menu_doc = await _resolve_menu_doc(db, menu_domain)
         await MenuReadModelSync(mongo_db).sync(menu_doc)
+
+        print("Seeding PriceList with Happy Hour overrides...")
+        pl_orm = PriceListORM(
+            id=1, tenant_id="1", menu_id=1, name="Happy Hour",
+            description="Preços especiais para bebidas no happy hour (18h-20h)",
+            is_active=True,
+        )
+        db.add(pl_orm)
+        await db.flush()
+
+        # Override prices for drink items during happy hour
+        drink_overrides = [
+            (112, Decimal("12.00")),   # Caipirinha: base 18 → 12
+            (113, Decimal("15.00")),   # Caipirinha de Frutas: base 22 → 15
+            (114, Decimal("6.00")),    # Água de Coco: base 8 → 6
+            (115, Decimal("10.00")),   # Heineken: base 12 → 10
+        ]
+        for menu_item_id, happy_price in drink_overrides:
+            pli_orm = PriceListItemORM(
+                id=menu_item_id,
+                price_list_id=1,
+                menu_item_id=menu_item_id,
+                price=happy_price,
+            )
+            db.add(pli_orm)
+        await db.flush()
+
+        # Second PriceList: "Diurno" — no overrides (base prices only)
+        pl_diurno = PriceListORM(
+            id=2, tenant_id="1", menu_id=1, name="Diurno",
+            description="Preços base do cardápio (sem descontos)",
+            is_active=True,
+        )
+        db.add(pl_diurno)
+        await db.flush()
+
+        # Associate PriceList "Happy Hour" as active
+        menu_orm.active_price_list_id = 1
+        await db.flush()
+
+        # Re-sync menu to MongoDB with PriceList overrides
+        menu_domain_with_pl = Menu(
+            id=1, tenant_id="1", name="Cardápio Barraca do Sol",
+            description="Sabores tropicais e delícias à beira-mar.",
+            price_list_id=1,
+        )
+        for cat in categories:
+            for mi in menu_items:
+                if mi.category_name == cat:
+                    menu_domain_with_pl.add_item_to_category(cat, mi.id)
+        menu_doc_with_pl = await _resolve_menu_doc(db, menu_domain_with_pl)
+        await MenuReadModelSync(mongo_db).sync(menu_doc_with_pl)
+        print("PriceLists seeded and synced.")
 
         print("Seeding active orders (Salão)...")
         # In the frontend, the order_id for Table 2 is 2, Table 3 is 3, Table 4 is 4
@@ -358,23 +417,33 @@ async def seed() -> None:
         await db.flush()
 
         print("Seeding active kitchen preparation items...")
-        k_item1 = KitchenOrderItemORM(id=7001, correlation_id=60022, name_cpy="Lula à Dorê", station_type_cpy="GRILL", tenant_id="1", state="PREPARING")
-        k_item2 = KitchenOrderItemORM(id=7002, correlation_id=60023, name_cpy="Isca de Peixe Crocante", station_type_cpy="GRILL", tenant_id="1", state="WAITING")
-        k_item3 = KitchenOrderItemORM(id=7003, correlation_id=60032, name_cpy="Queijo Coalho na Brasa", station_type_cpy="GRILL", tenant_id="1", state="READY")
-        db.add(k_item1)
-        db.add(k_item2)
-        db.add(k_item3)
+        kitchen_seed_items = [
+            # Order 2 - Mesa 2
+            KitchenOrderItemORM(id=7001, correlation_id=60022, name_cpy="Lula à Dorê", station_type_cpy="GRILL", tenant_id="1", state="PREPARING", preparation_profile="STANDARD"),
+            KitchenOrderItemORM(id=7002, correlation_id=60023, name_cpy="Isca de Peixe Crocante", station_type_cpy="GRILL", tenant_id="1", state="WAITING", preparation_profile="STANDARD"),
+            KitchenOrderItemORM(id=7003, correlation_id=60032, name_cpy="Queijo Coalho na Brasa", station_type_cpy="GRILL", tenant_id="1", state="READY", preparation_profile="STANDARD"),
+            # Missing beverage items (Mesa 2 - Caipirinha, Mesa 3 - Agua de Coco, Mesa 4 - Heineken)
+            KitchenOrderItemORM(id=7004, correlation_id=60021, name_cpy="Caipirinha de Limão", station_type_cpy="BEVERAGE", tenant_id="1", state="WAITING", preparation_profile="NO_PREP"),
+            KitchenOrderItemORM(id=7005, correlation_id=60031, name_cpy="Água de Coco", station_type_cpy="BEVERAGE", tenant_id="1", state="WAITING", preparation_profile="NO_PREP"),
+            KitchenOrderItemORM(id=7006, correlation_id=60043, name_cpy="Cerveja Heineken Long Neck", station_type_cpy="BEVERAGE", tenant_id="1", state="WAITING", preparation_profile="NO_PREP"),
+            # Missing Mesa 4 GRILL items
+            KitchenOrderItemORM(id=7007, correlation_id=60041, name_cpy="Moqueca de Camarão", station_type_cpy="GRILL", tenant_id="1", state="WAITING", preparation_profile="STANDARD"),
+            KitchenOrderItemORM(id=7008, correlation_id=60042, name_cpy="Porção de Batata Frita", station_type_cpy="GRILL", tenant_id="1", state="WAITING", preparation_profile="STANDARD"),
+        ]
+        for k in kitchen_seed_items:
+            db.add(k)
         await db.flush()
 
-        # Sync active kitchen items to MongoDB "kitchen_read"
+        # Sync ALL kitchen items to MongoDB "kitchen_read"
         now = datetime.datetime.now(datetime.UTC)
-        await mongo_db["kitchen_read"].insert_many([
+        kitchen_docs = [
             {
                 "kitchen_item_id": 7001,
                 "correlation_id": 60022,
                 "tenant_id": "1",
                 "name_cpy": "Lula à Dorê",
                 "station_type_cpy": "GRILL",
+                "preparation_profile": "STANDARD",
                 "state": "PREPARING",
                 "started_at": now,
                 "completed_at": None,
@@ -386,6 +455,7 @@ async def seed() -> None:
                 "tenant_id": "1",
                 "name_cpy": "Isca de Peixe Crocante",
                 "station_type_cpy": "GRILL",
+                "preparation_profile": "STANDARD",
                 "state": "WAITING",
                 "started_at": None,
                 "completed_at": None,
@@ -397,12 +467,74 @@ async def seed() -> None:
                 "tenant_id": "1",
                 "name_cpy": "Queijo Coalho na Brasa",
                 "station_type_cpy": "GRILL",
+                "preparation_profile": "STANDARD",
                 "state": "READY",
-                "started_at": now,
-                "completed_at": now,
+                "started_at": None,
+                "completed_at": None,
                 "created_at": now,
-            }
-        ])
+            },
+            {
+                "kitchen_item_id": 7004,
+                "correlation_id": 60021,
+                "tenant_id": "1",
+                "name_cpy": "Caipirinha de Limão",
+                "station_type_cpy": "BEVERAGE",
+                "preparation_profile": "NO_PREP",
+                "state": "WAITING",
+                "started_at": None,
+                "completed_at": None,
+                "created_at": now,
+            },
+            {
+                "kitchen_item_id": 7005,
+                "correlation_id": 60031,
+                "tenant_id": "1",
+                "name_cpy": "Água de Coco",
+                "station_type_cpy": "BEVERAGE",
+                "preparation_profile": "NO_PREP",
+                "state": "WAITING",
+                "started_at": None,
+                "completed_at": None,
+                "created_at": now,
+            },
+            {
+                "kitchen_item_id": 7006,
+                "correlation_id": 60043,
+                "tenant_id": "1",
+                "name_cpy": "Cerveja Heineken Long Neck",
+                "station_type_cpy": "BEVERAGE",
+                "preparation_profile": "NO_PREP",
+                "state": "WAITING",
+                "started_at": None,
+                "completed_at": None,
+                "created_at": now,
+            },
+            {
+                "kitchen_item_id": 7007,
+                "correlation_id": 60041,
+                "tenant_id": "1",
+                "name_cpy": "Moqueca de Camarão",
+                "station_type_cpy": "GRILL",
+                "preparation_profile": "STANDARD",
+                "state": "WAITING",
+                "started_at": None,
+                "completed_at": None,
+                "created_at": now,
+            },
+            {
+                "kitchen_item_id": 7008,
+                "correlation_id": 60042,
+                "tenant_id": "1",
+                "name_cpy": "Porção de Batata Frita",
+                "station_type_cpy": "GRILL",
+                "preparation_profile": "STANDARD",
+                "state": "WAITING",
+                "started_at": None,
+                "completed_at": None,
+                "created_at": now,
+            },
+        ]
+        await mongo_db["kitchen_read"].insert_many(kitchen_docs)
 
         print("Seeding past closed orders and payments (Analytics history)...")
         methods = ["PIX", "CREDIT_CARD", "DEBIT_CARD", "CASH"]

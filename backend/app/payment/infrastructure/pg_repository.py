@@ -28,11 +28,16 @@ class SQLAlchemyPaymentRepository:
         return self._map_to_domain(orm)
 
     async def find_by_order(self, order_id: int, tenant_id: str) -> Payment | None:
-        stmt = select(PaymentORM).where(
-            PaymentORM.order_id == order_id, PaymentORM.tenant_id == tenant_id
+        stmt = (
+            select(PaymentORM)
+            .where(
+                PaymentORM.order_id == order_id,
+                PaymentORM.tenant_id == tenant_id,
+            )
+            .order_by(PaymentORM.id.desc())
         )
         result = await self._session.execute(stmt)
-        orm = result.scalar_one_or_none()
+        orm = result.scalars().first()
         if not orm:
             return None
         return self._map_to_domain(orm)

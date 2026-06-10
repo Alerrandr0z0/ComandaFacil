@@ -376,7 +376,7 @@ export default function TableGrid({
     setIsOpening(tableNumber)
     try {
       const res = await httpClient.post<OrderForm>('/v1/order', {
-        id: tableNumber,
+        display_code: `MESA-${String(tableNumber).padStart(2, '0')}`,
         fulfillment_type: 'TABLE',
         table_number: tableNumber,
       })

@@ -1,12 +1,23 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from enum import Enum
 from typing import TYPE_CHECKING, Final
 
 from app.menu.domain.category import Category
 
 if TYPE_CHECKING:
     from app.shared.money import Money
+
+
+class PreparationProfile(Enum):
+    """Defines the preparation lifecycle for a menu item."""
+
+    NO_PREP = "NO_PREP"  # Waiting → Ready directly (e.g., bottled drinks)
+    STANDARD = "STANDARD"  # Waiting → Preparing → Ready (cooked items)
+
+    def __repr__(self) -> str:
+        return f"PreparationProfile.{self.name}"
 
 
 class MenuItem:
@@ -25,6 +36,7 @@ class MenuItem:
         category_name: str,
         image_url: str | None = None,
         is_available: bool = True,
+        preparation_profile: PreparationProfile = PreparationProfile.STANDARD,
     ) -> None:
         self.id: Final[int] = id
         self.tenant_id: Final[str] = tenant_id
@@ -35,6 +47,7 @@ class MenuItem:
         self.category_name: str = category_name
         self.image_url: str | None = image_url
         self.is_available: bool = is_available
+        self.preparation_profile: Final[PreparationProfile] = preparation_profile
 
     def update_availability(self, is_available: bool) -> None:
         self.is_available = is_available

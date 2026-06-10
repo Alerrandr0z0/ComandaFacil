@@ -97,6 +97,7 @@ ignore = [
     "ANN401", # allow Any in type annotations when explicitly needed
     "TRY003", # allow custom strings inside Standard exception constructors (e.g. HTTPException)
     "S101",   # assert statements allowed (also managed in per-file-ignores)
+    "S110",   # try-except-pass allowed for best-effort background tasks
     "B008",   # allow Depends() defaults for FastAPI DI
     "A002",   # allow using 'id' as argument name
     "E501",   # allow line length warnings

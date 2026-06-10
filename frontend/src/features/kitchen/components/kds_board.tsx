@@ -11,6 +11,8 @@ interface KitchenItem {
   state: 'WAITING' | 'PREPARING' | 'READY' | 'CANCELLED'
   tenant_id: string
   kitchen_item_id?: number
+  preparation_profile?: 'STANDARD' | 'NO_PREP'
+  notes?: string
 }
 
 interface KdsColumnProps {
@@ -21,6 +23,7 @@ interface KdsColumnProps {
   showCancel?: boolean
   actionLabel?: string
   onAction?: (itemId: number) => void
+  onReady?: (itemId: number) => void
   onCancel?: (itemId: number) => void
   seenTimestamps: Record<number, number>
 }
@@ -30,6 +33,7 @@ function KdsItemCard({
   showCancel,
   actionLabel,
   onAction,
+  onReady,
   onCancel,
   startTime,
 }: {
@@ -37,6 +41,7 @@ function KdsItemCard({
   showCancel?: boolean
   actionLabel?: string
   onAction?: (itemId: number) => void
+  onReady?: (itemId: number) => void
   onCancel?: (itemId: number) => void
   startTime: number
 }) {
@@ -71,6 +76,11 @@ function KdsItemCard({
             Ref ID: #{item.id}
           </span>
           <h4 className="text-sm font-bold text-white">{item.name_cpy}</h4>
+          {item.notes && (
+            <span className="text-[10px] italic text-brand-400 font-medium block">
+              Obs: {item.notes}
+            </span>
+          )}
         </div>
         <div
           className={`flex items-center gap-1 text-[10px] font-bold ${isWarning ? 'text-rose-400' : 'text-gray-400'}`}
@@ -94,19 +104,37 @@ function KdsItemCard({
         {actionLabel && onAction && (
           <button
             type="button"
-            onClick={() => onAction(item.id)}
+            onClick={() => {
+              if (item.state === 'WAITING' && item.preparation_profile === 'NO_PREP' && onReady) {
+                onReady(item.id)
+              } else {
+                onAction(item.id)
+              }
+            }}
             className={`flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold text-white transition-all duration-300 active:scale-[0.98] ${
               item.state === 'WAITING'
-                ? 'bg-amber-500 hover:bg-amber-600 shadow-md shadow-amber-500/10'
+                ? item.preparation_profile === 'NO_PREP'
+                  ? 'bg-brand-500 hover:bg-brand-600 shadow-md shadow-brand-500/10'
+                  : 'bg-amber-500 hover:bg-amber-600 shadow-md shadow-amber-500/10'
                 : 'bg-brand-500 hover:bg-brand-600 shadow-md shadow-brand-500/10'
             }`}
           >
-            {item.state === 'WAITING' ? (
-              <Play className="h-3.5 w-3.5 fill-current" />
+            {item.state === 'WAITING' && item.preparation_profile === 'NO_PREP' ? (
+              <>
+                <Check className="h-3.5 w-3.5" />
+                <span>Pronto</span>
+              </>
+            ) : item.state === 'WAITING' ? (
+              <>
+                <Play className="h-3.5 w-3.5 fill-current" />
+                <span>{actionLabel}</span>
+              </>
             ) : (
-              <Check className="h-3.5 w-3.5" />
+              <>
+                <Check className="h-3.5 w-3.5" />
+                <span>{actionLabel}</span>
+              </>
             )}
-            <span>{actionLabel}</span>
           </button>
         )}
       </div>
@@ -122,6 +150,7 @@ function KdsColumn({
   showCancel = false,
   actionLabel,
   onAction,
+  onReady,
   onCancel,
   seenTimestamps,
 }: KdsColumnProps) {
@@ -149,6 +178,7 @@ function KdsColumn({
               showCancel={showCancel}
               actionLabel={actionLabel}
               onAction={onAction}
+              onReady={onReady}
               onCancel={onCancel}
               startTime={seenTimestamps[item.id] || Date.now()}
             />
@@ -215,27 +245,49 @@ export default function KdsBoard() {
     const host = window.location.host
     const wsUrl = `${protocol}//${host}/api/v1/kitchen/ws?station_type=${stationType}&tenant_id=${tenantId}`
 
-    const ws = new WebSocket(wsUrl)
-    wsRef.current = ws
+    let retries = 0
+    const maxRetries = 10
+    let retryTimer: ReturnType<typeof setTimeout> | null = null
+    let ws: WebSocket | null = null
+    let disconnected = false
 
-    ws.onopen = () => {
-      setConnected(true)
+    const connect = () => {
+      if (disconnected) return
+
+      ws = new WebSocket(wsUrl)
+      wsRef.current = ws
+
+      ws.onopen = () => {
+        retries = 0
+        setConnected(true)
+      }
+
+      ws.onmessage = () => {
+        fetchItems()
+      }
+
+      ws.onerror = () => {
+        setConnected(false)
+      }
+
+      ws.onclose = () => {
+        setConnected(false)
+        if (disconnected) return
+
+        retries += 1
+        if (retries <= maxRetries) {
+          const delay = Math.min(1000 * 2 ** retries, 30000)
+          retryTimer = setTimeout(connect, delay)
+        }
+      }
     }
 
-    ws.onmessage = () => {
-      fetchItems()
-    }
-
-    ws.onerror = (_err) => {
-      setConnected(false)
-    }
-
-    ws.onclose = () => {
-      setConnected(false)
-    }
+    connect()
 
     return () => {
-      ws.close()
+      disconnected = true
+      if (retryTimer) clearTimeout(retryTimer)
+      if (ws) ws.close()
       wsRef.current = null
     }
   }, [stationType, tenantId, fetchItems])
@@ -347,6 +399,7 @@ export default function KdsBoard() {
             showCancel={true}
             actionLabel="Preparar"
             onAction={handlePrepare}
+            onReady={handleReady}
             onCancel={handleCancel}
             seenTimestamps={seenTimestamps}
           />

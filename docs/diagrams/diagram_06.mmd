@@ -1,0 +1,7 @@
+stateDiagram-v2
+    [*] --> PENDING : create_payment()
+    PENDING --> CONFIRMED : confirm(gateway_ref)
+    PENDING --> FAILED : fail(reason)
+    CONFIRMED --> REFUNDED : refund()
+    FAILED --> [*]
+    REFUNDED --> [*]

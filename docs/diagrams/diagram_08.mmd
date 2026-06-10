@@ -1,0 +1,27 @@
+sequenceDiagram
+    participant Client as Frontend
+    participant Route as API Route
+    participant Deps as Dependencies
+    participant Handler as Command Handler
+    participant Domain as Aggregate Root
+    participant Repo as Repository
+    participant DB as PostgreSQL
+    participant BG as BackgroundTask
+    participant Sync as Sync Class
+    participant Mongo as MongoDB
+
+    Client->>Route: POST /order/{id}/items
+    Route->>Deps: Resolve DbSession, TenantId, Employee
+    Deps->>Route: session, tenant_id, employee
+    Route->>Handler: AddOrderItemCommand(...)
+    Handler->>Domain: order.add_item(item)
+    Domain->>Domain: Valida regras de negócio
+    Domain->>Domain: Emite DomainEvent
+    Handler->>Repo: save(order)
+    Repo->>DB: INSERT/UPDATE (ACID)
+    DB-->>Repo: commit OK
+    Handler->>BG: add_task(_notify_kitchen, ...)
+    BG-->>Sync: sync(item)
+    Sync->>Mongo: upsert(collection, doc)
+    Handler-->>Route: OrderFormItem
+    Route-->>Client: 201 Created

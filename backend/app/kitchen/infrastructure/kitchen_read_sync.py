@@ -15,29 +15,30 @@ class KitchenReadModelSync:
 
     async def sync(self, item: KitchenOrderItem) -> None:
         now = datetime.datetime.now(datetime.UTC)
-        started_at: datetime.datetime | None = None
-        completed_at: datetime.datetime | None = None
-
         state = item.state.name
-        if state in ("PREPARING", "READY", "CANCELLED"):
-            started_at = now
-        if state in ("READY", "CANCELLED"):
-            completed_at = now
 
-        doc = {
-            "kitchen_item_id": item.id,
+        is_preparing = state in ("PREPARING", "READY", "CANCELLED")
+        is_final = state in ("READY", "CANCELLED")
+
+        set_fields: dict[str, object] = {
             "correlation_id": item.correlation_id,
-            "tenant_id": item.tenant_id,
             "name_cpy": item.name_cpy,
             "station_type_cpy": item.station_type_cpy,
+            "preparation_profile": item.preparation_profile,
+            "notes": item.notes,
             "state": state,
-            "started_at": started_at,
-            "completed_at": completed_at,
-            "created_at": now,
+            "tenant_id": item.tenant_id,
         }
 
-        await self._collection.replace_one(
+        if is_final:
+            set_fields["completed_at"] = now
+
+        set_on_insert: dict[str, object] = {}
+        if is_preparing:
+            set_on_insert["started_at"] = now
+
+        await self._collection.update_one(
             {"kitchen_item_id": item.id, "tenant_id": item.tenant_id},
-            doc,
+            {"$set": set_fields, "$setOnInsert": set_on_insert},
             upsert=True,
         )

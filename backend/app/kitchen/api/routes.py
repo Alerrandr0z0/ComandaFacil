@@ -127,7 +127,7 @@ async def websocket_endpoint(
                     },
                 }
             )
-    except Exception:  # noqa: S110
+    except Exception:
         pass
 
     try:

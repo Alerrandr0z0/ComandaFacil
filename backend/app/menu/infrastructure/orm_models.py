@@ -17,8 +17,8 @@ class MenuORM(Base):
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
-    price_list_id: Mapped[int | None] = mapped_column(
-        ForeignKey("price_lists.id", ondelete="SET NULL"), nullable=True
+    active_price_list_id: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
     )
 
     category_items: Mapped[list[CategoryItemORM]] = relationship(
@@ -26,7 +26,7 @@ class MenuORM(Base):
     )
 
     def __repr__(self) -> str:
-        return f"MenuORM(id={self.id}, name={self.name!r}, active={self.is_active}, price_list_id={self.price_list_id})"
+        return f"MenuORM(id={self.id}, name={self.name!r}, active={self.is_active}, active_price_list_id={self.active_price_list_id})"
 
 
 class MenuItemORM(Base):
@@ -41,6 +41,7 @@ class MenuItemORM(Base):
     category_name: Mapped[str] = mapped_column(String(100), nullable=False)
     image_url: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_available: Mapped[bool] = mapped_column(Boolean, default=True)
+    preparation_profile: Mapped[str] = mapped_column(String(50), nullable=False, default="STANDARD")
 
     def __repr__(self) -> str:
         return f"MenuItemORM(id={self.id}, name={self.name!r}, base_price={self.base_price})"
@@ -69,6 +70,9 @@ class PriceListORM(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    menu_id: Mapped[int] = mapped_column(
+        ForeignKey("menus.id", ondelete="CASCADE"), nullable=False
+    )
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     description: Mapped[str] = mapped_column(Text, default="")
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)

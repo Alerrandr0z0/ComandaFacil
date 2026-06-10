@@ -1,0 +1,25 @@
+graph TB
+    subgraph "Kitchen Display (Frontend)"
+        KDS["KDS Board<br/>(React Component)"]
+        WS_CLIENT["WebSocket Client"]
+    end
+
+    subgraph "Backend"
+        WS_EP["WebSocket Endpoint<br/>/api/v1/kitchen/ws"]
+        WS_MGR["KdsWebSocketManager<br/>(Singleton)"]
+        CMD["Command Handlers"]
+    end
+
+    subgraph "Data Sources"
+        PG["PostgreSQL<br/>(write)"]
+        MONGO["MongoDB<br/>(read)"]
+    end
+
+    KDS -->|"Connect"| WS_CLIENT
+    WS_CLIENT -->|"ws://host/ws?station=GRILL"| WS_EP
+    WS_EP -->|"Register"| WS_MGR
+    WS_MGR -->|"Push: ITEM_RECEIVED<br/>ITEM_PREPARING<br/>ITEM_READY<br/>ITEM_CANCELLED"| WS_CLIENT
+
+    CMD -->|"state change"| WS_MGR
+    CMD -->|"sync"| MONGO
+    KDS -->|"GET /kitchen/items"| MONGO

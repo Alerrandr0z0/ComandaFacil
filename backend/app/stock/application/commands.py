@@ -16,7 +16,6 @@ if TYPE_CHECKING:
 
 @dataclass(frozen=True)
 class CreateStockItemCommand:
-    id: int
     tenant_id: str
     name: str
     category: str
@@ -35,7 +34,7 @@ class CreateStockItemHandler:
             raise ConflictError(f"Item de estoque '{command.name}' já existe.")
 
         item = SimpleStockItem(
-            id=command.id,
+            id=0,
             tenant_id=command.tenant_id,
             name=command.name,
             category=command.category,
@@ -85,7 +84,7 @@ class StockService:
         item_id: int,
         quantity: Decimal,
         tenant_id: str,
-        reason: str = "",  # noqa: ARG002
+        reason: str = "",
     ) -> None:
         item = await self._item_repo.find_by_id(item_id, tenant_id)
         if not item:
@@ -100,6 +99,7 @@ class StockService:
             id=0,
             quantity=MeasuredQuantity(quantity, unit),
             type=TransactionType.OUTPUT,
+            reason=reason,
         )
         item.add_transaction(tx)
         await self._item_repo.save(item)
@@ -108,8 +108,9 @@ class StockService:
         self,
         item_id: int,
         quantity: Decimal,
-        reason: str | int,  # noqa: ARG002
         tenant_id: str,
+        reason: str = "",
+        transaction_type: TransactionType = TransactionType.ADJUSTMENT,
     ) -> None:
         item = await self._item_repo.find_by_id(item_id, tenant_id)
         if not item:
@@ -119,7 +120,8 @@ class StockService:
         tx = StockTransaction(
             id=0,
             quantity=MeasuredQuantity(quantity, unit),
-            type=TransactionType.ADJUSTMENT,
+            type=transaction_type,
+            reason=reason,
         )
         item.add_transaction(tx)
         await self._item_repo.save(item)
@@ -129,7 +131,7 @@ class StockService:
         item_id: int,
         quantity: Decimal,
         tenant_id: str,
-        reason: str = "",  # noqa: ARG002
+        reason: str = "",
     ) -> None:
         item = await self._item_repo.find_by_id(item_id, tenant_id)
         if not item:
@@ -144,6 +146,7 @@ class StockService:
             id=0,
             quantity=MeasuredQuantity(quantity, unit),
             type=TransactionType.WASTE,
+            reason=reason,
         )
         item.add_transaction(tx)
         await self._item_repo.save(item)

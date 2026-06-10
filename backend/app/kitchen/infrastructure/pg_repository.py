@@ -68,6 +68,8 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
             orm.station_type_cpy = item.station_type_cpy
             orm.tenant_id = item.tenant_id
             orm.state = item.state.name
+            orm.preparation_profile = item.preparation_profile
+            orm.notes = item.notes
         else:
             orm = KitchenOrderItemORM(
                 id=item.id,
@@ -76,6 +78,8 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
                 station_type_cpy=item.station_type_cpy,
                 tenant_id=item.tenant_id,
                 state=item.state.name,
+                preparation_profile=item.preparation_profile,
+                notes=item.notes,
             )
             self._session.add(orm)
 
@@ -88,6 +92,8 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
             name_cpy=orm.name_cpy,
             station_type_cpy=orm.station_type_cpy,
             tenant_id=orm.tenant_id,
+            preparation_profile=orm.preparation_profile,
+            notes=orm.notes or "",
         )
         # Map state string back to pure domain state objects
         state_map = {

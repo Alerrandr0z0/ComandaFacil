@@ -20,6 +20,7 @@ class OrderReadModelSync:
         doc: dict[str, Any] = {
             "order_id": order.id,
             "tenant_id": order.tenant_id,
+            "display_code": order.display_code,
             "total": total,
             "items": [
                 {

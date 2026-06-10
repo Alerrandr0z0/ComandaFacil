@@ -30,24 +30,24 @@ if TYPE_CHECKING:
 @pytest.fixture
 async def sqlite_session() -> AsyncGenerator[AsyncSession, None]:
     """In-memory SQLite session with all database schemas generated."""
-    import app.shared.database
+    from app.shared import database as _database
 
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    sf = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
 
     # Monkeypatch global database session factory to point to our test SQLite database
-    old_factory = app.shared.database.session_factory
-    app.shared.database.session_factory = session_factory
+    old_factory = _database.session_factory
+    _database.session_factory = sf
 
-    async with session_factory() as session:
+    async with sf() as session:
         yield session
         await session.rollback()
 
     # Restore the original factory after tests complete
-    app.shared.database.session_factory = old_factory
+    _database.session_factory = old_factory
     await engine.dispose()
 
 
@@ -148,7 +148,7 @@ async def test_kds_http_lifecycle_endpoints_success(
     await repo.save(item)
     await sqlite_session.commit()
 
-    # Sync to Mongo read model (since the test writes directly to Postgres)
+    # Sync to Mongo read model using the mock DB from the fixture
     from app.kitchen.infrastructure.kitchen_read_sync import KitchenReadModelSync
 
     await KitchenReadModelSync(_KITCHEN_MOCK[0]).sync(item)

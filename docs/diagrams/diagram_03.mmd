@@ -1,0 +1,27 @@
+classDiagram
+    class IFulfillmentStrategy {
+        <<interface>>
+        +calculate_fee() Money
+        +name: str
+    }
+    class Table {
+        +table_num: int
+        +calculate_fee() Money
+        +name: str = "TABLE"
+    }
+    class Takeaway {
+        +customer_name: str
+        +calculate_fee() Money
+        +name: str = "TAKEAWAY"
+    }
+    class Delivery {
+        +address: Address
+        +estimated_time: int
+        +tracking_code: int
+        +state: IDeliveryState
+        +calculate_fee() Money
+        +name: str = "DELIVERY"
+    }
+    IFulfillmentStrategy <|.. Table
+    IFulfillmentStrategy <|.. Takeaway
+    IFulfillmentStrategy <|.. Delivery

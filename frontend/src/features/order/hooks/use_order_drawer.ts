@@ -19,6 +19,8 @@ export interface OrderFulfillment {
   delivery_state_name?: string | null
 }
 
+export type OrderItemStatus = 'WAITING' | 'PREPARING' | 'READY' | 'DELIVERED' | 'CANCELED'
+
 export interface OrderItem {
   id: number
   menu_item_id: number
@@ -27,11 +29,13 @@ export interface OrderItem {
   quantity: number
   notes: string
   subtotal: number
+  status: OrderItemStatus
 }
 
 export interface OrderForm {
   id: number
   tenant_id: string
+  display_code: string
   state: 'OPEN' | 'PAID' | 'CLOSED'
   payment_requested: boolean
   total: number
@@ -41,6 +45,7 @@ export interface OrderForm {
 
 export interface OpenTableOptions {
   fulfillment_type: 'TABLE' | 'TAKEAWAY' | 'DELIVERY'
+  display_code?: string
   table_number?: number | null
   customer_name?: string
   delivery_street?: string
@@ -76,10 +81,20 @@ function buildDeliveryPayload(options: OpenTableOptions): Record<string, unknown
 }
 
 function buildCreatePayload(options?: OpenTableOptions): Record<string, unknown> {
-  if (!options) return { fulfillment_type: 'TABLE' }
-  if (options.fulfillment_type === 'TABLE') return buildTablePayload(options)
-  if (options.fulfillment_type === 'TAKEAWAY') return buildTakeawayPayload(options)
-  return buildDeliveryPayload(options)
+  let payload: Record<string, unknown>
+  if (!options) {
+    payload = { fulfillment_type: 'TABLE' }
+  } else if (options.fulfillment_type === 'TABLE') {
+    payload = buildTablePayload(options)
+  } else if (options.fulfillment_type === 'TAKEAWAY') {
+    payload = buildTakeawayPayload(options)
+  } else {
+    payload = buildDeliveryPayload(options)
+  }
+  if (options?.display_code) {
+    payload.display_code = options.display_code
+  }
+  return payload
 }
 
 export interface DraftItem {
@@ -89,18 +104,9 @@ export interface DraftItem {
   price: number
 }
 
-// Helper price lookup based on ID
 const getItemPrice = (item: MenuItem): number => {
-  try {
-    const pricesStr = localStorage.getItem('cf_menu_item_prices')
-    if (pricesStr) {
-      const prices = JSON.parse(pricesStr)
-      if (prices[item.id] !== undefined) {
-        return Number(prices[item.id])
-      }
-    }
-  } catch (_e) {
-    // Ignore and fallback
+  if (item.price !== undefined && item.price !== null) {
+    return Number(item.price)
   }
   const base = 12.0
   const offset = (item.id % 6) * 5.5
@@ -120,7 +126,7 @@ const getStationType = (item: MenuItem): string => {
   return 'GRILL'
 }
 
-export function useOrderDrawer() {
+export function useOrderDrawer(onOrderChanged?: () => void) {
   const { data: activeMenu } = useActiveMenu()
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null)
   const [activeOrder, setActiveOrder] = useState<OrderForm | null>(null)
@@ -186,6 +192,7 @@ export function useOrderDrawer() {
       setActiveOrder(res.data)
       setSelectedOrderId(res.data.id)
       setDraft([])
+      onOrderChanged?.()
       return res.data
     } catch (err) {
       alert('Falha ao criar a comanda. Tente novamente.')
@@ -247,6 +254,7 @@ export function useOrderDrawer() {
       const finalRes = await httpClient.get<OrderForm>(`/v1/order/${activeOrder.id}`)
       setActiveOrder(finalRes.data)
       setDraft([])
+      onOrderChanged?.()
       return finalRes.data
     } catch (err) {
       alert('Falha ao enviar pedidos para a cozinha.')
@@ -262,6 +270,7 @@ export function useOrderDrawer() {
     try {
       const res = await httpClient.post<OrderForm>(`/v1/order/${activeOrder.id}/request-payment`)
       setActiveOrder(res.data)
+      onOrderChanged?.()
       return res.data
     } catch (err) {
       alert('Erro ao solicitar a conta.')
@@ -291,6 +300,7 @@ export function useOrderDrawer() {
       // 2. Confirm order transition to PAID
       const res = await httpClient.post<OrderForm>(`/v1/order/${activeOrder.id}/process-payment`)
       setActiveOrder(res.data)
+      onOrderChanged?.()
       return res.data
     } catch (err) {
       alert('Erro ao processar o pagamento.')
@@ -308,6 +318,7 @@ export function useOrderDrawer() {
       setActiveOrder(null)
       setSelectedOrderId(null)
       setDraft([])
+      onOrderChanged?.()
       return res.data
     } catch (err) {
       alert('Erro ao fechar a comanda.')
@@ -325,6 +336,7 @@ export function useOrderDrawer() {
       setActiveOrder(null)
       setSelectedOrderId(null)
       setDraft([])
+      onOrderChanged?.()
       return res.data
     } catch (err) {
       alert('Erro ao cancelar a comanda.')

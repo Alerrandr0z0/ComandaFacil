@@ -84,7 +84,6 @@ class SQLAlchemyStockItemRepository:
             orm.unit = unit
         else:
             orm = StockItemORM(
-                id=item.id,
                 tenant_id=item.tenant_id,
                 name=item.name,
                 category=item.category,
@@ -96,6 +95,8 @@ class SQLAlchemyStockItemRepository:
             self._session.add(orm)
 
         await self._session.flush()
+        if item.id == 0:
+            item.id = orm.id
 
         # Save relationships for composite items
         if isinstance(item, CompositeStockItem):
@@ -128,6 +129,7 @@ class SQLAlchemyStockItemRepository:
                     transaction_type=tx.type.value,
                     quantity_value=tx.quantity.value,
                     quantity_unit=tx.quantity.unit,
+                    reason=tx.reason,
                     occurred_at=tx.occurred_at,
                 )
                 self._session.add(tx_orm)
@@ -158,6 +160,7 @@ class SQLAlchemyStockItemRepository:
                 id=t.id,
                 quantity=MeasuredQuantity(t.quantity_value, t.quantity_unit),
                 type=TransactionType(t.transaction_type),
+                reason=t.reason,
                 occurred_at=t.occurred_at,
             )
             for t in tx_orms

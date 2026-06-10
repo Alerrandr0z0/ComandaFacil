@@ -1,8 +1,11 @@
 import {
   ArrowRight,
+  Check,
   Edit2,
+  Link2,
   Plus,
   Sparkles,
+  Star,
   ToggleLeft,
   ToggleRight,
   Trash2,
@@ -30,44 +33,139 @@ interface Menu {
   items: MenuItem[]
 }
 
+interface PriceListSummary {
+  id: number
+  menu_id: number
+  name: string
+  description: string
+  is_active: boolean
+  is_active_for_menu: boolean
+  valid_from: string
+  valid_until: string | null
+  items: Array<{ id: number; menu_item_id: number; price: number }>
+}
+
+async function fetchCatalogItems(menuItems: MenuItem[]): Promise<MenuItem[]> {
+  const res = await httpClient.get<MenuItem[]>('/v1/menu/items')
+  const usedIds = new Set(menuItems.map((i) => i.id))
+  return res.data.filter((item) => !usedIds.has(item.id))
+}
+
+async function linkItemToMenu(menuId: number, itemId: number, category: string): Promise<void> {
+  await httpClient.post(`/v1/menu/${menuId}/link-item`, { item_id: itemId, category })
+}
+
+async function deleteMenu(
+  menuId: number,
+  selectedId: number | null,
+  onClearSelected: () => void,
+  onRefresh: () => void,
+): Promise<void> {
+  if (!window.confirm('Deseja realmente remover este cardápio permanentemente?')) return
+  try {
+    await httpClient.delete(`/v1/menu/${menuId}`)
+    if (selectedId === menuId) onClearSelected()
+    onRefresh()
+  } catch (_err) {
+    alert('Erro ao remover o cardápio.')
+  }
+}
+
+// biome-ignore lint/complexity/noExcessiveCognitiveComplexity: page-level component with many states/modals; pre-existing
 export default function MenuManagerPage() {
   const [menus, setMenus] = useState<Menu[]>([])
-  const [selectedMenu, setSelectedMenu] = useState<Menu | null>(null)
+  const [selectedMenuId, setSelectedMenuId] = useState<number | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isCreatingMenu, setIsCreatingMenu] = useState(false)
-  const [isAddingItem, setIsAddingItem] = useState(false)
   const [editingItem, setEditingItem] = useState<MenuItem | null>(null)
   const [editingPriceValue, setEditingPriceValue] = useState('')
+
+  const [basePrices, setBasePrices] = useState<Record<number, number>>({})
+  const [priceLists, setPriceLists] = useState<PriceListSummary[]>([])
+  const [showPriceLists, setShowPriceLists] = useState(false)
+  const [isCreatingPriceList, setIsCreatingPriceList] = useState(false)
+  const [newPriceListName, setNewPriceListName] = useState('')
+  const [isLinkingItem, setIsLinkingItem] = useState(false)
+  const [catalogItems, setCatalogItems] = useState<MenuItem[]>([])
+  const [linkSearchQuery, setLinkSearchQuery] = useState('')
+  const [linkCategory, setLinkCategory] = useState('Pratos')
 
   // Menu form state
   const [newMenuName, setNewMenuName] = useState('')
   const [newMenuDesc, setNewMenuDesc] = useState('')
 
-  // Item form state
-  const [newItemName, setNewItemName] = useState('')
-  const [newItemDesc, setNewItemDesc] = useState('')
-  const [newItemCategory, setNewItemCategory] = useState('Pratos')
-  const [newItemPrice, setNewItemPrice] = useState('25.90')
-  const [newItemImageUrl, setNewItemImageUrl] = useState('')
+  const selectedMenu = menus.find((m) => m.id === selectedMenuId) || null
+
+  const fetchPriceLists = useCallback(async () => {
+    if (!selectedMenuId) return
+    try {
+      const res = await httpClient.get<PriceListSummary[]>(`/v1/menu/${selectedMenuId}/price-lists`)
+      setPriceLists(res.data)
+    } catch (_err) {
+      // silent
+    }
+  }, [selectedMenuId])
+
+  useEffect(() => {
+    fetchPriceLists()
+  }, [fetchPriceLists])
+
+  const handleActivatePriceList = async (priceListId: number) => {
+    if (!selectedMenuId) return
+    try {
+      await httpClient.put(`/v1/menu/${selectedMenuId}/activate-price-list/${priceListId}`)
+      fetchMenus()
+      fetchPriceLists()
+    } catch (_err) {
+      alert('Erro ao ativar lista de preços.')
+    }
+  }
+
+  const handleCreatePriceList = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!selectedMenuId || !newPriceListName.trim()) return
+    const plId = Math.floor(Math.random() * 1000000000)
+    try {
+      await httpClient.post(`/v1/menu/${selectedMenuId}/price-lists`, {
+        id: plId,
+        name: newPriceListName,
+      })
+      setNewPriceListName('')
+      setIsCreatingPriceList(false)
+      fetchPriceLists()
+    } catch (_err) {
+      alert('Erro ao criar lista de preços.')
+    }
+  }
+
+  const fetchBasePrices = useCallback(async () => {
+    try {
+      const res = await httpClient.get<MenuItem[]>('/v1/menu/items')
+      const map: Record<number, number> = {}
+      for (const item of res.data) {
+        map[item.id] = Number(item.price ?? 0)
+      }
+      setBasePrices(map)
+    } catch (_err) {
+      // silent — fallback to resolved price
+    }
+  }, [])
 
   const fetchMenus = useCallback(async () => {
     setIsLoading(true)
     try {
       const res = await httpClient.get<Menu[]>('/v1/menu')
       setMenus(res.data)
-      if (selectedMenu) {
-        const updated = res.data.find((m) => m.id === selectedMenu.id)
-        if (updated) setSelectedMenu(updated)
-      }
     } catch (_err) {
     } finally {
       setIsLoading(false)
     }
-  }, [selectedMenu])
+  }, [])
 
   useEffect(() => {
     fetchMenus()
-  }, [fetchMenus])
+    fetchBasePrices()
+  }, [fetchMenus, fetchBasePrices])
 
   const handleCreateMenu = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -100,59 +198,8 @@ export default function MenuManagerPage() {
     }
   }
 
-  const handleDeleteMenu = async (menuId: number) => {
-    if (!window.confirm('Deseja realmente remover este cardápio permanentemente?')) return
-    try {
-      await httpClient.delete(`/v1/menu/${menuId}`)
-      if (selectedMenu?.id === menuId) setSelectedMenu(null)
-      fetchMenus()
-    } catch (_err) {
-      alert('Erro ao remover o cardápio.')
-    }
-  }
-
-  const handleAddItem = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!selectedMenu || !newItemName.trim() || !newItemCategory.trim()) return
-
-    const newId = Math.floor(Math.random() * 1000000000)
-    const priceNum = parseFloat(newItemPrice)
-    const stationType =
-      newItemCategory === 'Bebidas' || newItemCategory === 'Bebidas Alcoólicas'
-        ? 'BEVERAGE'
-        : 'GRILL'
-
-    try {
-      await httpClient.post(`/v1/menu/${selectedMenu.id}/items`, {
-        id: newId,
-        name: newItemName,
-        description: newItemDesc,
-        category: newItemCategory,
-        base_price: priceNum,
-        station_type: stationType,
-        image_url: newItemImageUrl.trim() || null,
-        is_available: true,
-      })
-
-      // Store custom price locally
-      if (!Number.isNaN(priceNum) && priceNum >= 0) {
-        const pricesStr = localStorage.getItem('cf_menu_item_prices') || '{}'
-        const prices = JSON.parse(pricesStr)
-        prices[newId] = priceNum
-        localStorage.setItem('cf_menu_item_prices', JSON.stringify(prices))
-      }
-
-      setNewItemName('')
-      setNewItemDesc('')
-      setNewItemCategory('Pratos')
-      setNewItemPrice('25.90')
-      setNewItemImageUrl('')
-      setIsAddingItem(false)
-      fetchMenus()
-    } catch (_err) {
-      alert('Erro ao adicionar o prato.')
-    }
-  }
+  const handleDeleteMenu = (menuId: number) =>
+    deleteMenu(menuId, selectedMenuId, () => setSelectedMenuId(null), fetchMenus)
 
   const handleDeleteItem = async (itemId: number) => {
     if (!selectedMenu || !window.confirm('Deseja remover este prato do cardápio?')) return
@@ -164,13 +211,21 @@ export default function MenuManagerPage() {
     }
   }
 
+  const getBasePrice = (itemId: number): number | undefined => basePrices[itemId]
+
+  const hasOverridePrice = (item: MenuItem): boolean => {
+    const base = getBasePrice(item.id)
+    if (base === undefined) return false
+    return (
+      item.price !== undefined && item.price !== null && Math.abs(Number(item.price) - base) > 0.001
+    )
+  }
+
   const getItemPrice = (item: MenuItem): number => {
     if (item.price !== undefined && item.price !== null) {
       return Number(item.price)
     }
-    const base = 12.0
-    const offset = (item.id % 6) * 5.5
-    return base + offset
+    return getBasePrice(item.id) ?? 0
   }
 
   const handleEditPrice = async (e: React.FormEvent) => {
@@ -189,8 +244,52 @@ export default function MenuManagerPage() {
       setEditingItem(null)
       setEditingPriceValue('')
       fetchMenus()
+      fetchBasePrices()
     } catch (_err) {
       alert('Erro ao atualizar o preço do item.')
+    }
+  }
+
+  const handleClearPrice = async () => {
+    if (!selectedMenu || !editingItem) return
+    if (
+      !window.confirm(
+        `Remover o preço especial de "${editingItem.name}"? O valor voltará ao preço base do catálogo.`,
+      )
+    )
+      return
+    try {
+      await httpClient.delete(`/v1/menu/${selectedMenu.id}/items/${editingItem.id}/price`)
+      setEditingItem(null)
+      setEditingPriceValue('')
+      fetchMenus()
+      fetchBasePrices()
+    } catch (_err) {
+      alert('Erro ao remover o preço especial.')
+    }
+  }
+
+  const handleOpenLink = async () => {
+    if (!selectedMenu) return
+    try {
+      const items = await fetchCatalogItems(selectedMenu.items)
+      setCatalogItems(items)
+      setIsLinkingItem(true)
+      setLinkSearchQuery('')
+      setLinkCategory('Pratos')
+    } catch (_err) {
+      alert('Erro ao carregar itens do catálogo.')
+    }
+  }
+
+  const handleLinkItem = async (item: MenuItem) => {
+    if (!selectedMenu) return
+    try {
+      await linkItemToMenu(selectedMenu.id, item.id, linkCategory)
+      setIsLinkingItem(false)
+      fetchMenus()
+    } catch (_err) {
+      alert('Erro ao vincular item ao cardápio.')
     }
   }
 
@@ -204,7 +303,7 @@ export default function MenuManagerPage() {
               Gestão de Cardápios
             </h2>
             <p className="text-xs text-gray-550 font-medium mt-0.5">
-              Crie cardápios dinâmicos e gerencie a oferta de produtos da sua franquia
+              Organize quais produtos compõem cada cardápio
             </p>
           </div>
           <button
@@ -245,10 +344,10 @@ export default function MenuManagerPage() {
                   // biome-ignore lint/a11y/useSemanticElements: custom card container requires interactive div
                   <div
                     key={menu.id}
-                    onClick={() => setSelectedMenu(menu)}
+                    onClick={() => setSelectedMenuId(menu.id)}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
-                        setSelectedMenu(menu)
+                        setSelectedMenuId(menu.id)
                       }
                     }}
                     role="button"
@@ -333,25 +432,25 @@ export default function MenuManagerPage() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setIsAddingItem(true)}
-                    className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-bold text-brand-400 border border-brand-500/10 hover:border-brand-500/20 transition flex items-center gap-1"
+                    onClick={handleOpenLink}
+                    className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-bold text-emerald-400 border border-emerald-500/10 hover:border-emerald-500/20 transition flex items-center gap-1"
                   >
-                    <Plus className="h-3.5 w-3.5" />
-                    Adicionar Prato
+                    <Link2 className="h-3.5 w-3.5" />
+                    Vincular Existente
                   </button>
                 </div>
 
                 {selectedMenu.items.length === 0 ? (
                   <div className="py-20 text-center space-y-3">
                     <p className="text-xs text-gray-500 italic">
-                      Nenhum item cadastrado neste cardápio.
+                      Nenhum item vinculado a este cardápio.
                     </p>
                     <button
                       type="button"
-                      onClick={() => setIsAddingItem(true)}
-                      className="mx-auto rounded-lg bg-gray-900 px-3 py-1.5 text-[10px] font-bold text-brand-400 border border-brand-500/10 hover:bg-gray-850 transition"
+                      onClick={handleOpenLink}
+                      className="mx-auto rounded-lg bg-gray-900 px-3 py-1.5 text-[10px] font-bold text-emerald-400 border border-emerald-500/10 hover:bg-gray-850 transition"
                     >
-                      Adicionar Primeiro Prato
+                      Vincular Item do Catálogo
                     </button>
                   </div>
                 ) : (
@@ -374,7 +473,14 @@ export default function MenuManagerPage() {
                         )}
 
                         <div className="flex-1 min-w-0 pr-6">
-                          <h5 className="text-xs font-bold text-gray-200 truncate">{item.name}</h5>
+                          <h5 className="text-xs font-bold text-gray-200 truncate flex items-center gap-1.5">
+                            {item.name}
+                            {hasOverridePrice(item) && (
+                              <span className="text-[8px] font-extrabold uppercase text-brand-400 px-1 py-0.5 rounded-full bg-brand-500/10 border border-brand-500/20">
+                                Preço Especial
+                              </span>
+                            )}
+                          </h5>
                           <p className="text-[10px] text-gray-550 mt-0.5 line-clamp-1">
                             {item.description || 'Sem descrição.'}
                           </p>
@@ -383,9 +489,20 @@ export default function MenuManagerPage() {
                               {item.category}
                             </span>
                             <div className="flex items-center gap-1.5">
-                              <span className="text-xs font-black text-amber-500">
-                                R$ {getItemPrice(item).toFixed(2)}
-                              </span>
+                              {hasOverridePrice(item) ? (
+                                <div className="flex items-center gap-1 text-[10px]">
+                                  <span className="text-gray-600 line-through">
+                                    R$ {getBasePrice(item.id)?.toFixed(2)}
+                                  </span>
+                                  <span className="text-xs font-black text-amber-500">
+                                    R$ {getItemPrice(item).toFixed(2)}
+                                  </span>
+                                </div>
+                              ) : (
+                                <span className="text-xs font-black text-amber-500">
+                                  R$ {getItemPrice(item).toFixed(2)}
+                                </span>
+                              )}
                               <button
                                 type="button"
                                 onClick={() => {
@@ -405,7 +522,7 @@ export default function MenuManagerPage() {
                           type="button"
                           onClick={() => handleDeleteItem(item.id)}
                           className="absolute right-3 bottom-3 text-gray-600 hover:text-rose-500 opacity-0 group-hover:opacity-100 transition-all p-1"
-                          title="Remover Prato"
+                          title="Desvincular Prato"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </button>
@@ -421,6 +538,136 @@ export default function MenuManagerPage() {
             )}
           </div>
         </div>
+
+        {/* PriceList section */}
+        {selectedMenu && (
+          <div className="border border-gray-900/60 rounded-2xl bg-gray-950/10 p-5 backdrop-blur-md glass-card">
+            <button
+              type="button"
+              onClick={() => setShowPriceLists(!showPriceLists)}
+              className="w-full flex items-center justify-between text-left"
+            >
+              <div className="flex items-center gap-2">
+                <Star
+                  className={`h-4 w-4 ${showPriceLists ? 'text-brand-400' : 'text-gray-600'}`}
+                />
+                <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-300">
+                  Preços Especiais
+                </h3>
+                {priceLists.length > 0 && (
+                  <span className="text-[9px] text-gray-500 bg-gray-900 px-2 py-0.5 rounded-full">
+                    {priceLists.length} lista{priceLists.length !== 1 ? 's' : ''}
+                  </span>
+                )}
+              </div>
+              <span className="text-[10px] text-gray-600">{showPriceLists ? '▲' : '▼'}</span>
+            </button>
+
+            {showPriceLists && (
+              <div className="mt-4 space-y-3 border-t border-gray-900/40 pt-4">
+                {priceLists.length === 0 && !isCreatingPriceList ? (
+                  <div className="text-center py-4">
+                    <p className="text-[10px] text-gray-500 italic mb-3">
+                      Nenhuma lista de preços especial. Crie uma para definir preços diferenciados.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => setIsCreatingPriceList(true)}
+                      className="rounded-lg bg-gray-900 px-3 py-1.5 text-[10px] font-bold text-brand-400 border border-brand-500/10 hover:bg-gray-850 transition"
+                    >
+                      Criar Lista de Preços
+                    </button>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {priceLists.map((pl) => (
+                      <div
+                        key={pl.id}
+                        className={`p-3 rounded-xl border transition ${
+                          pl.is_active_for_menu
+                            ? 'border-brand-500/30 bg-brand-950/10'
+                            : 'border-gray-900/60 bg-gray-950/20 hover:border-gray-800'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2 min-w-0">
+                            {pl.is_active_for_menu ? (
+                              <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                            ) : (
+                              <div className="h-3.5 w-3.5 shrink-0" />
+                            )}
+                            <span className="text-xs font-bold text-gray-200 truncate">
+                              {pl.name}
+                            </span>
+                            {pl.is_active_for_menu && (
+                              <span className="text-[8px] font-extrabold uppercase text-emerald-400 px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
+                                Ativo
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-[9px] text-gray-600">
+                              {pl.items.length} item{pl.items.length !== 1 ? 'ns' : ''}
+                            </span>
+                            {!pl.is_active_for_menu && (
+                              <button
+                                type="button"
+                                onClick={() => handleActivatePriceList(pl.id)}
+                                className="text-[9px] font-bold text-brand-400 hover:text-brand-300 px-2 py-1 rounded border border-gray-800 hover:border-brand-500/30 transition"
+                              >
+                                Ativar
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                        {pl.description && (
+                          <p className="text-[9px] text-gray-600 mt-1 ml-5.5">{pl.description}</p>
+                        )}
+                      </div>
+                    ))}
+
+                    {isCreatingPriceList ? (
+                      <form onSubmit={handleCreatePriceList} className="flex gap-2 pt-1">
+                        <input
+                          type="text"
+                          required
+                          placeholder="Ex: Happy Hour, Fim de Semana..."
+                          value={newPriceListName}
+                          onChange={(e) => setNewPriceListName(e.target.value)}
+                          className="flex-1 rounded-lg px-3 py-1.5 text-[10px] text-white glass-input"
+                        />
+                        <button
+                          type="submit"
+                          className="rounded-lg bg-brand-500 hover:bg-brand-600 px-3 py-1.5 text-[10px] font-bold text-white transition"
+                        >
+                          Criar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setIsCreatingPriceList(false)
+                            setNewPriceListName('')
+                          }}
+                          className="rounded-lg border border-gray-800 px-3 py-1.5 text-[10px] font-bold text-gray-400 transition"
+                        >
+                          Cancelar
+                        </button>
+                      </form>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => setIsCreatingPriceList(true)}
+                        className="w-full mt-1 rounded-lg border border-dashed border-gray-800 hover:border-gray-700 py-2 text-[10px] font-bold text-gray-500 hover:text-gray-300 transition"
+                      >
+                        + Nova Lista de Preços
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Modal: Create Menu */}
         {isCreatingMenu && (
@@ -485,115 +732,6 @@ export default function MenuManagerPage() {
           </div>
         )}
 
-        {/* Modal: Add Menu Item */}
-        {isAddingItem && selectedMenu && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
-            <form
-              onSubmit={handleAddItem}
-              className="w-full max-w-sm rounded-2xl glass-elevated p-6 space-y-4"
-            >
-              <div>
-                <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                  Adicionar Item a {selectedMenu.name}
-                </h3>
-                <p className="text-xs text-gray-550 mt-1">Insira os detalhes do prato ou bebida</p>
-              </div>
-
-              <div className="space-y-3">
-                <div className="space-y-1.5">
-                  <span className="block text-[10px] uppercase font-extrabold text-gray-400">
-                    Nome do Item
-                  </span>
-                  <input
-                    type="text"
-                    required
-                    placeholder="Ex: Filé Mignon Grelhado"
-                    value={newItemName}
-                    onChange={(e) => setNewItemName(e.target.value)}
-                    className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
-                  />
-                </div>
-
-                <div className="space-y-1.5">
-                  <span className="block text-[10px] uppercase font-extrabold text-gray-400">
-                    Descrição do Item
-                  </span>
-                  <input
-                    type="text"
-                    placeholder="Ex: Acompanha arroz, batatas e farofa"
-                    value={newItemDesc}
-                    onChange={(e) => setNewItemDesc(e.target.value)}
-                    className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-1.5">
-                    <span className="block text-[10px] uppercase font-extrabold text-gray-400">
-                      Categoria
-                    </span>
-                    <select
-                      value={newItemCategory}
-                      onChange={(e) => setNewItemCategory(e.target.value)}
-                      className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input bg-[#0b0b11]"
-                    >
-                      <option value="Entradas">Entradas</option>
-                      <option value="Pratos">Pratos</option>
-                      <option value="Bebidas">Bebidas</option>
-                      <option value="Bebidas Alcoólicas">Bebidas Alcoólicas</option>
-                      <option value="Sobremesas">Sobremesas</option>
-                    </select>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <span className="block text-[10px] uppercase font-extrabold text-gray-400">
-                      Preço (R$)
-                    </span>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      placeholder="29.90"
-                      value={newItemPrice}
-                      onChange={(e) => setNewItemPrice(e.target.value)}
-                      className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-1.5">
-                  <span className="block text-[10px] uppercase font-extrabold text-gray-400">
-                    URL da Imagem (Opcional)
-                  </span>
-                  <input
-                    type="url"
-                    placeholder="Ex: https://imagens.com/prato.jpg"
-                    value={newItemImageUrl}
-                    onChange={(e) => setNewItemImageUrl(e.target.value)}
-                    className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
-                  />
-                </div>
-              </div>
-
-              <div className="flex gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAddingItem(false)}
-                  className="flex-1 rounded-xl border border-gray-850 hover:bg-white/[0.02] py-2.5 text-xs font-bold text-gray-400 transition"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="flex-1 rounded-xl bg-brand-500 hover:bg-brand-600 py-2.5 text-xs font-bold text-white transition"
-                >
-                  Adicionar Item
-                </button>
-              </div>
-            </form>
-          </div>
-        )}
-
         {/* Modal: Edit Item Price */}
         {editingItem && (
           <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
@@ -603,16 +741,24 @@ export default function MenuManagerPage() {
             >
               <div>
                 <h3 className="text-sm font-bold text-white uppercase tracking-wider">
-                  Alterar Preço do Item
+                  Preço Especial
                 </h3>
                 <p className="text-xs text-gray-550 mt-1">
-                  Defina o novo preço para <strong>{editingItem.name}</strong> no cardápio ativo.
+                  Defina um preço especial para <strong>{editingItem.name}</strong> neste cardápio.
                 </p>
+                {getBasePrice(editingItem.id) !== undefined && (
+                  <p className="text-[10px] text-gray-600 mt-1">
+                    Preço base no catálogo:{' '}
+                    <span className="font-bold text-gray-400">
+                      R$ {getBasePrice(editingItem.id)?.toFixed(2)}
+                    </span>
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
                 <span className="block text-[10px] uppercase font-extrabold text-gray-400">
-                  Preço (R$)
+                  Preço Especial (R$)
                 </span>
                 <input
                   type="number"
@@ -643,7 +789,125 @@ export default function MenuManagerPage() {
                   Salvar Preço
                 </button>
               </div>
+
+              {hasOverridePrice(editingItem) && (
+                <div className="border-t border-gray-900 pt-3">
+                  <button
+                    type="button"
+                    onClick={handleClearPrice}
+                    className="w-full rounded-xl border border-rose-500/20 hover:bg-rose-950/10 py-2 text-xs font-bold text-rose-400 transition"
+                  >
+                    Remover Preço Especial
+                  </button>
+                </div>
+              )}
             </form>
+          </div>
+        )}
+
+        {/* Modal: Link Existing Item */}
+        {isLinkingItem && selectedMenu && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+            <div className="w-full max-w-lg rounded-2xl glass-elevated p-6 space-y-4 max-h-[90vh] overflow-y-auto">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                    <Link2 className="h-4 w-4 text-emerald-400" />
+                    Vincular Item Existente
+                  </h3>
+                  <p className="text-[10px] text-gray-500 font-medium mt-0.5">
+                    Selecione um item do catálogo para vincular a {selectedMenu.name}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsLinkingItem(false)}
+                  className="rounded-lg border border-gray-800 hover:bg-white/[0.03] px-3 py-1.5 text-[10px] font-bold text-gray-400 transition"
+                >
+                  Fechar
+                </button>
+              </div>
+
+              {catalogItems.length === 0 ? (
+                <div className="border border-dashed border-gray-850 rounded-xl p-8 text-center">
+                  <p className="text-xs text-gray-500 italic">
+                    Todos os itens do catálogo já estão vinculados a este cardápio.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Buscar item no catálogo..."
+                    value={linkSearchQuery}
+                    onChange={(e) => setLinkSearchQuery(e.target.value)}
+                    className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+                  />
+
+                  <div className="space-y-1.5">
+                    <span className="block text-[10px] uppercase font-extrabold text-gray-400">
+                      Vincular como categoria
+                    </span>
+                    <select
+                      value={linkCategory}
+                      onChange={(e) => setLinkCategory(e.target.value)}
+                      className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input bg-[#0b0b11]"
+                    >
+                      <option value="Entradas">Entradas</option>
+                      <option value="Pratos">Pratos</option>
+                      <option value="Bebidas">Bebidas</option>
+                      <option value="Bebidas Alcoólicas">Bebidas Alcoólicas</option>
+                      <option value="Sobremesas">Sobremesas</option>
+                    </select>
+                  </div>
+
+                  <div className="space-y-2 max-h-64 overflow-y-auto">
+                    {catalogItems
+                      .filter(
+                        (item) =>
+                          !linkSearchQuery ||
+                          item.name.toLowerCase().includes(linkSearchQuery.toLowerCase()),
+                      )
+                      .map((item) => (
+                        <button
+                          key={item.id}
+                          type="button"
+                          onClick={() => handleLinkItem(item)}
+                          className="w-full flex items-center gap-3 p-3 rounded-xl border border-gray-900/60 bg-gray-950/20 hover:bg-white/[0.02] text-left transition"
+                        >
+                          {item.image_url ? (
+                            <img
+                              src={item.image_url}
+                              alt={item.name}
+                              className="w-10 h-10 rounded-lg object-cover bg-gray-900 border border-gray-850"
+                            />
+                          ) : (
+                            <div className="w-10 h-10 rounded-lg bg-gray-900 border border-gray-850 flex items-center justify-center text-gray-600">
+                              <Sparkles className="h-4 w-4" />
+                            </div>
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <span className="text-xs font-bold text-gray-200 truncate block">
+                              {item.name}
+                            </span>
+                            <span className="text-[9px] text-gray-500">
+                              {item.description || 'Sem descrição.'}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-[9px] uppercase font-bold text-brand-400 px-1.5 py-0.5 rounded bg-brand-500/5 border border-brand-500/10">
+                              {item.category}
+                            </span>
+                            <span className="text-[10px] font-bold text-amber-500">
+                              R$ {Number(item.price ?? 0).toFixed(2)}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>

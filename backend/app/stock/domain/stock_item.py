@@ -24,7 +24,7 @@ class StockItem(ABC):
         is_active: bool = True,
         transactions: list[StockTransaction] | None = None,
     ) -> None:
-        self.id: Final[int] = id
+        self.id: int = id
         self.tenant_id: Final[str] = tenant_id
         self.name: str = name
         self.category: str = category
@@ -126,30 +126,17 @@ class CompositeStockItem(StockItem):
     def add_component(self, item: StockItem) -> None:
         self.components.append(item)
 
+    def add_transaction(self, tx: StockTransaction) -> None:  # noqa: ARG002
+        raise ValueError(
+            "Transações diretas não são permitidas em itens compostos. "
+            "Ajuste os componentes individualmente."
+        )
+
     def get_balance(self) -> MeasuredQuantity:
-        # Aggregate components balance
+        # Balance is ALWAYS derived purely from children — no ledger on the composite itself
         balance = MeasuredQuantity(Decimal("0"), self.unit)
         for comp in self.components:
             balance = balance.add(comp.get_balance())
-
-        # Apply its own transaction ledger (if any)
-        sorted_txs = sorted(self.transactions, key=lambda tx: tx.occurred_at)
-        latest_adjustment = None
-        adj_idx = -1
-        for i, tx in enumerate(sorted_txs):
-            if tx.type == TransactionType.ADJUSTMENT:
-                latest_adjustment = tx
-                adj_idx = i
-
-        if latest_adjustment:
-            balance = latest_adjustment.quantity
-
-        for tx in sorted_txs[adj_idx + 1 :]:
-            if tx.type in (TransactionType.INPUT, TransactionType.PRODUCTION):
-                balance = balance.add(tx.quantity)
-            elif tx.type in (TransactionType.OUTPUT, TransactionType.WASTE):
-                balance = balance.subtract(tx.quantity)
-
         return balance
 
 

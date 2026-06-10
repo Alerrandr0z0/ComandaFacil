@@ -3,10 +3,16 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import joinedload, selectinload
 
 from app.menu.domain.category import Category, CategoryItem
-from app.menu.domain.menu import Menu, MenuItem, MenuItemRepository, MenuRepository
+from app.menu.domain.menu import (
+    Menu,
+    MenuItem,
+    MenuItemRepository,
+    MenuRepository,
+    PreparationProfile,
+)
 from app.menu.domain.price_list import PriceList, PriceListItem, PriceListRepository
 from app.menu.infrastructure.orm_models import (
     CategoryItemORM,
@@ -60,7 +66,7 @@ class SQLAlchemyMenuRepository(MenuRepository):
             orm.name = menu.name
             orm.description = menu.description
             orm.is_active = menu.is_active
-            orm.price_list_id = menu.price_list_id
+            orm.active_price_list_id = menu.price_list_id
             orm.category_items.clear()
         else:
             orm = MenuORM(
@@ -69,7 +75,7 @@ class SQLAlchemyMenuRepository(MenuRepository):
                 name=menu.name,
                 description=menu.description,
                 is_active=menu.is_active,
-                price_list_id=menu.price_list_id,
+                active_price_list_id=menu.price_list_id,
             )
             self._session.add(orm)
 
@@ -99,7 +105,7 @@ class SQLAlchemyMenuRepository(MenuRepository):
             name=orm.name,
             description=orm.description,
             is_active=orm.is_active,
-            price_list_id=orm.price_list_id,
+            price_list_id=orm.active_price_list_id,
         )
         categories_map: dict[str, list[CategoryItem]] = {}
         for item_orm in orm.category_items:
@@ -144,6 +150,7 @@ class SQLAlchemyMenuItemRepository(MenuItemRepository):
             orm.category_name = item.category_name
             orm.image_url = item.image_url
             orm.is_available = item.is_available
+            orm.preparation_profile = item.preparation_profile.value
         else:
             orm = MenuItemORM(
                 id=item.id,
@@ -155,6 +162,7 @@ class SQLAlchemyMenuItemRepository(MenuItemRepository):
                 category_name=item.category_name,
                 image_url=item.image_url,
                 is_available=item.is_available,
+                preparation_profile=item.preparation_profile.value,
             )
             self._session.add(orm)
         await self._session.flush()
@@ -178,6 +186,7 @@ class SQLAlchemyMenuItemRepository(MenuItemRepository):
             category_name=orm.category_name,
             image_url=orm.image_url,
             is_available=orm.is_available,
+            preparation_profile=PreparationProfile(orm.preparation_profile),
         )
 
 
@@ -237,6 +246,7 @@ class SQLAlchemyPriceListRepository(PriceListRepository):
             orm = PriceListORM(
                 id=price_list.id,
                 tenant_id=price_list.tenant_id,
+                menu_id=price_list.menu_id,
                 name=price_list.name,
                 description=price_list.description,
                 is_active=price_list.is_active,
@@ -266,10 +276,25 @@ class SQLAlchemyPriceListRepository(PriceListRepository):
             await self._session.delete(orm)
             await self._session.flush()
 
+    async def find_by_menu_id(self, menu_id: int, tenant_id: str) -> list[PriceList]:
+        stmt = (
+            select(PriceListORM)
+            .options(selectinload(PriceListORM.items))
+            .where(
+                PriceListORM.menu_id == menu_id,
+                PriceListORM.tenant_id == tenant_id,
+            )
+            .order_by(PriceListORM.id)
+        )
+        result = await self._session.execute(stmt)
+        orms = result.scalars().all()
+        return [self._map_to_domain(orm) for orm in orms]
+
     def _map_to_domain(self, orm: PriceListORM) -> PriceList:
         pl = PriceList(
             id=orm.id,
             tenant_id=orm.tenant_id,
+            menu_id=orm.menu_id,
             name=orm.name,
             description=orm.description,
             is_active=orm.is_active,

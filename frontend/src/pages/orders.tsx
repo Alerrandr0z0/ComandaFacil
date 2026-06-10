@@ -7,7 +7,8 @@ import { useOrderDrawer } from '@/features/order/hooks/use_order_drawer'
 import Layout from '@/shared/components/layout'
 
 export default function OrdersPage() {
-  const drawer = useOrderDrawer()
+  const [refreshKey, setRefreshKey] = useState(0)
+  const drawer = useOrderDrawer(() => setRefreshKey((k) => k + 1))
   const { readyItems, dismissReadyItem } = useKitchenAlerts()
   const [activeOrdersCount, setActiveOrdersCount] = useState(0)
 
@@ -28,6 +29,7 @@ export default function OrdersPage() {
             onDismissReadyItem={dismissReadyItem}
             onNewOrder={drawer.openNewOrderDrawer}
             onActiveOrdersCount={setActiveOrdersCount}
+            refreshKey={refreshKey}
           />
         </div>
 

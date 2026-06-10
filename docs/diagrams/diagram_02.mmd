@@ -1,0 +1,8 @@
+stateDiagram-v2
+    [*] --> Open : create_order()
+    Open --> Open : add_item()
+    Open --> Open : request_payment()
+    Open --> Paid : process_payment()
+    Open --> Closed : cancel()
+    Paid --> Closed : deliver()
+    Closed --> [*]

@@ -60,6 +60,7 @@ class StockTransactionORM(Base):
     transaction_type: Mapped[str] = mapped_column(String(20), nullable=False)
     quantity_value: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
     quantity_unit: Mapped[str] = mapped_column(String(20), nullable=False)
+    reason: Mapped[str] = mapped_column(String(500), nullable=False, default="")
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )

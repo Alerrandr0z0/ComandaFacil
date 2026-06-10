@@ -90,7 +90,6 @@ async def test_create_stock_item_when_new_then_creates_successfully(
 ) -> None:
     handler = CreateStockItemHandler(item_repo)
     command = CreateStockItemCommand(
-        id=1,
         tenant_id="franquia_001",
         name="Coca-Cola",
         category="BEVERAGE",
@@ -112,7 +111,6 @@ async def test_create_stock_item_when_duplicate_name_then_raises(
 ) -> None:
     handler = CreateStockItemHandler(item_repo)
     command = CreateStockItemCommand(
-        id=2,
         tenant_id="franquia_001",
         name="Farinha",
         category="RAW_MATERIAL",
@@ -163,7 +161,7 @@ async def test_stock_service_adjust(
     service = StockService(item_repo, recipe_repo)
     await service.add_input(1, Decimal("10"), "franquia_001")
 
-    await service.adjust(1, Decimal("15"), "Ajuste físico", "franquia_001")
+    await service.adjust(1, Decimal("15"), "franquia_001", reason="Ajuste físico")
 
     assert existing_item.get_balance().value == Decimal("15")
 

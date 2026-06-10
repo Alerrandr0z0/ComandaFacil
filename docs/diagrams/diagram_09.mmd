@@ -1,0 +1,41 @@
+sequenceDiagram
+    participant C as Waiter (Frontend)
+    participant API as FastAPI
+    participant OrderCtx as Order Context
+    participant MenuCtx as Menu Context
+    participant KitchenCtx as Kitchen Context
+    participant PG as PostgreSQL
+    participant Mongo as MongoDB
+
+    Note over C,Mongo: 1. Criar Pedido
+    C->>API: POST /order
+    API->>OrderCtx: CreateOrderHandler.handle()
+    OrderCtx->>PG: INSERT order_forms
+    PG-->>OrderCtx: commit OK
+    OrderCtx-->>API: OrderForm
+    API-->>C: 201 Created
+
+    Note over C,Mongo: 2. Adicionar Item ao Pedido
+    C->>API: POST /order/{id}/items
+    API->>OrderCtx: AddOrderItemHandler.handle()
+    OrderCtx->>PG: INSERT order_form_items
+    OrderCtx->>OrderCtx: order.add_item() + snapshot dados
+    PG-->>OrderCtx: commit OK
+
+    Note over C,Mongo: 3. Background: Notificar Cozinha
+    OrderCtx-->>BG: BackgroundTask(_notify_kitchen)
+    BG->>MenuCtx: Busca MenuItem (station_type, profile)
+    MenuCtx-->>BG: MenuItem com preparation_profile
+    BG->>KitchenCtx: KitchenService.receive_item()
+    KitchenCtx->>PG: INSERT kitchen_order_items
+    KitchenCtx->>KitchenCtx: broadcast(ITEM_RECEIVED)
+    KitchenCtx->>Mongo: upsert(kitchen_read, doc)
+    BG-->>API: done
+    API-->>C: 201 Created
+
+    Note over C,Mongo: 4. Cozinha Processa
+    C->>API: PATCH /kitchen/items/{id}/prepare
+    API->>KitchenCtx: PrepareKitchenItemHandler.handle()
+    KitchenCtx->>PG: UPDATE kitchen_order_items SET state='PREPARING'
+    KitchenCtx->>KitchenCtx: broadcast(ITEM_PREPARING)
+    KitchenCtx->>Mongo: upsert(kitchen_read, {state: "PREPARING"})

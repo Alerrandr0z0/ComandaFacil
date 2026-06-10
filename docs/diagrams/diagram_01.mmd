@@ -1,0 +1,209 @@
+erDiagram
+    %% === AUTH CONTEXT ===
+    tenants {
+        int id PK
+        varchar name
+        varchar plan_type
+        boolean is_active
+    }
+
+    employees {
+        int id PK
+        varchar name
+        varchar email
+        varchar password_hash
+        boolean is_active
+    }
+
+    user_tenant_roles {
+        int id PK
+        int employee_id FK
+        int tenant_id FK
+        varchar role_type
+    }
+
+    sessions {
+        varchar session_id PK
+        int employee_id FK
+        int tenant_id FK
+        datetime expires_at
+    }
+
+    %% === MENU CONTEXT ===
+    menus {
+        int id PK
+        int tenant_id
+        varchar name
+        text description
+        boolean is_active
+        int price_list_id FK
+    }
+
+    menu_items {
+        int id PK
+        int tenant_id
+        varchar name
+        text description
+        decimal base_price
+        varchar station_type
+        varchar category_name
+        varchar image_url
+        boolean is_available
+        varchar preparation_profile
+    }
+
+    category_items {
+        int menu_id FK
+        varchar category_name
+        int menu_item_id FK
+    }
+
+    price_lists {
+        int id PK
+        int tenant_id
+        varchar name
+        text description
+        boolean is_active
+        datetime valid_from
+        datetime valid_until
+    }
+
+    price_list_items {
+        int id PK
+        int price_list_id FK
+        int menu_item_id FK
+        decimal price
+    }
+
+    %% === ORDER CONTEXT ===
+    order_forms {
+        int id PK
+        int tenant_id
+        varchar state
+        boolean payment_requested
+        varchar fulfillment_type
+        int table_number
+        varchar customer_name
+        text delivery_street
+        varchar delivery_number
+        varchar delivery_neighborhood
+        varchar delivery_city
+        varchar delivery_state
+        varchar delivery_postal_code
+        int delivery_estimated_time
+        int delivery_tracking_code
+        varchar delivery_state_name
+    }
+
+    order_form_items {
+        int id PK
+        int order_id FK
+        int menu_item_id
+        varchar name_cpy
+        decimal price_cpy
+        varchar station_type_cpy
+        int quantity
+        text notes
+        decimal subtotal
+        varchar status
+    }
+
+    %% === KITCHEN CONTEXT ===
+    kitchen_order_items {
+        int id PK
+        int correlation_id
+        varchar name_cpy
+        varchar station_type_cpy
+        varchar tenant_id
+        varchar state
+    }
+
+    kitchen_stations {
+        int id PK
+        int tenant_id
+        varchar station_type
+        boolean is_active
+    }
+
+    %% === PAYMENT CONTEXT ===
+    payments {
+        int id PK
+        int order_id
+        int tenant_id
+        decimal amount
+        varchar method
+        varchar status
+        varchar gateway_ref
+        text failure_reason
+        datetime created_at
+    }
+
+    %% === STOCK CONTEXT ===
+    stock_items {
+        int id PK
+        int tenant_id
+        varchar name
+        varchar category
+        varchar unit
+        float min_stock_level
+        boolean is_active
+        varchar item_type
+    }
+
+    stock_transactions {
+        int id PK
+        int stock_item_id FK
+        varchar type
+        decimal quantity
+        varchar unit
+        text reason
+        datetime occurred_at
+    }
+
+    composite_stock_item_relations {
+        int id PK
+        int parent_item_id FK
+        int child_item_id FK
+    }
+
+    recipes {
+        int id PK
+        int menu_item_id
+        int tenant_id
+    }
+
+    recipe_ingredients {
+        int id PK
+        int recipe_id FK
+        int stock_item_id FK
+        decimal quantity
+        varchar unit
+    }
+
+    %% === RELATIONSHIPS ===
+    tenants ||--o{ user_tenant_roles : "has"
+    employees ||--o{ user_tenant_roles : "has"
+    tenants ||--o{ sessions : "has"
+    employees ||--o{ sessions : "creates"
+
+    tenants ||--o{ menus : "owns"
+    menus ||--o{ category_items : "contains"
+    menu_items ||--o{ category_items : "belongs_to"
+    menus ||--o| price_lists : "linked_to"
+    price_lists ||--o{ price_list_items : "contains"
+    menu_items ||--o{ price_list_items : "overridden_in"
+
+    tenants ||--o{ order_forms : "owns"
+    order_forms ||--o{ order_form_items : "contains"
+
+    tenants ||--o{ kitchen_order_items : "owns"
+    tenants ||--o{ kitchen_stations : "has"
+
+    order_forms ||--o{ payments : "has"
+
+    tenants ||--o{ stock_items : "owns"
+    stock_items ||--o{ stock_transactions : "has_ledger"
+    stock_items ||--o{ composite_stock_item_relations : "parent_of"
+    stock_items ||--o{ composite_stock_item_relations : "child_of"
+    recipes ||--o{ recipe_ingredients : "contains"
+    stock_items ||--o{ recipe_ingredients : "used_in"

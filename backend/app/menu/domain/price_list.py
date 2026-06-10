@@ -4,7 +4,15 @@ import datetime
 from abc import ABC, abstractmethod
 from typing import TYPE_CHECKING, Final
 
+from app.menu.domain.price_list_events import (
+    PriceListCreated,
+    PriceListItemAdded,
+    PriceListItemRemoved,
+    PriceListItemUpdated,
+)
+
 if TYPE_CHECKING:
+    from app.shared.domain_events import DomainEvent
     from app.shared.money import Money
 
 
@@ -67,6 +75,7 @@ class PriceList:
         self,
         id: int,
         tenant_id: str,
+        menu_id: int,
         name: str,
         description: str = "",
         is_active: bool = True,
@@ -75,24 +84,62 @@ class PriceList:
     ) -> None:
         self.id: Final[int] = id
         self.tenant_id: Final[str] = tenant_id
+        self.menu_id: Final[int] = menu_id
         self.name: str = name
         self.description: str = description
         self.is_active: bool = is_active
         self.valid_from: datetime.datetime = valid_from or datetime.datetime.now(datetime.UTC)
         self.valid_until: datetime.datetime | None = valid_until
         self.items: list[PriceListItem] = []
+        self._events: list[DomainEvent] = []
+        self._events.append(PriceListCreated(price_list_id=id, tenant_id=tenant_id, name=name))
+
+    def collect_events(self) -> list[DomainEvent]:
+        events = list(self._events)
+        self._events.clear()
+        return events
 
     def add_item(self, item: PriceListItem) -> None:
         if any(existing.menu_item_id == item.menu_item_id for existing in self.items):
             raise ValueError(f"Item de menu {item.menu_item_id} já possui preço nesta lista.")
         self.items.append(item)
+        self._events.append(
+            PriceListItemAdded(
+                price_list_id=self.id,
+                menu_item_id=item.menu_item_id,
+                price_amount=float(str(item.price.amount)),
+                tenant_id=self.tenant_id,
+            )
+        )
 
     def remove_item(self, menu_item_id: int) -> None:
-        for i, item in enumerate(self.items):
-            if item.menu_item_id == menu_item_id:
-                self.items.pop(i)
-                return
-        raise ValueError(f"Item de menu {menu_item_id} não encontrado nesta lista de preços.")
+        removed_item = next((i for i in self.items if i.menu_item_id == menu_item_id), None)
+        if not removed_item:
+            raise ValueError(f"Item de menu {menu_item_id} não encontrado nesta lista de preços.")
+        self.items.remove(removed_item)
+        self._events.append(
+            PriceListItemRemoved(
+                price_list_id=self.id,
+                menu_item_id=menu_item_id,
+                tenant_id=self.tenant_id,
+            )
+        )
+
+    def update_item_price(self, menu_item_id: int, new_price: Money) -> None:
+        item = next((i for i in self.items if i.menu_item_id == menu_item_id), None)
+        if not item:
+            raise ValueError(f"Item de menu {menu_item_id} não encontrado nesta lista de preços.")
+        old_price = float(str(item.price.amount))
+        item.update_price(new_price)
+        self._events.append(
+            PriceListItemUpdated(
+                price_list_id=self.id,
+                menu_item_id=menu_item_id,
+                old_price_amount=old_price,
+                new_price_amount=float(str(new_price.amount)),
+                tenant_id=self.tenant_id,
+            )
+        )
 
     def get_price(self, menu_item_id: int) -> Money | None:
         for item in self.items:

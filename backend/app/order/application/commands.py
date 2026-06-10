@@ -21,6 +21,7 @@ class CreateOrderCommand:
     tenant_id: str
     fulfillment_type: str
     id: int | None = None
+    display_code: str | None = None
     table_number: int | None = None
     customer_name: str | None = None
     delivery_street: str | None = None
@@ -40,10 +41,12 @@ class CreateOrderHandler:
     def __init__(self, order_repo: OrderRepository) -> None:
         self._order_repo: Final[OrderRepository] = order_repo
 
-    def _generate_order_id(
-        self, all_orders: list[OrderForm], requested_id: int | None
-    ) -> int:
-        return requested_id if requested_id is not None else (max((o.id for o in all_orders), default=0) + 1)
+    def _generate_order_id(self, all_orders: list[OrderForm], requested_id: int | None) -> int:
+        return (
+            requested_id
+            if requested_id is not None
+            else (max((o.id for o in all_orders), default=0) + 1)
+        )
 
     def _build_fulfillment(self, command: CreateOrderCommand, order: OrderForm) -> None:
         if command.fulfillment_type == "TABLE":
@@ -73,8 +76,11 @@ class CreateOrderHandler:
                 postal_code=command.delivery_postal_code,
             )
             order.set_fulfillment_strategy(
-                Delivery(address=addr, estimated_time=command.delivery_estimated_time,
-                         tracking_code=command.delivery_tracking_code)
+                Delivery(
+                    address=addr,
+                    estimated_time=command.delivery_estimated_time,
+                    tracking_code=command.delivery_tracking_code,
+                )
             )
         else:
             raise ValueError(f"Fulfillment type '{command.fulfillment_type}' inválido.")
@@ -89,7 +95,11 @@ class CreateOrderHandler:
             else:
                 raise ConflictError(f"Comanda com id {order_id} já existe.")
 
-        order = OrderForm(id=order_id, tenant_id=command.tenant_id)
+        order = OrderForm(
+            id=order_id,
+            tenant_id=command.tenant_id,
+            display_code=command.display_code or str(order_id),
+        )
         self._build_fulfillment(command, order)
         await self._order_repo.save(order)
         return order

@@ -1,0 +1,26 @@
+sequenceDiagram
+    participant Cashier as Cashier (Frontend)
+    participant API as FastAPI
+    participant PayCtx as Payment Context
+    participant Gateway as StripeGateway (HTTPX)
+    participant Stripe as Stripe API
+    participant PG as PostgreSQL
+    participant Mongo as MongoDB
+
+    Note over Cashier,Mongo: Solicitar Pagamento
+    Cashier->>API: POST /payments/request
+    API->>PayCtx: RequestPaymentHandler.handle()
+    PayCtx->>PG: INSERT payments (status=PENDING)
+    PayCtx->>Gateway: charge(amount, method)
+    alt CREDIT_CARD / DEBIT_CARD
+        Gateway->>Stripe: POST /v1/payment_intents
+        Stripe-->>Gateway: {id: pi_xxx, status: succeeded}
+        Gateway-->>PayCtx: GatewayResponse(success=True, ref="pi_xxx")
+    else CASH
+        Gateway-->>PayCtx: GatewayResponse(success=True, ref="ch_cash_700")
+    end
+    PayCtx->>PayCtx: payment.confirm(gateway_ref)
+    PayCtx->>PG: UPDATE payments SET status='CONFIRMED'
+    PayCtx->>Mongo: upsert(payments_read, doc)
+    PayCtx-->>API: Payment
+    API-->>Cashier: 200 OK

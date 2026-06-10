@@ -18,6 +18,7 @@ interface OrderDrawerProps {
   isDelivering: boolean
   onClose: () => void
   onCreateOrder: (options?: {
+    display_code?: string
     fulfillment_type: 'TABLE' | 'TAKEAWAY' | 'DELIVERY'
     table_number?: number | null
     customer_name?: string
@@ -44,16 +45,8 @@ interface OrderDrawerProps {
 }
 
 const getItemPrice = (item: MenuItem): number => {
-  try {
-    const pricesStr = localStorage.getItem('cf_menu_item_prices')
-    if (pricesStr) {
-      const prices = JSON.parse(pricesStr)
-      if (prices[item.id] !== undefined) {
-        return Number(prices[item.id])
-      }
-    }
-  } catch (_e) {
-    // Ignore and fallback
+  if (item.price !== undefined && item.price !== null) {
+    return Number(item.price)
   }
   const base = 12.0
   const offset = (item.id % 6) * 5.5
@@ -269,6 +262,14 @@ interface ConfirmedItemsListProps {
   setIsPaymentOpen: (open: boolean) => void
 }
 
+const statusConfig: Record<string, { label: string; color: string }> = {
+  WAITING: { label: 'Espera', color: 'border-amber-500/20 bg-amber-950/20 text-amber-400' },
+  PREPARING: { label: 'Preparando', color: 'border-blue-500/20 bg-blue-950/20 text-blue-400' },
+  READY: { label: 'Pronto', color: 'border-emerald-500/20 bg-emerald-950/20 text-emerald-400' },
+  DELIVERED: { label: 'Servido', color: 'border-purple-500/20 bg-purple-950/20 text-purple-400' },
+  CANCELED: { label: 'Cancelado', color: 'border-gray-500/20 bg-gray-950/20 text-gray-400' },
+}
+
 function ConfirmedItemsList({
   activeOrder,
   isPaid,
@@ -299,18 +300,28 @@ function ConfirmedItemsList({
                 key={item.id}
                 className="flex justify-between border-b border-gray-900/60 pb-2 text-xs"
               >
-                <div className="space-y-0.5">
-                  <h4 className="font-bold text-gray-200">
-                    {item.name_cpy}{' '}
-                    <span className="text-gray-500 font-medium">x{item.quantity}</span>
-                  </h4>
+                <div className="space-y-0.5 min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {item.status && (
+                      <span
+                        className={`rounded-full px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider border ${
+                          statusConfig[item.status]?.color ||
+                          'border-gray-500/20 bg-gray-950/20 text-gray-400'
+                        }`}
+                      >
+                        {statusConfig[item.status]?.label || item.status}
+                      </span>
+                    )}
+                    <h4 className="font-bold text-gray-200 truncate">{item.name_cpy}</h4>
+                    <span className="text-gray-500 font-medium shrink-0">x{item.quantity}</span>
+                  </div>
                   {item.notes && (
-                    <span className="text-[9px] italic text-brand-400 font-medium block">
+                    <span className="text-[9px] italic text-brand-400 font-medium block mt-1">
                       Obs: {item.notes}
                     </span>
                   )}
                 </div>
-                <span className="font-bold text-gray-400">
+                <span className="font-bold text-gray-400 shrink-0 ml-3">
                   R$ {Number(item.subtotal).toFixed(2)}
                 </span>
               </div>
@@ -403,26 +414,28 @@ interface OrderDrawerHeaderProps {
 function getHeaderTitle(order: OrderForm | null): { title: string; subtitle: string } {
   if (!order) return { title: 'Nova Comanda', subtitle: 'Preencha os detalhes para iniciar' }
 
+  const displayCode =
+    order.display_code && order.display_code !== String(order.id) ? order.display_code : ''
   const f = order.fulfillment
   if (f.type === 'TABLE' && f.table_number) {
     return {
       title: `Mesa ${f.table_number < 10 ? `0${f.table_number}` : f.table_number}`,
-      subtitle: `Comanda #${order.id}`,
+      subtitle: displayCode,
     }
   }
   if (f.type === 'TAKEAWAY') {
     return {
       title: f.customer_name || 'Retirada',
-      subtitle: `Comanda #${order.id} · Retirada`,
+      subtitle: displayCode ? `${displayCode} · Retirada` : 'Retirada',
     }
   }
   if (f.type === 'DELIVERY') {
     return {
-      title: `Delivery #${order.id}`,
+      title: displayCode || `Delivery #${order.id}`,
       subtitle: [f.delivery_street, f.delivery_number].filter(Boolean).join(', ') || 'Entrega',
     }
   }
-  return { title: `Comanda #${order.id}`, subtitle: '' }
+  return { title: displayCode || `Comanda #${order.id}`, subtitle: '' }
 }
 
 function OrderDrawerHeader({
@@ -469,6 +482,7 @@ function OrderDrawerHeader({
 
 interface OrderDrawerLivreStateProps {
   onCreateOrder: (options: {
+    display_code?: string
     fulfillment_type: 'TABLE' | 'TAKEAWAY' | 'DELIVERY'
     table_number?: number | null
     customer_name?: string
@@ -493,6 +507,7 @@ function OrderDrawerLivreState({ onCreateOrder }: OrderDrawerLivreStateProps) {
   const [city, setCity] = useState('')
   const [stateCode, setStateCode] = useState('')
   const [postalCode, setPostalCode] = useState('')
+  const [displayCode, setDisplayCode] = useState('')
   const [estTime, setEstTime] = useState('40')
 
   const validateForm = () => {
@@ -516,6 +531,7 @@ function OrderDrawerLivreState({ onCreateOrder }: OrderDrawerLivreStateProps) {
     if (!validateForm()) return
 
     const payload: {
+      display_code?: string
       fulfillment_type: 'TABLE' | 'TAKEAWAY' | 'DELIVERY'
       table_number?: number | null
       customer_name?: string
@@ -529,6 +545,10 @@ function OrderDrawerLivreState({ onCreateOrder }: OrderDrawerLivreStateProps) {
       delivery_tracking_code?: number
     } = {
       fulfillment_type: fulfillmentType,
+    }
+
+    if (displayCode.trim()) {
+      payload.display_code = displayCode.trim()
     }
 
     if (fulfillmentType === 'TABLE') {
@@ -582,6 +602,19 @@ function OrderDrawerLivreState({ onCreateOrder }: OrderDrawerLivreStateProps) {
               <option value="TAKEAWAY">Retirada (Takeaway)</option>
               <option value="DELIVERY">Entrega (Delivery)</option>
             </select>
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="block text-[10px] uppercase font-extrabold text-gray-400">
+              Nº da Comanda <span className="text-gray-600">(opcional)</span>
+            </span>
+            <input
+              type="text"
+              placeholder={fulfillmentType === 'TABLE' ? 'Ex: MESA-04' : 'Ex: RET-123'}
+              value={displayCode}
+              onChange={(e) => setDisplayCode(e.target.value)}
+              className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+            />
           </div>
 
           {fulfillmentType === 'TABLE' && (

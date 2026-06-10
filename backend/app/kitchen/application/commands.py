@@ -17,11 +17,14 @@ class ReceiveKitchenItemCommand:
     name_cpy: str
     station_type_cpy: str
     tenant_id: str
+    preparation_profile: str = "STANDARD"
+    notes: str = ""
 
     def __repr__(self) -> str:
         return (
             f"ReceiveKitchenItemCommand(correlation_id={self.correlation_id}, "
-            f"name={self.name_cpy!r}, station={self.station_type_cpy!r}, tenant={self.tenant_id!r})"
+            f"name={self.name_cpy!r}, station={self.station_type_cpy!r}, "
+            f"tenant={self.tenant_id!r}, profile={self.preparation_profile})"
         )
 
 
@@ -43,6 +46,8 @@ class ReceiveKitchenItemHandler:
             name_cpy=command.name_cpy,
             station_type_cpy=command.station_type_cpy,
             tenant_id=command.tenant_id,
+            preparation_profile=command.preparation_profile,
+            notes=command.notes,
         )
         await self._item_repo.save(item)
 
@@ -58,6 +63,7 @@ class ReceiveKitchenItemHandler:
                     "name_cpy": item.name_cpy,
                     "station_type_cpy": item.station_type_cpy,
                     "state": item.state.name,
+                    "notes": item.notes,
                 },
             },
         )
@@ -192,13 +198,21 @@ class KitchenService:
         self._cancel_handler = CancelKitchenItemHandler(item_repo)
 
     async def receive_item(
-        self, correlation_id: int, name_cpy: str, station_type_cpy: str, tenant_id: str
+        self,
+        correlation_id: int,
+        name_cpy: str,
+        station_type_cpy: str,
+        tenant_id: str,
+        preparation_profile: str = "STANDARD",
+        notes: str = "",
     ) -> KitchenOrderItem:
         cmd = ReceiveKitchenItemCommand(
             correlation_id=correlation_id,
             name_cpy=name_cpy,
             station_type_cpy=station_type_cpy,
             tenant_id=tenant_id,
+            preparation_profile=preparation_profile,
+            notes=notes,
         )
         return await self._receive_handler.handle(cmd)
 

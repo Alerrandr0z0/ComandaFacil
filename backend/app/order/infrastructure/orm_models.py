@@ -15,6 +15,7 @@ class OrderFormORM(Base):
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
     tenant_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    display_code: Mapped[str] = mapped_column(String(100), nullable=False)
     state: Mapped[str] = mapped_column(String(50), nullable=False, default="OPEN")
     payment_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
 

@@ -18,9 +18,12 @@ from app.stock.application.queries import (
     ListStockItemsHandler,
     ListStockItemsQuery,
 )
+from app.stock.domain.enums import TransactionType
+from app.stock.domain.measured_quantity import MeasuredQuantity
+from app.stock.domain.recipe import Recipe, RecipeIngredient
 from app.stock.domain.stock_item import StockItem
 from app.stock.infrastructure.mongo_read_repository import MongoStockReadRepository
-from app.stock.infrastructure.orm_models import StockTransactionORM
+from app.stock.infrastructure.orm_models import StockItemORM, StockTransactionORM
 from app.stock.infrastructure.pg_repository import (
     SQLAlchemyRecipeRepository,
     SQLAlchemyStockItemRepository,
@@ -34,7 +37,6 @@ router = APIRouter(prefix="/stock", tags=["Stock"])
 
 
 class StockItemCreateSchema(BaseModel):
-    id: int = Field(..., description="Unique stock item identifier")
     name: str = Field(..., max_length=255, description="Item name")
     category: str = Field(
         ..., max_length=100, description="Category (RAW_MATERIAL, BEVERAGE, etc.)"
@@ -79,7 +81,11 @@ class StockDeductSchema(BaseModel):
 
 class StockAdjustSchema(BaseModel):
     new_quantity: float = Field(..., ge=0, description="Absolute new quantity (physical count)")
-    reason: str = Field(default="Inventory adjustment")
+    reason: str = Field(default="", description="Justification / audit note for this adjustment")
+    transaction_type: str = Field(
+        default="ADJUSTMENT",
+        description="Transaction type: ADJUSTMENT (inventory count), WASTE (loss/spoilage), PRODUCTION (manufactured)",
+    )
 
     model_config = ConfigDict(frozen=True)
 
@@ -123,7 +129,6 @@ async def create_stock_item(
     repo = SQLAlchemyStockItemRepository(db)
     handler = CreateStockItemHandler(repo)
     command = CreateStockItemCommand(
-        id=schema.id,
         tenant_id=tenant_id,
         name=schema.name,
         category=schema.category,
@@ -287,7 +292,21 @@ async def adjust_stock(
     recipe_repo = SQLAlchemyRecipeRepository(db, item_repo)
     service = StockService(item_repo, recipe_repo)
 
-    await service.adjust(item_id, Decimal(str(schema.new_quantity)), schema.reason, tenant_id)
+    allowed_types = {"ADJUSTMENT", "WASTE", "PRODUCTION"}
+    tx_type_str = schema.transaction_type.upper() if schema.transaction_type else "ADJUSTMENT"
+    if tx_type_str not in allowed_types:
+        raise HTTPException(
+            status_code=422,
+            detail=f"transaction_type inválido. Valores aceitos: {sorted(allowed_types)}",
+        )
+
+    await service.adjust(
+        item_id,
+        Decimal(str(schema.new_quantity)),
+        tenant_id,
+        reason=schema.reason,
+        transaction_type=TransactionType(tx_type_str),
+    )
     await db.commit()
 
     item = await item_repo.find_by_id(item_id, tenant_id)
@@ -307,12 +326,15 @@ async def adjust_stock(
 async def get_stock_movements(
     item_id: int,
     db: DbSession,
-    _tenant_id: CurrentTenantId,
+    tenant_id: CurrentTenantId,
 ) -> list[StockMovementResponseSchema]:
-    # Query transactions
     stmt = (
-        _from_val := select(StockTransactionORM)
-        .where(StockTransactionORM.stock_item_id == item_id)
+        select(StockTransactionORM)
+        .join(StockItemORM, StockTransactionORM.stock_item_id == StockItemORM.id)
+        .where(
+            StockTransactionORM.stock_item_id == item_id,
+            StockItemORM.tenant_id == tenant_id,
+        )
         .order_by(StockTransactionORM.occurred_at.desc())
     )
     res = await db.execute(stmt)
@@ -323,13 +345,185 @@ async def get_stock_movements(
             stock_item_id=t.stock_item_id,
             movement_type=t.transaction_type,
             quantity_changed=float(t.quantity_value),
-            reason="",
+            reason=t.reason,
             reference_type=None,
             reference_id=None,
             created_at=t.occurred_at.isoformat(),
         )
         for t in txs
     ]
+
+
+# ─── Recipe Schemas ────────────────────────────────────────────────────────────
+
+
+class RecipeIngredientSchema(BaseModel):
+    stock_item_id: int = Field(..., description="Stock item ID")
+    quantity_value: float = Field(..., gt=0, description="Quantity needed")
+    quantity_unit: str = Field(..., description="Measurement unit")
+
+    model_config = ConfigDict(frozen=True)
+
+
+class RecipeSaveSchema(BaseModel):
+    ingredients: list[RecipeIngredientSchema] = Field(..., min_length=1)
+
+    model_config = ConfigDict(frozen=True)
+
+
+class RecipeResponseSchema(BaseModel):
+    menu_item_id: int
+    ingredients: list[RecipeIngredientSchema]
+
+    model_config = ConfigDict(from_attributes=True, frozen=True)
+
+
+class RecipeProduceResponseSchema(BaseModel):
+    detail: str
+    deducted_ingredients: list[dict[str, object]]
+
+    model_config = ConfigDict(frozen=True)
+
+
+# ─── Recipe Endpoints ─────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/recipes/{menu_item_id}",
+    response_model=RecipeResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Get recipe for a menu item",
+    dependencies=[Depends(require_permission("ADJUST_STOCK"))],
+)
+async def get_recipe(
+    menu_item_id: int,
+    db: DbSession,
+    tenant_id: CurrentTenantId,
+) -> RecipeResponseSchema:
+    item_repo = SQLAlchemyStockItemRepository(db)
+    recipe_repo = SQLAlchemyRecipeRepository(db, item_repo)
+    recipe = await recipe_repo.find_by_menu_item(menu_item_id, tenant_id)
+    if not recipe:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Recipe para menu item '{menu_item_id}' não encontrada.",
+        )
+    return RecipeResponseSchema(
+        menu_item_id=recipe.menu_item_id,
+        ingredients=[
+            RecipeIngredientSchema(
+                stock_item_id=ing.stock_item.id,
+                quantity_value=float(ing.quantity.value),
+                quantity_unit=ing.quantity.unit,
+            )
+            for ing in recipe.get_ingredients()
+        ],
+    )
+
+
+@router.put(
+    "/recipes/{menu_item_id}",
+    response_model=RecipeResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Save or update recipe for a menu item",
+    dependencies=[Depends(require_permission("ADJUST_STOCK"))],
+)
+async def save_recipe(
+    menu_item_id: int,
+    schema: RecipeSaveSchema,
+    db: DbSession,
+    tenant_id: CurrentTenantId,
+) -> RecipeResponseSchema:
+    item_repo = SQLAlchemyStockItemRepository(db)
+    recipe_repo = SQLAlchemyRecipeRepository(db, item_repo)
+
+    ingredients: list[RecipeIngredient] = []
+    for ing in schema.ingredients:
+        stock_item = await item_repo.find_by_id(ing.stock_item_id, tenant_id)
+        if not stock_item:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Stock item '{ing.stock_item_id}' não encontrado.",
+            )
+        ingredients.append(
+            RecipeIngredient(
+                stock_item=stock_item,
+                quantity=MeasuredQuantity(
+                    value=Decimal(str(ing.quantity_value)), unit=ing.quantity_unit
+                ),
+            )
+        )
+
+    recipe = Recipe(
+        id=0,
+        menu_item_id=menu_item_id,
+        tenant_id=tenant_id,
+        ingredients=ingredients,
+    )
+    await recipe_repo.save(recipe)
+    await db.commit()
+
+    return RecipeResponseSchema(
+        menu_item_id=recipe.menu_item_id,
+        ingredients=[
+            RecipeIngredientSchema(
+                stock_item_id=ing.stock_item.id,
+                quantity_value=float(ing.quantity.value),
+                quantity_unit=ing.quantity.unit,
+            )
+            for ing in recipe.get_ingredients()
+        ],
+    )
+
+
+@router.post(
+    "/recipes/{menu_item_id}/produce",
+    response_model=RecipeProduceResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Produce a menu item, deducting stock ingredients",
+    dependencies=[Depends(require_permission("ADJUST_STOCK"))],
+)
+async def produce_recipe(
+    menu_item_id: int,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
+    mongo: MongoDB,
+    tenant_id: CurrentTenantId,
+    quantity: int = Query(1, gt=0, description="Number of portions to produce"),
+) -> RecipeProduceResponseSchema:
+    item_repo = SQLAlchemyStockItemRepository(db)
+    recipe_repo = SQLAlchemyRecipeRepository(db, item_repo)
+    service = StockService(item_repo, recipe_repo)
+
+    deducted: list[dict[str, object]] = []
+    for _ in range(quantity):
+        try:
+            await service.deduct_by_recipe(menu_item_id, tenant_id)
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e)) from e
+
+    await db.commit()
+
+    # Reload and sync all affected items
+    recipe = await recipe_repo.find_by_menu_item(menu_item_id, tenant_id)
+    if recipe:
+        for ing in recipe.get_ingredients():
+            item = await item_repo.find_by_id(ing.stock_item.id, tenant_id)
+            if item:
+                background_tasks.add_task(StockReadModelSync(mongo).sync, item)
+                deducted.append(
+                    {
+                        "stock_item_id": ing.stock_item.id,
+                        "name": ing.stock_item.name,
+                        "quantity_deducted": float(ing.quantity.value),
+                        "unit": ing.quantity.unit,
+                    }
+                )
+
+    return RecipeProduceResponseSchema(
+        detail=f"Produzido {quantity}x do item {menu_item_id} com dedução de estoque.",
+        deducted_ingredients=deducted,
+    )
 
 
 # ─── Internal Helpers ─────────────────────────────────────────────────────────

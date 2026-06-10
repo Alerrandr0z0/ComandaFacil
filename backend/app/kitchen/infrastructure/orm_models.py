@@ -17,6 +17,8 @@ class KitchenOrderItemORM(Base):
     station_type_cpy: Mapped[str] = mapped_column(String(100), nullable=False)
     tenant_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     state: Mapped[str] = mapped_column(String(50), nullable=False, default="WAITING")
+    preparation_profile: Mapped[str] = mapped_column(String(50), nullable=False, default="STANDARD")
+    notes: Mapped[str | None] = mapped_column(String(500), nullable=True, default=None)
 
     def __repr__(self) -> str:
         return (

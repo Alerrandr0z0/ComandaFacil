@@ -11,6 +11,7 @@ from app.analytics.api.routes import router as analytics_router
 # Import routers
 from app.auth.api.routes import router as auth_router
 from app.kitchen.api.routes import router as kitchen_router
+from app.menu.api.price_list_routes import router as price_list_router
 from app.menu.api.routes import router as menu_router
 from app.order.api.routes import router as order_router
 from app.payment.api.routes import router as payment_router
@@ -93,6 +94,7 @@ app.include_router(order_router, prefix="/api/v1")
 app.include_router(kitchen_router, prefix="/api/v1")
 app.include_router(payment_router, prefix="/api/v1")
 app.include_router(stock_router, prefix="/api/v1")
+app.include_router(price_list_router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api/v1")
 
 

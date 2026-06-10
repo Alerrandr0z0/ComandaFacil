@@ -14,7 +14,8 @@ class StockTransaction:
     id: int
     quantity: MeasuredQuantity
     type: TransactionType
+    reason: str = ""
     occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def __repr__(self) -> str:
-        return f"StockTransaction(id={self.id}, type={self.type.value}, qty={self.quantity})"
+        return f"StockTransaction(id={self.id}, type={self.type.value}, qty={self.quantity}, reason={self.reason!r})"

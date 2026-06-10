@@ -17,6 +17,7 @@ interface OrderGridProps {
   onDismissReadyItem: (itemId: number) => void
   onNewOrder: () => void
   onActiveOrdersCount?: (count: number) => void
+  refreshKey?: number
 }
 
 interface OrderCardProps {
@@ -153,7 +154,7 @@ function OrderCard({ order, isSelected, readyCount, onSelect, onClearReadyItems 
         <div className="flex items-baseline justify-between">
           <div className="space-y-0.5">
             <span className="text-3xl font-black text-white tracking-tight">
-              #{order.id < 100 ? `0${order.id}`.slice(-2) : order.id}
+              {order.display_code || `#${order.id}`}
             </span>
             <p className="text-[11px] font-bold text-gray-400 text-left">{fulfillmentLine}</p>
           </div>
@@ -192,11 +193,13 @@ export default function OrderGrid({
   onDismissReadyItem,
   onNewOrder,
   onActiveOrdersCount,
+  refreshKey,
 }: OrderGridProps) {
   const [orders, setOrders] = useState<ActiveOrder[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [_refreshTrigger, setRefreshTrigger] = useState(0)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refreshTrigger/refreshKey trigger polling
   useEffect(() => {
     const fetchOrders = async () => {
       setIsLoading(true)
@@ -218,7 +221,7 @@ export default function OrderGrid({
     }
 
     fetchOrders()
-  }, [onActiveOrdersCount])
+  }, [onActiveOrdersCount, refreshTrigger, refreshKey])
 
   useEffect(() => {
     const interval = setInterval(() => {

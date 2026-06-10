@@ -1,0 +1,24 @@
+classDiagram
+    class StockItem {
+        <<abstract>>
+        +id: int
+        +tenant_id: str
+        +name: str
+        +category: str
+        +min_stock_level: float
+        +get_balance() MeasuredQuantity
+        +add_transaction(tx)
+    }
+    class SimpleStockItem {
+        +unit: str
+        +get_balance() MeasuredQuantity
+    }
+    class CompositeStockItem {
+        +unit: str
+        +components: list~StockItem~
+        +add_component(item)
+        +get_balance() MeasuredQuantity
+    }
+    StockItem <|-- SimpleStockItem
+    StockItem <|-- CompositeStockItem
+    CompositeStockItem o-- StockItem : contains

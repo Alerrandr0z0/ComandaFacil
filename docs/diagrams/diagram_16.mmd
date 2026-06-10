@@ -1,0 +1,33 @@
+graph LR
+    subgraph "Frontend (React 19)"
+        PAGE["Page Component"]
+        HOOK["useEffect / useCallback"]
+        CLIENT["httpClient (Axios)"]
+    end
+
+    subgraph "Interceptors"
+        REQ_INT["Request Interceptor<br/>+ X-Tenant-ID<br/>+ Authorization"]
+        RES_INT["Response Interceptor<br/>401 → redirect /login"]
+    end
+
+    subgraph "Backend API"
+        MW["TenantMiddleware"]
+        AUTH["Auth Dependencies"]
+        HANDLER["Route Handler"]
+    end
+
+    subgraph "Read DB"
+        MONGO["MongoDB"]
+    end
+
+    PAGE --> HOOK
+    HOOK -->|"httpClient.get('/v1/menu')"| CLIENT
+    CLIENT --> REQ_INT
+    REQ_INT -->|"HTTP GET<br/>X-Tenant-ID: X<br/>Authorization: Bearer Y"| MW
+    MW --> AUTH
+    AUTH --> HANDLER
+    HANDLER -->|"read"| MONGO
+    MONGO -->|"JSON doc"| HANDLER
+    HANDLER -->|"Response"| RES_INT
+    RES_INT --> CLIENT
+    CLIENT -->|"data"| PAGE
