@@ -19,14 +19,41 @@ if TYPE_CHECKING:
 # Setup async sqlite engine for route integration tests
 @pytest.fixture
 async def sqlite_session() -> AsyncGenerator[AsyncSession, None]:
+    from app.shared import database as _database
+
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
     session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+
+    old_factory = _database.session_factory
+    _database.session_factory = session_factory
+
     async with session_factory() as session:
-        yield session
-        await session.rollback()
+        from app.shared.domain_events import EventBus, pending_events_var
+
+        token = pending_events_var.set([])
+
+        original_commit = session.commit
+
+        async def commit_with_events() -> None:
+            await original_commit()
+            events = pending_events_var.get()
+            if events:
+                pending_events_var.set([])
+                for event in events:
+                    await EventBus.publish(event)
+
+        session.commit = commit_with_events
+
+        try:
+            yield session
+            await session.rollback()
+        finally:
+            pending_events_var.reset(token)
+
+    _database.session_factory = old_factory
     await engine.dispose()
 
 
@@ -268,3 +295,91 @@ async def test_delete_employee_endpoint_success(
     response = await api_client.delete("/api/v1/auth/employees/1", headers={"X-Tenant-ID": "10"})
     assert response.status_code == 200
     assert response.json() == {"detail": "Colaborador removido da franquia com sucesso."}
+
+
+@pytest.mark.asyncio
+async def test_list_audit_logs_endpoint_success(
+    api_client: AsyncClient, sqlite_session: AsyncSession
+) -> None:
+    # Arrange: Create a tenant and register/delete employee to trigger a log
+    tenant_repo = SQLAlchemyTenantRepository(sqlite_session)
+    tenant = Tenant(id=10, name="Main Franchise", plan_type=PlanType.PRO, is_active=True)
+    await tenant_repo.save(tenant)
+    await sqlite_session.commit()
+
+    # Register employee
+    await api_client.post(
+        "/api/v1/auth/employees",
+        json={
+            "id": 1,
+            "name": "Jane Doe",
+            "email": "jane@comandafacil.com",
+            "password": "secure_password_123",
+        },
+    )
+    # Assign Role
+    await api_client.post(
+        "/api/v1/auth/employees/1/roles", json={"tenant_id": 10, "role_type": "WAITER"}
+    )
+    # Delete employee (which generates audit log)
+    delete_resp = await api_client.delete("/api/v1/auth/employees/1", headers={"X-Tenant-ID": "10"})
+    assert delete_resp.status_code == 200
+
+    # Act - Retrieve audit logs
+    response = await api_client.get("/api/v1/auth/audit-logs", headers={"X-Tenant-ID": "10"})
+
+    # Assert
+    assert response.status_code == 200
+    json_data = response.json()
+    assert len(json_data) >= 1
+    assert any(log["action"] == "EMPLOYEE_REMOVED" for log in json_data)
+
+
+@pytest.mark.asyncio
+async def test_order_and_kitchen_events_are_audited_successfully(
+    api_client: AsyncClient, sqlite_session: AsyncSession
+) -> None:
+    from app.auth.application.audit_listener import register_audit_listeners
+    from app.kitchen.domain.kitchen_events import KitchenItemStatusChanged
+    from app.order.domain.order_events import OrderItemAdded
+    from app.shared.domain_events import EventBus
+
+    # Ensure listeners are registered
+    register_audit_listeners()
+
+    from decimal import Decimal
+
+    # Trigger events
+    event_order = OrderItemAdded(
+        order_id=123,
+        tenant_id="10",
+        item_id=1,
+        menu_item_id=456,
+        name="Burger",
+        quantity=2,
+        price=Decimal("15.50"),
+        notes="no onions",
+    )
+    event_kitchen = KitchenItemStatusChanged(
+        item_id=789,
+        tenant_id="10",
+        correlation_id=1,
+        name="Burger",
+        old_state="WAITING",
+        new_state="PREPARING",
+    )
+
+    await EventBus.publish(event_order)
+    await EventBus.publish(event_kitchen)
+
+    # Act - Retrieve audit logs
+    response = await api_client.get("/api/v1/auth/audit-logs", headers={"X-Tenant-ID": "10"})
+
+    # Assert
+    assert response.status_code == 200
+    json_data = response.json()
+    assert len(json_data) >= 2
+
+    actions = [log["action"] for log in json_data]
+    assert "ORDER_ITEM_ADD" in actions
+    assert "KITCHEN_STATUS_PREPARING" in actions

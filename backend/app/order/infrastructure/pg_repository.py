@@ -13,6 +13,7 @@ from app.order.domain.order_item import OrderFormItem
 from app.order.domain.repository import OrderRepository
 from app.order.domain.states import Closed, Open, Paid
 from app.order.infrastructure.orm_models import OrderFormItemORM, OrderFormORM
+from app.shared.domain_events import register_pending_events
 from app.shared.money import Money
 from app.shared.value_objects import Address
 
@@ -48,6 +49,19 @@ class SQLAlchemyOrderRepository(OrderRepository):
         orms = result.scalars().all()
         return [self._map_to_domain(o) for o in orms]
 
+    async def find_by_item_id(self, item_id: int, tenant_id: str) -> OrderForm | None:
+        stmt = (
+            select(OrderFormORM)
+            .join(OrderFormORM.items)
+            .where(OrderFormItemORM.id == item_id, OrderFormORM.tenant_id == tenant_id)
+            .options(selectinload(OrderFormORM.items))
+        )
+        result = await self._session.execute(stmt)
+        orm = result.scalar_one_or_none()
+        if not orm:
+            return None
+        return self._map_to_domain(orm)
+
     async def find_all_active_by_tenant(self, tenant_id: str) -> list[OrderForm]:
         stmt = (
             select(OrderFormORM)
@@ -79,6 +93,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
                 display_code=order.display_code,
                 state=order.state.name,
                 payment_requested=order._payment_requested,  # type: ignore[reportPrivateUsage]
+                created_at=order.created_at,
             )
             self._session.add(orm)
 
@@ -95,6 +110,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
                 "price_cpy": item.price_cpy.amount,
                 "station_type_cpy": item.station_type_cpy,
                 "quantity": item.quantity,
+                "delivered_quantity": item.delivered_quantity,
                 "notes": item.notes,
                 "status": item.status.value,
             }
@@ -110,6 +126,8 @@ class SQLAlchemyOrderRepository(OrderRepository):
         for domain_item, item_orm in zip(order.items, new_item_orms, strict=True):
             if domain_item.id == 0:
                 domain_item.id = item_orm.id
+
+        register_pending_events(order.collect_events())
 
     async def delete(self, id: int, tenant_id: str) -> None:
         stmt = select(OrderFormORM).where(
@@ -165,7 +183,12 @@ class SQLAlchemyOrderRepository(OrderRepository):
         orm.delivery_state_name = None
 
     def _map_to_domain(self, orm: OrderFormORM) -> OrderForm:
-        order = OrderForm(id=orm.id, tenant_id=orm.tenant_id, display_code=orm.display_code)
+        order = OrderForm(
+            id=orm.id,
+            tenant_id=orm.tenant_id,
+            display_code=orm.display_code,
+            created_at=orm.created_at,
+        )
         order._payment_requested = orm.payment_requested  # type: ignore[reportPrivateUsage]
 
         # Map state
@@ -188,6 +211,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
                 price_cpy=Money(item_orm.price_cpy),
                 station_type_cpy=item_orm.station_type_cpy,
                 quantity=item_orm.quantity,
+                delivered_quantity=item_orm.delivered_quantity,
                 notes=item_orm.notes or "",
                 status=OrderItemStatus(item_orm.status),
             )

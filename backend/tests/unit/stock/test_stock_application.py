@@ -94,6 +94,7 @@ async def test_create_stock_item_when_new_then_creates_successfully(
         name="Coca-Cola",
         category="BEVERAGE",
         current_quantity=Decimal("50"),
+        initial_cost_amount=Decimal("5.00"),
         unit="un",
     )
 
@@ -115,6 +116,7 @@ async def test_create_stock_item_when_duplicate_name_then_raises(
         name="Farinha",
         category="RAW_MATERIAL",
         current_quantity=Decimal("5"),
+        initial_cost_amount=Decimal("5.00"),
         unit="kg",
     )
 
@@ -129,7 +131,7 @@ async def test_stock_service_add_input(
     existing_item: StockItem,
 ) -> None:
     service = StockService(item_repo, recipe_repo)
-    await service.add_input(1, Decimal("10"), "franquia_001")
+    await service.add_input(1, Decimal("10"), Decimal("5.00"), "franquia_001")
 
     assert existing_item.get_balance().value == Decimal("10")
     assert len(existing_item.transactions) == 1
@@ -144,7 +146,7 @@ async def test_stock_service_register_output(
 ) -> None:
     service = StockService(item_repo, recipe_repo)
     # Add initial stock
-    await service.add_input(1, Decimal("10"), "franquia_001")
+    await service.add_input(1, Decimal("10"), Decimal("5.00"), "franquia_001")
 
     # Deduct stock
     await service.register_output(1, Decimal("4"), "franquia_001", "Venda")
@@ -159,7 +161,7 @@ async def test_stock_service_adjust(
     existing_item: StockItem,
 ) -> None:
     service = StockService(item_repo, recipe_repo)
-    await service.add_input(1, Decimal("10"), "franquia_001")
+    await service.add_input(1, Decimal("10"), Decimal("5.00"), "franquia_001")
 
     await service.adjust(1, Decimal("15"), "franquia_001", reason="Ajuste físico")
 
@@ -173,7 +175,7 @@ async def test_stock_service_register_waste(
     existing_item: StockItem,
 ) -> None:
     service = StockService(item_repo, recipe_repo)
-    await service.add_input(1, Decimal("10"), "franquia_001")
+    await service.add_input(1, Decimal("10"), Decimal("5.00"), "franquia_001")
 
     await service.register_waste(1, Decimal("2"), "franquia_001")
 
@@ -187,7 +189,7 @@ async def test_stock_service_deduct_by_recipe(
     existing_item: StockItem,
 ) -> None:
     service = StockService(item_repo, recipe_repo)
-    await service.add_input(1, Decimal("10"), "franquia_001")
+    await service.add_input(1, Decimal("10"), Decimal("5.00"), "franquia_001")
 
     # Create recipe
     recipe = Recipe(id=1, menu_item_id=101, tenant_id="franquia_001")
@@ -198,3 +200,44 @@ async def test_stock_service_deduct_by_recipe(
     await service.deduct_by_recipe(101, "franquia_001")
 
     assert existing_item.get_balance().value == Decimal("9.5")
+
+
+@pytest.mark.unit
+async def test_stock_service_errors(
+    item_repo: InMemoryStockItemRepository,
+    recipe_repo: InMemoryRecipeRepository,
+    existing_item: StockItem,
+) -> None:
+    from app.shared.exceptions import InsufficientStockError, NotFoundError
+
+    service = StockService(item_repo, recipe_repo)
+
+    # 1. NotFoundError in add_input
+    with pytest.raises(NotFoundError):
+        await service.add_input(999, Decimal("10"), Decimal("5.00"), "franquia_001")
+
+    # 2. NotFoundError in register_output
+    with pytest.raises(NotFoundError):
+        await service.register_output(999, Decimal("10"), "franquia_001")
+
+    # 3. NotFoundError in adjust
+    with pytest.raises(NotFoundError):
+        await service.adjust(999, Decimal("10"), "franquia_001")
+
+    # 4. NotFoundError in register_waste
+    with pytest.raises(NotFoundError):
+        await service.register_waste(999, Decimal("10"), "franquia_001")
+
+    # 5. InsufficientStockError in register_waste
+    with pytest.raises(InsufficientStockError):
+        await service.register_waste(1, Decimal("10"), "franquia_001")
+
+    # 6. deduct_by_recipe returns early if no recipe
+    await service.deduct_by_recipe(999, "franquia_001")
+
+    # 7. NotFoundError in get_balance
+    with pytest.raises(NotFoundError):
+        await service.get_balance(999, "franquia_001")
+
+    # 8. get_balance success
+    assert (await service.get_balance(1, "franquia_001")).value == Decimal("0")

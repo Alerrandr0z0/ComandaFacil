@@ -54,6 +54,16 @@ interface OrderHistory {
   closed_at: string
 }
 
+interface TimelineItem {
+  id: number
+  actor_name: string
+  action: string
+  entity_type: string | null
+  entity_id: string | null
+  details: string
+  created_at: string | null
+}
+
 interface StatsProps {
   totalSales: number
   completedCount: number
@@ -158,6 +168,28 @@ function OrderDetailPanel({
   formatDate: (d: string) => string
   formatFulfillmentType: (t: string | null) => string
 }) {
+  const [timeline, setTimeline] = useState<TimelineItem[]>([])
+  const [isLoadingTimeline, setIsLoadingTimeline] = useState(false)
+
+  useEffect(() => {
+    if (selectedOrder) {
+      const fetchTimeline = async () => {
+        setIsLoadingTimeline(true)
+        try {
+          const res = await httpClient.get<TimelineItem[]>(
+            `/v1/order/${selectedOrder.order_id}/timeline`,
+          )
+          setTimeline(res.data)
+        } catch {
+          // timeline not loaded
+        } finally {
+          setIsLoadingTimeline(false)
+        }
+      }
+      fetchTimeline()
+    }
+  }, [selectedOrder])
+
   return (
     <div className="border border-gray-900/60 rounded-2xl bg-gray-950/20 p-5 backdrop-blur-md glass-card space-y-5 sticky top-6">
       <div className="flex items-center justify-between border-b border-gray-900 pb-3">
@@ -289,6 +321,57 @@ function OrderDetailPanel({
               R$ {parseFloat(selectedOrder.total).toFixed(2)}
             </span>
           </div>
+        </div>
+
+        <div className="border-t border-gray-900/60 pt-4 space-y-3">
+          <h4 className="text-[10px] uppercase font-extrabold tracking-wider text-gray-500 flex items-center gap-1">
+            <HistoryIcon className="h-3.5 w-3.5 text-gray-650" />
+            Linha do Tempo Operacional
+          </h4>
+
+          {isLoadingTimeline ? (
+            <div className="py-6 flex items-center justify-center">
+              <div className="h-4 w-4 animate-spin rounded-full border-2 border-brand-500 border-t-transparent" />
+            </div>
+          ) : timeline.length === 0 ? (
+            <p className="text-[10px] text-gray-550 italic pl-1">
+              Nenhum evento operacional registrado para esta comanda.
+            </p>
+          ) : (
+            <div className="space-y-4 max-h-[200px] overflow-y-auto pr-1 pt-1 scrollbar-thin">
+              {timeline.map((log, idx) => {
+                const formattedTime = log.created_at
+                  ? new Date(log.created_at).toLocaleTimeString('pt-BR', {
+                      hour: '2-digit',
+                      minute: '2-digit',
+                      second: '2-digit',
+                    })
+                  : ''
+
+                return (
+                  <div key={log.id || idx} className="relative pl-5 text-[11px] leading-relaxed">
+                    {/* Vertical line connecting nodes */}
+                    {idx < timeline.length - 1 && (
+                      <div className="absolute left-[7px] top-[14px] bottom-[-20px] w-[1px] bg-gray-900" />
+                    )}
+                    {/* Bullet node */}
+                    <div className="absolute left-[3px] top-[4px] h-2.5 w-2.5 rounded-full border border-brand-500 bg-gray-950 flex items-center justify-center">
+                      <div className="h-1 w-1 rounded-full bg-brand-500 animate-pulse" />
+                    </div>
+                    <div className="flex justify-between items-baseline gap-1 text-[10px]">
+                      <span className="font-extrabold text-gray-300">
+                        {log.actor_name || 'Sistema'}
+                      </span>
+                      <span className="text-[8px] text-gray-500 font-bold tracking-tight shrink-0">
+                        {formattedTime}
+                      </span>
+                    </div>
+                    <p className="text-gray-400 text-[10.5px] mt-0.5 font-medium">{log.details}</p>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
 
@@ -582,7 +665,7 @@ export default function HistoryPage() {
                     <tbody className="divide-y divide-gray-900/40 text-xs">
                       {filteredHistory.map((item) => (
                         <tr
-                          key={item.order_id}
+                          key={`${item.order_id}_${item.closed_at}`}
                           onClick={() => setSelectedOrder(item)}
                           className={`hover:bg-white/[0.02] transition cursor-pointer ${
                             selectedOrder?.order_id === item.order_id

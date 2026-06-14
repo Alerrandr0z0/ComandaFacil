@@ -13,7 +13,7 @@ class KitchenReadModelSync:
     def __init__(self, mongo_db: Any) -> None:
         self._collection = mongo_db["kitchen_read"]
 
-    async def sync(self, item: KitchenOrderItem) -> None:
+    async def sync(self, item: KitchenOrderItem, menu_item_id: int | None = None) -> None:
         now = datetime.datetime.now(datetime.UTC)
         state = item.state.name
 
@@ -29,16 +29,28 @@ class KitchenReadModelSync:
             "state": state,
             "tenant_id": item.tenant_id,
         }
+        if menu_item_id is not None:
+            set_fields["menu_item_id"] = menu_item_id
 
         if is_final:
             set_fields["completed_at"] = now
 
-        set_on_insert: dict[str, object] = {}
+        set_on_insert: dict[str, Any] = {
+            "kitchen_item_id": item.id,
+            "created_at": now,
+        }
+        if menu_item_id is not None:
+            set_on_insert["menu_item_id"] = menu_item_id
+
+        update_doc: dict[str, Any] = {
+            "$set": set_fields,
+            "$setOnInsert": set_on_insert,
+        }
         if is_preparing:
-            set_on_insert["started_at"] = now
+            update_doc["$min"] = {"started_at": now}
 
         await self._collection.update_one(
             {"kitchen_item_id": item.id, "tenant_id": item.tenant_id},
-            {"$set": set_fields, "$setOnInsert": set_on_insert},
+            update_doc,
             upsert=True,
         )

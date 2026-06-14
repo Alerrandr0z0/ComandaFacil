@@ -13,7 +13,9 @@ from app.menu.domain.menu import (
     MenuRepository,
     PreparationProfile,
 )
+from app.menu.domain.menu_events import MenuItemCreated, MenuItemDeleted, MenuItemUpdated
 from app.menu.domain.price_list import PriceList, PriceListItem, PriceListRepository
+from app.menu.domain.price_list_events import PriceListDeleted
 from app.menu.infrastructure.orm_models import (
     CategoryItemORM,
     MenuItemORM,
@@ -21,6 +23,7 @@ from app.menu.infrastructure.orm_models import (
     PriceListItemORM,
     PriceListORM,
 )
+from app.shared.domain_events import register_pending_events
 from app.shared.money import Money
 
 if TYPE_CHECKING:
@@ -151,7 +154,9 @@ class SQLAlchemyMenuItemRepository(MenuItemRepository):
             orm.image_url = item.image_url
             orm.is_available = item.is_available
             orm.preparation_profile = item.preparation_profile.value
+            is_new = False
         else:
+            is_new = True
             orm = MenuItemORM(
                 id=item.id,
                 tenant_id=item.tenant_id,
@@ -167,6 +172,25 @@ class SQLAlchemyMenuItemRepository(MenuItemRepository):
             self._session.add(orm)
         await self._session.flush()
 
+        if is_new:
+            event = MenuItemCreated(
+                item_id=item.id,
+                tenant_id=item.tenant_id,
+                name=item.name,
+                category=item.category_name,
+                price=item.base_price.amount,
+            )
+        else:
+            event = MenuItemUpdated(
+                item_id=item.id,
+                tenant_id=item.tenant_id,
+                name=item.name,
+                category=item.category_name,
+                price=item.base_price.amount,
+                is_available=item.is_available,
+            )
+        register_pending_events([event])
+
     async def delete(self, id: int, tenant_id: str) -> None:
         stmt = select(MenuItemORM).where(MenuItemORM.id == id, MenuItemORM.tenant_id == tenant_id)
         result = await self._session.execute(stmt)
@@ -174,6 +198,8 @@ class SQLAlchemyMenuItemRepository(MenuItemRepository):
         if orm:
             await self._session.delete(orm)
             await self._session.flush()
+
+            register_pending_events([MenuItemDeleted(item_id=id, tenant_id=tenant_id)])
 
     def _map_to_domain(self, orm: MenuItemORM) -> MenuItem:
         return MenuItem(
@@ -266,6 +292,8 @@ class SQLAlchemyPriceListRepository(PriceListRepository):
 
         await self._session.flush()
 
+        register_pending_events(price_list.collect_events())
+
     async def delete(self, id: int, tenant_id: str) -> None:
         stmt = select(PriceListORM).where(
             PriceListORM.id == id, PriceListORM.tenant_id == tenant_id
@@ -275,6 +303,8 @@ class SQLAlchemyPriceListRepository(PriceListRepository):
         if orm:
             await self._session.delete(orm)
             await self._session.flush()
+
+            register_pending_events([PriceListDeleted(price_list_id=id, tenant_id=tenant_id)])
 
     async def find_by_menu_id(self, menu_id: int, tenant_id: str) -> list[PriceList]:
         stmt = (

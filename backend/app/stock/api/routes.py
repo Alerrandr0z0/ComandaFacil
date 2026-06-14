@@ -6,7 +6,13 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
-from app.dependencies import CurrentTenantId, DbSession, MongoDB, require_permission
+from app.dependencies import (
+    CurrentEmployee,
+    CurrentTenantId,
+    DbSession,
+    MongoDB,
+    require_permission,
+)
 from app.menu.infrastructure.orm_models import MenuItemORM
 from app.stock.application.commands import (
     CreateStockItemCommand,
@@ -22,7 +28,8 @@ from app.stock.application.queries import (
 from app.stock.domain.enums import TransactionType
 from app.stock.domain.measured_quantity import MeasuredQuantity
 from app.stock.domain.recipe import Recipe, RecipeIngredient
-from app.stock.domain.stock_item import StockItem
+from app.stock.domain.stock_item import CompositeStockItem, SimpleStockItem, StockItem
+from app.stock.domain.transaction import StockTransaction
 from app.stock.infrastructure.mongo_read_repository import MongoStockReadRepository
 from app.stock.infrastructure.orm_models import (
     RecipeIngredientORM,
@@ -48,8 +55,20 @@ class StockItemCreateSchema(BaseModel):
         ..., max_length=100, description="Category (RAW_MATERIAL, BEVERAGE, etc.)"
     )
     current_quantity: float = Field(default=0.0, ge=0, description="Initial quantity")
+    initial_cost_amount: float = Field(default=0.0, ge=0, description="Initial unit cost")
     unit: str = Field(default="un", description="Measurement unit (g, kg, ml, l, un)")
     min_stock_level: float = Field(default=0.0, ge=0, description="Minimum stock alert level")
+
+    model_config = ConfigDict(frozen=True)
+
+
+class StockItemUpdateSchema(BaseModel):
+    name: str = Field(..., max_length=255, description="Item name")
+    category: str = Field(
+        ..., max_length=100, description="Category (RAW_MATERIAL, BEVERAGE, etc.)"
+    )
+    unit: str = Field(..., max_length=20, description="Measurement unit (g, kg, ml, l, un)")
+    min_stock_level: float = Field(..., ge=0.0, description="Minimum stock alert level")
 
     model_config = ConfigDict(frozen=True)
 
@@ -69,6 +88,7 @@ class StockItemResponseSchema(BaseModel):
 
 class StockAddSchema(BaseModel):
     quantity: float = Field(..., gt=0, description="Positive quantity to add")
+    cost_amount: float = Field(..., gt=0, description="Unit cost amount of this purchase")
     reason: str = Field(default="", description="Reason for stock addition")
     reference_type: str | None = Field(default=None, description="Order type, etc.")
     reference_id: int | None = Field(default=None, description="Related entity ID")
@@ -140,12 +160,91 @@ async def create_stock_item(
         category=schema.category,
         current_quantity=Decimal(str(schema.current_quantity)),
         unit=schema.unit,
+        initial_cost_amount=Decimal(str(schema.initial_cost_amount)),
         min_stock_level=schema.min_stock_level,
     )
     item = await handler.handle(command)
     await db.commit()
     background_tasks.add_task(StockReadModelSync(mongo).sync, item)
     return _item_to_response(item)
+
+
+@router.put(
+    "/items/{item_id}",
+    response_model=StockItemResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Update a stock item's metadata",
+    dependencies=[Depends(require_permission("ADJUST_STOCK"))],
+)
+async def update_stock_item(
+    item_id: int,
+    schema: StockItemUpdateSchema,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
+    mongo: MongoDB,
+    tenant_id: CurrentTenantId,
+) -> StockItemResponseSchema:
+    repo = SQLAlchemyStockItemRepository(db)
+    item = await repo.find_by_id(item_id, tenant_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="StockItem not found")
+
+    if item.name != schema.name:
+        existing = await repo.find_by_name(schema.name, tenant_id)
+        if existing and existing.id != item_id:
+            raise HTTPException(
+                status_code=409, detail=f"Item de estoque '{schema.name}' já existe."
+            )
+
+    item.name = schema.name
+    item.category = schema.category
+    if isinstance(item, (SimpleStockItem, CompositeStockItem)):
+        item.unit = schema.unit
+        if isinstance(item, SimpleStockItem):
+            new_txs = []
+            for tx in item.transactions:
+                new_qty = MeasuredQuantity(tx.quantity.value, schema.unit)
+                new_tx = StockTransaction(
+                    id=tx.id,
+                    quantity=new_qty,
+                    type=tx.type,
+                    cost_amount=tx.cost_amount,
+                    reason=tx.reason,
+                    occurred_at=tx.occurred_at,
+                )
+                new_txs.append(new_tx)
+            item.transactions = new_txs
+
+    item.set_min_stock_level(schema.min_stock_level)
+    await repo.save(item)
+    await db.commit()
+
+    background_tasks.add_task(StockReadModelSync(mongo).sync, item)
+    return _item_to_response(item)
+
+
+@router.delete(
+    "/items/{item_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Delete a stock item",
+    dependencies=[Depends(require_permission("ADJUST_STOCK"))],
+)
+async def delete_stock_item(
+    item_id: int,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
+    mongo: MongoDB,
+    tenant_id: CurrentTenantId,
+) -> None:
+    repo = SQLAlchemyStockItemRepository(db)
+    item = await repo.find_by_id(item_id, tenant_id)
+    if not item:
+        raise HTTPException(status_code=404, detail="StockItem not found")
+
+    await repo.delete(item_id, tenant_id)
+    await db.commit()
+
+    background_tasks.add_task(StockReadModelSync(mongo).remove, item_id, tenant_id)
 
 
 @router.get(
@@ -206,7 +305,12 @@ async def add_stock(
     item_repo = SQLAlchemyStockItemRepository(db)
     recipe_repo = SQLAlchemyRecipeRepository(db, item_repo)
     service = StockService(item_repo, recipe_repo)
-    await service.add_input(item_id, Decimal(str(schema.quantity)), tenant_id)
+    await service.add_input(
+        item_id,
+        Decimal(str(schema.quantity)),
+        Decimal(str(schema.cost_amount)),
+        tenant_id,
+    )
     await db.commit()
 
     # Reload item for response
@@ -383,6 +487,15 @@ class RecipeIngredientSchema(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class RecipeIngredientResponseSchema(BaseModel):
+    stock_item_id: int = Field(..., description="Stock item ID")
+    stock_item_name: str = Field(..., description="Stock item name")
+    quantity_value: float = Field(..., gt=0, description="Quantity needed")
+    quantity_unit: str = Field(..., description="Measurement unit")
+
+    model_config = ConfigDict(frozen=True)
+
+
 class RecipeSaveSchema(BaseModel):
     ingredients: list[RecipeIngredientSchema] = Field(..., min_length=1)
 
@@ -391,7 +504,7 @@ class RecipeSaveSchema(BaseModel):
 
 class RecipeResponseSchema(BaseModel):
     menu_item_id: int
-    ingredients: list[RecipeIngredientSchema]
+    ingredients: list[RecipeIngredientResponseSchema]
 
     model_config = ConfigDict(from_attributes=True, frozen=True)
 
@@ -457,12 +570,12 @@ async def get_consumed_by(
     response_model=RecipeResponseSchema,
     status_code=status.HTTP_200_OK,
     summary="Get recipe for a menu item",
-    dependencies=[Depends(require_permission("ADJUST_STOCK"))],
 )
 async def get_recipe(
     menu_item_id: int,
     db: DbSession,
     tenant_id: CurrentTenantId,
+    _current_employee: CurrentEmployee,
 ) -> RecipeResponseSchema:
     item_repo = SQLAlchemyStockItemRepository(db)
     recipe_repo = SQLAlchemyRecipeRepository(db, item_repo)
@@ -475,8 +588,9 @@ async def get_recipe(
     return RecipeResponseSchema(
         menu_item_id=recipe.menu_item_id,
         ingredients=[
-            RecipeIngredientSchema(
+            RecipeIngredientResponseSchema(
                 stock_item_id=ing.stock_item.id,
+                stock_item_name=ing.stock_item.name,
                 quantity_value=float(ing.quantity.value),
                 quantity_unit=ing.quantity.unit,
             )
@@ -524,14 +638,16 @@ async def save_recipe(
         tenant_id=tenant_id,
         ingredients=ingredients,
     )
+    recipe.record_saved()
     await recipe_repo.save(recipe)
     await db.commit()
 
     return RecipeResponseSchema(
         menu_item_id=recipe.menu_item_id,
         ingredients=[
-            RecipeIngredientSchema(
+            RecipeIngredientResponseSchema(
                 stock_item_id=ing.stock_item.id,
+                stock_item_name=ing.stock_item.name,
                 quantity_value=float(ing.quantity.value),
                 quantity_unit=ing.quantity.unit,
             )

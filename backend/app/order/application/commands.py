@@ -5,6 +5,7 @@ from decimal import Decimal  # noqa: TC003
 from typing import TYPE_CHECKING, Final
 
 from app.order.domain.fulfillment import Delivery, Table, Takeaway
+from app.order.domain.order_events import OrderCreated
 from app.order.domain.order_form import OrderForm
 from app.order.domain.order_item import OrderFormItem
 from app.shared.exceptions import ConflictError, NotFoundError
@@ -101,6 +102,14 @@ class CreateOrderHandler:
             display_code=command.display_code or str(order_id),
         )
         self._build_fulfillment(command, order)
+        order.record_event(
+            OrderCreated(
+                order_id=order.id,
+                tenant_id=order.tenant_id,
+                fulfillment_type=command.fulfillment_type,
+                display_code=order.display_code,
+            )
+        )
         await self._order_repo.save(order)
         return order
 

@@ -103,7 +103,7 @@ class SQLAlchemyEmployeeRepository(EmployeeRepository):
             )
             self._session.add(orm)
 
-        # Add roles ORM mappings
+        # Add roles ORM mappings (including soft-deleted)
         for role in employee.roles:
             role_orm = UserTenantRoleORM(
                 id=role.id,
@@ -111,6 +111,7 @@ class SQLAlchemyEmployeeRepository(EmployeeRepository):
                 employee_id=employee.id,
                 role_type=role.role_type.value,
                 is_active=role.is_active,
+                removed=role.removed,
             )
             orm.roles.append(role_orm)
 
@@ -128,6 +129,7 @@ class SQLAlchemyEmployeeRepository(EmployeeRepository):
                 employee_id=r_orm.employee_id,
                 role_type=RoleType(r_orm.role_type),
                 is_active=r_orm.is_active,
+                removed=r_orm.removed,
             )
             # Use private list extension or standard append since aggregate handles it
             employee.roles.append(role)

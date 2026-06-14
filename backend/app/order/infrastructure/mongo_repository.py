@@ -70,21 +70,20 @@ class OrderHistoryMongoRepository:
             "closed_at": datetime.datetime.now(datetime.UTC).isoformat(),
         }
 
-        await self._collection.replace_one(
-            {"order_id": order.id},
-            doc,
-            upsert=True,
-        )
+        await self._collection.insert_one(doc)
 
     async def find_by_id(self, order_id: int, tenant_id: str) -> dict[str, Any] | None:
         """Finds a completed order document by order_id scoped to a tenant."""
-        res = await self._collection.find_one(
-            {"order_id": order_id, "tenant_id": tenant_id}, {"_id": 0}
+        cursor = (
+            self._collection.find({"order_id": order_id, "tenant_id": tenant_id}, {"_id": 0})
+            .sort("closed_at", -1)
+            .limit(1)
         )
-        return res if res else None
+        res = await cursor.to_list(length=1)
+        return res[0] if res else None
 
     async def find_all_by_tenant(self, tenant_id: str) -> list[dict[str, Any]]:
-        """Finds all completed order documents for a tenant."""
-        cursor = self._collection.find({"tenant_id": tenant_id}, {"_id": 0})
+        """Finds all completed order documents for a tenant, sorted by closed_at desc."""
+        cursor = self._collection.find({"tenant_id": tenant_id}, {"_id": 0}).sort("closed_at", -1)
         res = await cursor.to_list(length=100)
         return list(res)

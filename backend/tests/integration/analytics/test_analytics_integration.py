@@ -44,8 +44,22 @@ async def seeded_db(
             "order_id": 1,
             "total": 100.0,
             "items": [
-                {"name": "Pizza", "category": "Pratos", "price": 60.0},
-                {"name": "Suco", "category": "Bebidas", "price": 40.0},
+                {
+                    "name": "Pizza",
+                    "category": "Pratos",
+                    "price": 60.0,
+                    "menu_item_id": 101,
+                    "quantity": 1,
+                    "subtotal": 60.0,
+                },
+                {
+                    "name": "Suco",
+                    "category": "Bebidas",
+                    "price": 40.0,
+                    "menu_item_id": 102,
+                    "quantity": 1,
+                    "subtotal": 40.0,
+                },
             ],
             "created_at": datetime.now(UTC),
         },
@@ -54,7 +68,14 @@ async def seeded_db(
             "order_id": 2,
             "total": 50.0,
             "items": [
-                {"name": "Salada", "category": "Pratos", "price": 50.0},
+                {
+                    "name": "Salada",
+                    "category": "Pratos",
+                    "price": 50.0,
+                    "menu_item_id": 103,
+                    "quantity": 1,
+                    "subtotal": 50.0,
+                },
             ],
             "created_at": datetime.now(UTC),
         },
@@ -63,7 +84,14 @@ async def seeded_db(
             "order_id": 3,
             "total": 200.0,
             "items": [
-                {"name": "Lasanha", "category": "Pratos", "price": 200.0},
+                {
+                    "name": "Lasanha",
+                    "category": "Pratos",
+                    "price": 200.0,
+                    "menu_item_id": 104,
+                    "quantity": 1,
+                    "subtotal": 200.0,
+                },
             ],
             "created_at": datetime.now(UTC),
         },
@@ -75,7 +103,8 @@ async def seeded_db(
         {
             "tenant_id": "franquia_001",
             "item_id": 1,
-            "state": "DONE",
+            "state": "READY",
+            "station_type_cpy": "GRILL",
             "started_at": datetime.now(UTC),
             "completed_at": datetime.now(UTC),
             "created_at": datetime.now(UTC),
@@ -83,7 +112,8 @@ async def seeded_db(
         {
             "tenant_id": "franquia_001",
             "item_id": 2,
-            "state": "DONE",
+            "state": "READY",
+            "station_type_cpy": "BEVERAGE",
             "started_at": datetime.now(UTC),
             "completed_at": datetime.now(UTC),
             "created_at": datetime.now(UTC),
@@ -92,6 +122,7 @@ async def seeded_db(
             "tenant_id": "franquia_001",
             "item_id": 3,
             "state": "COOKING",
+            "station_type_cpy": "GRILL",
             "started_at": datetime.now(UTC),
             "completed_at": None,
             "created_at": datetime.now(UTC),
@@ -215,3 +246,33 @@ async def test_get_kitchen_performance_when_no_completed_then_zero_rate(seeded_d
     # Assert
     assert data.items_prepared == 3
     assert data.completion_rate == 0.0
+
+
+@pytest.mark.asyncio
+async def test_get_kitchen_performance_by_station(seeded_db: Any) -> None:
+    # Arrange
+    repo = MongoAnalyticsRepository(seeded_db)
+
+    # Act
+    data = await repo.get_kitchen_performance("franquia_001", AnalyticsPeriod.DAY)
+
+    # Assert
+    assert data.by_station is not None
+    assert "GRILL" in data.by_station
+    assert "BEVERAGE" in data.by_station
+    assert data.by_station["GRILL"]["items_prepared"] == 2
+    assert data.by_station["BEVERAGE"]["items_prepared"] == 1
+
+
+@pytest.mark.asyncio
+async def test_get_menu_items_sales(seeded_db: Any) -> None:
+    # Arrange
+    repo = MongoAnalyticsRepository(seeded_db)
+
+    # Act
+    sales = await repo.get_menu_items_sales("franquia_001", AnalyticsPeriod.DAY)
+
+    # Assert
+    assert len(sales) == 3
+    menu_item_ids = {s["_id"] for s in sales}
+    assert menu_item_ids == {101, 102, 103}

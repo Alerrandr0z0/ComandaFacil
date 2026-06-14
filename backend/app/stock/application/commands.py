@@ -21,6 +21,7 @@ class CreateStockItemCommand:
     category: str
     current_quantity: Decimal
     unit: str
+    initial_cost_amount: Decimal = Decimal("0.0")
     min_stock_level: float = 0.0
 
 
@@ -47,6 +48,7 @@ class CreateStockItemHandler:
                     id=0,
                     quantity=MeasuredQuantity(command.current_quantity, command.unit),
                     type=TransactionType.INPUT,
+                    cost_amount=command.initial_cost_amount,
                 )
             )
         await self._repo.save(item)
@@ -64,7 +66,9 @@ class StockService:
         self._item_repo: Final[StockItemRepository] = item_repo
         self._recipe_repo: Final[RecipeRepository] = recipe_repo
 
-    async def add_input(self, item_id: int, quantity: Decimal, tenant_id: str) -> None:
+    async def add_input(
+        self, item_id: int, quantity: Decimal, cost_amount: Decimal, tenant_id: str
+    ) -> None:
         item = await self._item_repo.find_by_id(item_id, tenant_id)
         if not item:
             raise NotFoundError("StockItem", item_id)
@@ -75,6 +79,7 @@ class StockService:
             id=0,
             quantity=MeasuredQuantity(quantity, unit),
             type=TransactionType.INPUT,
+            cost_amount=cost_amount,
         )
         item.add_transaction(tx)
         await self._item_repo.save(item)

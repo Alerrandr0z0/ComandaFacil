@@ -137,6 +137,19 @@ async def refund_payment(
 
         background_tasks.add_task(PaymentReadModelSync(mongo).sync, payment)
 
+        # Update the most recent matching order in order_history to REFUNDED state
+        cursor = (
+            mongo["order_history"]
+            .find({"order_id": schema.order_id, "tenant_id": tenant_id})
+            .sort("closed_at", -1)
+            .limit(1)
+        )
+        matched_orders = await cursor.to_list(length=1)
+        if matched_orders:
+            await mongo["order_history"].update_one(
+                {"_id": matched_orders[0]["_id"]}, {"$set": {"state": "REFUNDED"}}
+            )
+
         return PaymentResponseSchema(
             id=payment.id,
             order_id=payment.order_id,

@@ -10,7 +10,14 @@ from decimal import Decimal
 
 from sqlalchemy import delete, select
 
-from app.auth.infrastructure.orm_models import EmployeeORM, SessionORM, TenantORM, UserTenantRoleORM
+from app.auth.infrastructure.orm_models import (
+    AuditLogORM,
+    EmployeeORM,
+    EmployeePermissionORM,
+    SessionORM,
+    TenantORM,
+    UserTenantRoleORM,
+)
 from app.kitchen.infrastructure.orm_models import KitchenOrderItemORM
 from app.menu.api.routes import _resolve_menu_doc
 from app.menu.domain.menu import Menu
@@ -84,6 +91,8 @@ async def seed() -> None:
         await db.execute(delete(PaymentORM).where(PaymentORM.tenant_id == "1"))
 
         # Clean auth roles for Tenant 1
+        await db.execute(delete(EmployeePermissionORM).where(EmployeePermissionORM.tenant_id == 1))
+        await db.execute(delete(AuditLogORM).where(AuditLogORM.tenant_id == 1))
         await db.execute(delete(SessionORM).where(SessionORM.tenant_id == 1))
         await db.execute(delete(UserTenantRoleORM).where(UserTenantRoleORM.tenant_id == 1))
 
@@ -141,10 +150,44 @@ async def seed() -> None:
                 tenant_id=1,
                 employee_id=emp.id,
                 role_type=role,
-                is_active=True
+                is_active=True,
+                removed=False,
             )
             db.add(role_orm)
             await db.flush()
+
+        print("Seeding sample audit logs and employee permissions...")
+        audit_logs_data = [
+            (1, 501, "Lucas Gerente", "EMPLOYEE_CREATED", "employee", "502", "Colaborador Marcos Garçom cadastrado no sistema."),
+            (2, 501, "Lucas Gerente", "ROLE_ASSIGNED", "employee", "503", "Cargo COOK atribuído a Sandra Cozinheira."),
+            (3, 501, "Lucas Gerente", "ROLE_ASSIGNED", "employee", "504", "Cargo CASHIER atribuído a Roberta Caixa."),
+            (4, 501, "Lucas Gerente", "EMPLOYEE_REMOVED", "employee", "505", "Colaborador removido da franquia (soft-delete)."),
+            (5, 501, "Lucas Gerente", "PERMISSION_OVERRIDE", "employee", "502", "Permissão MANAGE_MENU concedida a Marcos Garçom."),
+        ]
+        for log_id, actor_id, actor_name, action, entity_type, entity_id, details in audit_logs_data:
+            log_orm = AuditLogORM(
+                id=log_id,
+                tenant_id=1,
+                actor_id=actor_id,
+                actor_name=actor_name,
+                action=action,
+                entity_type=entity_type,
+                entity_id=entity_id,
+                details=details,
+                created_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(days=30, hours=log_id),
+            )
+            db.add(log_orm)
+
+        # Sample permission overrides: waiter Marcos (502) can manage menu
+        perm_orm = EmployeePermissionORM(
+            id=1,
+            tenant_id=1,
+            employee_id=502,
+            action="MANAGE_MENU",
+            granted=True,
+        )
+        db.add(perm_orm)
+        await db.flush()
 
         print("Seeding beach restaurant menu items...")
         menu_items_data = [
@@ -232,6 +275,7 @@ async def seed() -> None:
                 transaction_type="INPUT",
                 quantity_value=Decimal(str(initial_qty)),
                 quantity_unit=unit,
+                cost_amount=Decimal("5.00"),
             )
             db.add(tx_orm)
             await db.flush()
@@ -245,7 +289,13 @@ async def seed() -> None:
                 min_stock_level=min_stock,
                 is_active=True,
                 transactions=[
-                    StockTransaction(id=tx_orm.id, quantity=MeasuredQuantity(Decimal(str(initial_qty)), unit), type=TransactionType.INPUT, reason="Seed initial stock")
+                    StockTransaction(
+                        id=tx_orm.id,
+                        quantity=MeasuredQuantity(Decimal(str(initial_qty)), unit),
+                        type=TransactionType.INPUT,
+                        cost_amount=Decimal("5.00"),
+                        reason="Seed initial stock",
+                    )
                 ]
             )
             await stock_sync.sync(domain_item)
@@ -374,11 +424,13 @@ async def seed() -> None:
         await MenuReadModelSync(mongo_db).sync(menu_doc_with_pl)
         print("PriceLists seeded and synced.")
 
+        now = datetime.datetime.now(datetime.UTC)
+
         print("Seeding active orders (Salão)...")
         # In the frontend, the order_id for Table 2 is 2, Table 3 is 3, Table 4 is 4
 
         # Mesa 2 (OPEN)
-        order_m2 = OrderFormORM(id=2, tenant_id="1", display_code="MESA-02", state="OPEN", table_number=2, fulfillment_type="TABLE")
+        order_m2 = OrderFormORM(id=2, tenant_id="1", display_code="MESA-02", state="OPEN", table_number=2, fulfillment_type="TABLE", created_at=now)
         db.add(order_m2)
         await db.flush()
 
@@ -391,7 +443,7 @@ async def seed() -> None:
         await db.flush()
 
         # Mesa 3 (OPEN)
-        order_m3 = OrderFormORM(id=3, tenant_id="1", state="OPEN", display_code="MESA-03", table_number=3, fulfillment_type="TABLE")
+        order_m3 = OrderFormORM(id=3, tenant_id="1", state="OPEN", display_code="MESA-03", table_number=3, fulfillment_type="TABLE", created_at=now)
         db.add(order_m3)
         await db.flush()
 
@@ -402,7 +454,7 @@ async def seed() -> None:
         await db.flush()
 
         # Mesa 4 (PAYMENT_REQUESTED)
-        order_m4 = OrderFormORM(id=4, tenant_id="1", state="OPEN", display_code="MESA-04", table_number=4, fulfillment_type="TABLE", payment_requested=True)
+        order_m4 = OrderFormORM(id=4, tenant_id="1", state="OPEN", display_code="MESA-04", table_number=4, fulfillment_type="TABLE", payment_requested=True, created_at=now)
         db.add(order_m4)
         await db.flush()
 
@@ -436,8 +488,41 @@ async def seed() -> None:
             db.add(k)
         await db.flush()
 
+        # Seed active orders audit logs
+        print("Seeding active orders audit logs...")
+        active_audit_logs = [
+            # Mesa 2
+            AuditLogORM(id=10, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="ORDER_CREATED", entity_type="order", entity_id="2", details="Comanda ID 2 (Código: MESA-02) criada com tipo de atendimento TABLE.", created_at=now - datetime.timedelta(minutes=10)),
+            AuditLogORM(id=11, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="ORDER_ITEM_ADD", entity_type="order", entity_id="2", details="Item 'Caipirinha de Limão' (Qtd: 2, Valor: R$ 18.00) adicionado à comanda ID 2.", created_at=now - datetime.timedelta(minutes=9)),
+            AuditLogORM(id=12, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="ORDER_ITEM_ADD", entity_type="order", entity_id="2", details="Item 'Lula à Dorê' (Qtd: 1, Valor: R$ 55.00) adicionado à comanda ID 2.", created_at=now - datetime.timedelta(minutes=9)),
+            AuditLogORM(id=13, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="ORDER_ITEM_ADD", entity_type="order", entity_id="2", details="Item 'Isca de Peixe Crocante' (Qtd: 1, Valor: R$ 45.00) adicionado à comanda ID 2.", created_at=now - datetime.timedelta(minutes=9)),
+            AuditLogORM(id=14, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="KITCHEN_ITEM_CREATED", entity_type="kitchen_item", entity_id="7001", details="Item de cozinha 'Lula à Dorê' (ID: 7001, Comanda Ref ID: 60022) enviado para a praça GRILL.", created_at=now - datetime.timedelta(minutes=8)),
+            AuditLogORM(id=15, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="KITCHEN_ITEM_CREATED", entity_type="kitchen_item", entity_id="7002", details="Item de cozinha 'Isca de Peixe Crocante' (ID: 7002, Comanda Ref ID: 60023) enviado para a praça GRILL.", created_at=now - datetime.timedelta(minutes=8)),
+            AuditLogORM(id=16, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="KITCHEN_ITEM_CREATED", entity_type="kitchen_item", entity_id="7004", details="Item de cozinha 'Caipirinha de Limão' (ID: 7004, Comanda Ref ID: 60021) enviado para a praça BEVERAGE.", created_at=now - datetime.timedelta(minutes=8)),
+            AuditLogORM(id=17, tenant_id=1, actor_id=503, actor_name="Sandra Cozinheira", action="KITCHEN_STATUS_PREPARING", entity_type="kitchen_item", entity_id="7001", details="Item de cozinha 'Lula à Dorê' (ID: 7001, Comanda Ref ID: 60022) alterou de 'Aguardando' para 'Em Preparo'.", created_at=now - datetime.timedelta(minutes=5)),
+
+            # Mesa 3
+            AuditLogORM(id=18, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="ORDER_CREATED", entity_type="order", entity_id="3", details="Comanda ID 3 (Código: MESA-03) criada com tipo de atendimento TABLE.", created_at=now - datetime.timedelta(minutes=15)),
+            AuditLogORM(id=19, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="ORDER_ITEM_ADD", entity_type="order", entity_id="3", details="Item 'Água de Coco' (Qtd: 3, Valor: R$ 8.00) adicionado à comanda ID 3.", created_at=now - datetime.timedelta(minutes=14)),
+            AuditLogORM(id=20, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="ORDER_ITEM_ADD", entity_type="order", entity_id="3", details="Item 'Queijo Coalho na Brasa' (Qtd: 2, Valor: R$ 15.00) adicionado à comanda ID 3.", created_at=now - datetime.timedelta(minutes=14)),
+            AuditLogORM(id=21, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="KITCHEN_ITEM_CREATED", entity_type="kitchen_item", entity_id="7005", details="Item de cozinha 'Água de Coco' (ID: 7005, Comanda Ref ID: 60031) enviado para a praça BEVERAGE.", created_at=now - datetime.timedelta(minutes=13)),
+            AuditLogORM(id=22, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="KITCHEN_ITEM_CREATED", entity_type="kitchen_item", entity_id="7003", details="Item de cozinha 'Queijo Coalho na Brasa' (ID: 7003, Comanda Ref ID: 60032) enviado para a praça GRILL.", created_at=now - datetime.timedelta(minutes=13)),
+            AuditLogORM(id=23, tenant_id=1, actor_id=503, actor_name="Sandra Cozinheira", action="KITCHEN_STATUS_READY", entity_type="kitchen_item", entity_id="7003", details="Item de cozinha 'Queijo Coalho na Brasa' (ID: 7003, Comanda Ref ID: 60032) alterou de 'Em Preparo' para 'Pronto'.", created_at=now - datetime.timedelta(minutes=2)),
+
+            # Mesa 4
+            AuditLogORM(id=24, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="ORDER_CREATED", entity_type="order", entity_id="4", details="Comanda ID 4 (Código: MESA-04) criada com tipo de atendimento TABLE.", created_at=now - datetime.timedelta(minutes=25)),
+            AuditLogORM(id=25, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="ORDER_ITEM_ADD", entity_type="order", entity_id="4", details="Item 'Moqueca de Camarão' (Qtd: 1, Valor: R$ 120.00) adicionado à comanda ID 4.", created_at=now - datetime.timedelta(minutes=24)),
+            AuditLogORM(id=26, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="ORDER_ITEM_ADD", entity_type="order", entity_id="4", details="Item 'Porção de Batata Frita' (Qtd: 1, Valor: R$ 25.00) adicionado à comanda ID 4.", created_at=now - datetime.timedelta(minutes=24)),
+            AuditLogORM(id=27, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="ORDER_ITEM_ADD", entity_type="order", entity_id="4", details="Item 'Cerveja Heineken Long Neck' (Qtd: 4, Valor: R$ 12.00) adicionado à comanda ID 4.", created_at=now - datetime.timedelta(minutes=24)),
+            AuditLogORM(id=28, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="KITCHEN_ITEM_CREATED", entity_type="kitchen_item", entity_id="7007", details="Item de cozinha 'Moqueca de Camarão' (ID: 7007, Comanda Ref ID: 60041) enviado para a praça GRILL.", created_at=now - datetime.timedelta(minutes=23)),
+            AuditLogORM(id=30, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="KITCHEN_ITEM_CREATED", entity_type="kitchen_item", entity_id="7008", details="Item de cozinha 'Porção de Batata Frita' (ID: 7008, Comanda Ref ID: 60042) enviado para a praça GRILL.", created_at=now - datetime.timedelta(minutes=23)),
+            AuditLogORM(id=31, tenant_id=1, actor_id=502, actor_name="Marcos Garçom", action="KITCHEN_ITEM_CREATED", entity_type="kitchen_item", entity_id="7006", details="Item de cozinha 'Cerveja Heineken Long Neck' (ID: 7006, Comanda Ref ID: 60043) enviado para a praça BEVERAGE.", created_at=now - datetime.timedelta(minutes=23)),
+        ]
+        for log in active_audit_logs:
+            db.add(log)
+        await db.flush()
+
         # Sync ALL kitchen items to MongoDB "kitchen_read"
-        now = datetime.datetime.now(datetime.UTC)
         kitchen_docs = [
             {
                 "kitchen_item_id": 7001,
@@ -550,16 +635,15 @@ async def seed() -> None:
         ]
 
         order_seq = 2000
+        # Create orders spanning at least 5 years (1825 days)
+        base_date = now - datetime.timedelta(days=1825)
         for i in range(25):
             order_seq += 1
 
-            # To populate the daily dashboard, we make 8 of the orders be created TODAY
-            if i < 8:
-                order_time = now - datetime.timedelta(minutes=30 * i)
-            else:
-                day_offset = (i % 6) + 1
-                hour_offset = (i * 2) % 12 + 10
-                order_time = now - datetime.timedelta(days=day_offset, hours=hour_offset)
+            # Distribute orders evenly over 5+ years
+            day_offset = (i % 365) + 1  # 1-365 days
+            hour_offset = (i * 3) % 24  # 0-23 hours
+            order_time = base_date + datetime.timedelta(days=day_offset, hours=hour_offset)
 
             order_hist = OrderFormORM(
                 id=order_seq,

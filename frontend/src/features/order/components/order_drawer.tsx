@@ -302,7 +302,31 @@ function ConfirmedItemsList({
               >
                 <div className="space-y-0.5 min-w-0 flex-1">
                   <div className="flex items-center gap-2 flex-wrap">
-                    {item.status && (
+                    {item.kitchen_states && item.kitchen_states.length > 0 ? (
+                      <div className="flex gap-1 flex-wrap">
+                        {Object.entries(
+                          item.kitchen_states.reduce(
+                            (acc, st) => {
+                              acc[st] = (acc[st] || 0) + 1
+                              return acc
+                            },
+                            {} as Record<string, number>,
+                          ),
+                        ).map(([st, count]) => (
+                          <span
+                            key={st}
+                            className={`rounded-full px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider border ${
+                              statusConfig[st]?.color ||
+                              'border-gray-500/20 bg-gray-950/20 text-gray-400'
+                            }`}
+                            title={`${count}x unidades em status ${statusConfig[st]?.label || st}`}
+                          >
+                            {count > 1 ? `${count}x ` : ''}
+                            {statusConfig[st]?.label || st}
+                          </span>
+                        ))}
+                      </div>
+                    ) : item.status ? (
                       <span
                         className={`rounded-full px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider border ${
                           statusConfig[item.status]?.color ||
@@ -311,7 +335,7 @@ function ConfirmedItemsList({
                       >
                         {statusConfig[item.status]?.label || item.status}
                       </span>
-                    )}
+                    ) : null}
                     <h4 className="font-bold text-gray-200 truncate">{item.name_cpy}</h4>
                     <span className="text-gray-500 font-medium shrink-0">x{item.quantity}</span>
                   </div>

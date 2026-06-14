@@ -211,7 +211,14 @@ async def test_get_kitchen_when_data_exists_then_returns_200(
 ) -> None:
     fake_mongo.set_data(
         "kitchen_read",
-        [{"avg_prep_time": 480000.0, "total_prepared": 50, "completed": 48}],
+        [
+            {
+                "avg_prep_time": 480000.0,
+                "avg_queue_time": 300000.0,
+                "total_prepared": 50,
+                "completed": 48,
+            }
+        ],
     )
 
     response = await api_client.get("/api/v1/analytics/kitchen")
@@ -220,6 +227,7 @@ async def test_get_kitchen_when_data_exists_then_returns_200(
     body = response.json()
     assert body["period"] == "day"
     assert "average_prep_time_minutes" in body
+    assert "average_queue_time_minutes" in body
     assert "items_prepared" in body
     assert "completion_rate" in body
 
@@ -239,6 +247,7 @@ async def test_get_kitchen_when_no_data_then_returns_zeros(
     assert response.status_code == 200
     body = response.json()
     assert body["average_prep_time_minutes"] == 0.0
+    assert body["average_queue_time_minutes"] == 0.0
     assert body["items_prepared"] == 0
 
 

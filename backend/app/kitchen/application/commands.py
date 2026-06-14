@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Final
 
@@ -64,6 +65,7 @@ class ReceiveKitchenItemHandler:
                     "station_type_cpy": item.station_type_cpy,
                     "state": item.state.name,
                     "notes": item.notes,
+                    "created_at": datetime.datetime.now(datetime.UTC).isoformat(),
                 },
             },
         )
@@ -103,6 +105,7 @@ class PrepareKitchenItemHandler:
                     "name_cpy": item.name_cpy,
                     "station_type_cpy": item.station_type_cpy,
                     "state": item.state.name,
+                    "started_at": datetime.datetime.now(datetime.UTC).isoformat(),
                 },
             },
         )

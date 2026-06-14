@@ -15,7 +15,7 @@ interface TableGridProps {
   onSelectTable: (tableNumber: number, order: OrderForm | null) => void
   selectedTableNumber: number | null
   readyItems: ReadyItem[]
-  onDismissReadyItem: (itemId: number) => void
+  onDismissReadyItem: (item: ReadyItem) => void
 }
 
 interface TableCardProps {
@@ -78,26 +78,19 @@ function getTableStatusConfig(
   }
 }
 
-function useElapsedTime(isOccupied: boolean, tableNumber: number): string {
+function useElapsedTime(orderCreatedAt: string | undefined): string {
   const [elapsedTime, setElapsedTime] = useState<string>('')
 
   useEffect(() => {
-    if (!isOccupied) {
+    if (!orderCreatedAt) {
       setElapsedTime('')
       return
     }
 
-    const key = `cf_table_${tableNumber}_open_time`
-    let openTime = localStorage.getItem(key)
-    if (!openTime) {
-      openTime = Date.now().toString()
-      localStorage.setItem(key, openTime)
-    }
-
-    const startTime = parseInt(openTime, 10)
+    const startTime = new Date(orderCreatedAt).getTime()
 
     const updateTimer = () => {
-      const diffMs = Date.now() - startTime
+      const diffMs = Math.max(0, Date.now() - startTime)
       const diffMins = Math.floor(diffMs / 60000)
       const diffSecs = Math.floor((diffMs % 60000) / 1000)
 
@@ -109,7 +102,7 @@ function useElapsedTime(isOccupied: boolean, tableNumber: number): string {
     updateTimer()
     const timer = setInterval(updateTimer, 1000)
     return () => clearInterval(timer)
-  }, [isOccupied, tableNumber])
+  }, [orderCreatedAt])
 
   return elapsedTime
 }
@@ -207,7 +200,7 @@ function TableCard({
   const isPaid = order?.state === 'PAID'
   const hasReadyAlert = readyCount > 0
 
-  const elapsedTime = useElapsedTime(isOccupied, tableNumber)
+  const elapsedTime = useElapsedTime(order?.created_at)
 
   const { statusLabel, statusColor, borderGlow } = getTableStatusConfig(
     hasReadyAlert,
@@ -380,8 +373,6 @@ export default function TableGrid({
         fulfillment_type: 'TABLE',
         table_number: tableNumber,
       })
-      // Track opening timestamp locally
-      localStorage.setItem(`cf_table_${tableNumber}_open_time`, Date.now().toString())
       setRefreshTrigger((prev) => prev + 1)
       onSelectTable(tableNumber, res.data)
     } catch (_err) {
@@ -407,7 +398,7 @@ export default function TableGrid({
 
     // Dismiss all matching alerts
     for (const item of matchingItems) {
-      onDismissReadyItem(item.id)
+      onDismissReadyItem(item)
     }
   }
 

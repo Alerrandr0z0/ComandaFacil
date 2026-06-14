@@ -1,4 +1,14 @@
-import { Check, Clock, Flame, GlassWater, Loader2, Play, RefreshCw, X } from 'lucide-react'
+import {
+  BookOpen,
+  Check,
+  Clock,
+  Flame,
+  GlassWater,
+  Loader2,
+  Play,
+  RefreshCw,
+  X,
+} from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTenant } from '@/shared/hooks/useTenant'
 import { httpClient } from '@/shared/lib/http_client'
@@ -9,10 +19,13 @@ interface KitchenItem {
   name_cpy: string
   station_type_cpy: string
   state: 'WAITING' | 'PREPARING' | 'READY' | 'CANCELLED'
-  tenant_id: string
+  tenant_id?: string
   kitchen_item_id?: number
   preparation_profile?: 'STANDARD' | 'NO_PREP'
   notes?: string
+  created_at?: string
+  started_at?: string
+  menu_item_id?: number
 }
 
 interface KdsColumnProps {
@@ -26,6 +39,7 @@ interface KdsColumnProps {
   onReady?: (itemId: number) => void
   onCancel?: (itemId: number) => void
   seenTimestamps: Record<number, number>
+  onShowRecipe?: (menuItemId: number, itemName: string) => void
 }
 
 function KdsItemCard({
@@ -36,6 +50,7 @@ function KdsItemCard({
   onReady,
   onCancel,
   startTime,
+  onShowRecipe,
 }: {
   item: KitchenItem
   showCancel?: boolean
@@ -44,12 +59,13 @@ function KdsItemCard({
   onReady?: (itemId: number) => void
   onCancel?: (itemId: number) => void
   startTime: number
+  onShowRecipe?: (menuItemId: number, itemName: string) => void
 }) {
   const [elapsed, setElapsed] = useState('')
 
   useEffect(() => {
     const updateTimer = () => {
-      const diffMs = Date.now() - startTime
+      const diffMs = Math.max(0, Date.now() - startTime)
       const diffMins = Math.floor(diffMs / 60000)
       const diffSecs = Math.floor((diffMs % 60000) / 1000)
       setElapsed(`${diffMins}m ${diffSecs}s`)
@@ -91,6 +107,16 @@ function KdsItemCard({
       </div>
 
       <div className="flex gap-2 justify-end border-t border-gray-900/50 pt-3">
+        {item.menu_item_id && onShowRecipe && (
+          <button
+            type="button"
+            onClick={() => item.menu_item_id && onShowRecipe(item.menu_item_id, item.name_cpy)}
+            className="rounded-xl p-2.5 border border-gray-900 bg-gray-950/40 hover:bg-gray-900/40 text-gray-450 hover:text-white transition"
+            title="Ver receita"
+          >
+            <BookOpen className="h-4 w-4" />
+          </button>
+        )}
         {showCancel && onCancel && (
           <button
             type="button"
@@ -153,6 +179,7 @@ function KdsColumn({
   onReady,
   onCancel,
   seenTimestamps,
+  onShowRecipe,
 }: KdsColumnProps) {
   return (
     <div className="flex flex-col rounded-2xl border border-gray-900 bg-gray-950/10 p-5 backdrop-blur-md glass-card h-[calc(100vh-14rem)] min-h-[400px]">
@@ -180,10 +207,126 @@ function KdsColumn({
               onAction={onAction}
               onReady={onReady}
               onCancel={onCancel}
-              startTime={seenTimestamps[item.id] || Date.now()}
+              startTime={
+                item.state === 'PREPARING' && item.started_at
+                  ? new Date(item.started_at).getTime()
+                  : item.created_at
+                    ? new Date(item.created_at).getTime()
+                    : seenTimestamps[item.id] || Date.now()
+              }
+              onShowRecipe={onShowRecipe}
             />
           ))
         )}
+      </div>
+    </div>
+  )
+}
+
+interface RecipeIngredient {
+  stock_item_id: number
+  stock_item_name: string
+  quantity_value: number
+  quantity_unit: string
+}
+
+interface RecipeData {
+  menu_item_id: number
+  ingredients: RecipeIngredient[]
+}
+
+function RecipeModal({
+  menuItemId,
+  itemName,
+  onClose,
+}: {
+  menuItemId: number
+  itemName: string
+  onClose: () => void
+}) {
+  const [recipe, setRecipe] = useState<RecipeData | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let active = true
+    const fetchRecipe = async () => {
+      try {
+        const res = await httpClient.get<RecipeData>(`/v1/stock/recipes/${menuItemId}`)
+        if (active) {
+          setRecipe(res.data)
+        }
+      } catch (_err) {
+        if (active) {
+          setError('Nenhuma receita cadastrada para este item.')
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false)
+        }
+      }
+    }
+    fetchRecipe()
+    return () => {
+      active = false
+    }
+  }, [menuItemId])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+      <div className="w-full max-w-md rounded-2xl border border-gray-900 bg-gray-950 p-6 shadow-2xl relative animate-in zoom-in-95 duration-200">
+        <button
+          type="button"
+          onClick={onClose}
+          className="absolute top-4 right-4 rounded-xl p-1.5 text-gray-400 hover:text-white hover:bg-white/[0.05] transition"
+        >
+          <X className="h-5 w-5" />
+        </button>
+
+        <div className="flex items-center gap-2.5 mb-5 border-b border-gray-900 pb-3">
+          <BookOpen className="h-5 w-5 text-brand-400" />
+          <h3 className="text-base font-black text-white uppercase tracking-wide">
+            Receita: {itemName}
+          </h3>
+        </div>
+
+        {isLoading ? (
+          <div className="flex py-10 justify-center items-center gap-2">
+            <Loader2 className="h-5 w-5 animate-spin text-brand-400" />
+            <span className="text-xs text-gray-400 font-medium">Carregando ingredientes...</span>
+          </div>
+        ) : error ? (
+          <div className="py-6 text-center text-xs text-gray-500 font-medium italic">{error}</div>
+        ) : (
+          <div className="space-y-3">
+            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest text-left">
+              Ingredientes
+            </h4>
+            <div className="divide-y divide-gray-900 overflow-hidden rounded-xl border border-gray-900 bg-gray-950/20">
+              {recipe?.ingredients.map((ing) => (
+                <div
+                  key={ing.stock_item_id}
+                  className="flex justify-between items-center px-4 py-3 hover:bg-white/[0.01] transition-colors"
+                >
+                  <span className="text-sm font-medium text-white">{ing.stock_item_name}</span>
+                  <span className="text-xs font-black text-brand-400 bg-brand-500/10 border border-brand-500/20 rounded-lg px-2.5 py-1">
+                    {ing.quantity_value} {ing.quantity_unit}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="mt-6 flex justify-end">
+          <button
+            type="button"
+            onClick={onClose}
+            className="rounded-xl bg-gray-900 hover:bg-gray-850 px-4 py-2.5 text-xs font-bold text-white transition active:scale-95"
+          >
+            Fechar
+          </button>
+        </div>
       </div>
     </div>
   )
@@ -196,6 +339,7 @@ export default function KdsBoard() {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [connected, setConnected] = useState(false)
+  const [selectedRecipe, setSelectedRecipe] = useState<{ id: number; name: string } | null>(null)
 
   // Track timestamps of when items are first seen to show elapsed timers locally
   const [seenTimestamps, setSeenTimestamps] = useState<Record<number, number>>({})
@@ -327,6 +471,10 @@ export default function KdsBoard() {
   const readyItems = items.filter((item) => item.state === 'READY')
   const cancelledItems = items.filter((item) => item.state === 'CANCELLED')
 
+  const handleShowRecipe = (menuItemId: number, itemName: string) => {
+    setSelectedRecipe({ id: menuItemId, name: itemName })
+  }
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -402,6 +550,7 @@ export default function KdsBoard() {
             onReady={handleReady}
             onCancel={handleCancel}
             seenTimestamps={seenTimestamps}
+            onShowRecipe={handleShowRecipe}
           />
           <KdsColumn
             title="Em Preparação"
@@ -413,6 +562,7 @@ export default function KdsBoard() {
             onAction={handleReady}
             onCancel={handleCancel}
             seenTimestamps={seenTimestamps}
+            onShowRecipe={handleShowRecipe}
           />
           <KdsColumn
             title="Prontos p/ Retirada"
@@ -420,6 +570,7 @@ export default function KdsBoard() {
             colorClass="text-emerald-400"
             items={readyItems}
             seenTimestamps={seenTimestamps}
+            onShowRecipe={handleShowRecipe}
           />
           <KdsColumn
             title="Cancelados (15 min)"
@@ -427,8 +578,17 @@ export default function KdsBoard() {
             colorClass="text-rose-450"
             items={cancelledItems}
             seenTimestamps={seenTimestamps}
+            onShowRecipe={handleShowRecipe}
           />
         </div>
+      )}
+
+      {selectedRecipe && (
+        <RecipeModal
+          menuItemId={selectedRecipe.id}
+          itemName={selectedRecipe.name}
+          onClose={() => setSelectedRecipe(null)}
+        />
       )}
     </div>
   )

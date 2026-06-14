@@ -276,22 +276,26 @@ def test_order_insights_when_peak_hour_boundary_high() -> None:
 @given(
     period=periods,
     average_prep_time_minutes=non_neg_floats,
+    average_queue_time_minutes=non_neg_floats,
     items_prepared=small_positive_ints,
     completion_rate=rate_floats,
 )
 def test_kitchen_performance_hypothesis_when_valid_then_creates(
     period: AnalyticsPeriod,
     average_prep_time_minutes: float,
+    average_queue_time_minutes: float,
     items_prepared: int,
     completion_rate: float,
 ) -> None:
     perf = KitchenPerformance(
         period=period,
         average_prep_time_minutes=average_prep_time_minutes,
+        average_queue_time_minutes=average_queue_time_minutes,
         items_prepared=items_prepared,
         completion_rate=completion_rate,
     )
     assert perf.period == period
     assert perf.average_prep_time_minutes == average_prep_time_minutes
+    assert perf.average_queue_time_minutes == average_queue_time_minutes
     assert perf.items_prepared == items_prepared
     assert perf.completion_rate == completion_rate

@@ -81,12 +81,50 @@ def test_kitchen_item_invalid_transitions_then_raises_value_error() -> None:
     with pytest.raises(ValueError, match="Item is already being prepared"):
         item.prepare()
 
-    # Act & Assert 3: cannot prepare or cancel from ready
+    # Act & Assert 3: cannot prepare from ready
     item.mark_as_ready()
     with pytest.raises(ValueError, match="Cannot prepare a ready item"):
         item.prepare()
-    with pytest.raises(ValueError, match="Cannot cancel a ready item"):
-        item.cancel()
+
+
+def test_kitchen_item_cancel_when_ready_then_transitions_to_surplus() -> None:
+    # Arrange
+    item = KitchenOrderItem(1, 42, "Burguer", "Grill", "franquia_001")
+    item.prepare()
+    item.mark_as_ready()
+
+    # Act
+    item.cancel()
+
+    # Assert
+    assert item.state.name == "SURPLUS"
+
+
+def test_kitchen_item_reclaim_when_surplus_then_transitions_to_ready_with_new_correlation_id() -> (
+    None
+):
+    # Arrange
+    item = KitchenOrderItem(1, 42, "Burguer", "Grill", "franquia_001")
+    item.prepare()
+    item.mark_as_ready()
+    item.cancel()
+    assert item.state.name == "SURPLUS"
+
+    # Act
+    item.reclaim(99)
+
+    # Assert
+    assert item.state.name == "READY"
+    assert item.correlation_id == 99
+
+
+def test_kitchen_item_reclaim_when_not_surplus_then_raises_value_error() -> None:
+    # Arrange
+    item = KitchenOrderItem(1, 42, "Burguer", "Grill", "franquia_001")
+
+    # Act & Assert
+    with pytest.raises(ValueError, match="Only surplus items can be reclaimed"):
+        item.reclaim(99)
 
 
 def test_kitchen_stations_creation_and_inheritance() -> None:

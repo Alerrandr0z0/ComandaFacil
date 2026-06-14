@@ -9,6 +9,8 @@ from app.analytics.application.queries import (
     GetDashboardQuery,
     GetKitchenPerformanceHandler,
     GetKitchenPerformanceQuery,
+    GetMenuMatrixHandler,
+    GetMenuMatrixQuery,
     GetOrderInsightsHandler,
     GetOrderInsightsQuery,
     GetSalesReportHandler,
@@ -16,7 +18,11 @@ from app.analytics.application.queries import (
 )
 from app.analytics.domain.enums import AnalyticsPeriod
 from app.analytics.infrastructure.mongo_repository import MongoAnalyticsRepository
-from app.dependencies import CurrentTenantId, MongoDB, require_permission
+from app.dependencies import CurrentTenantId, DbSession, MongoDB, require_permission
+from app.stock.infrastructure.pg_repository import (
+    SQLAlchemyRecipeRepository,
+    SQLAlchemyStockItemRepository,
+)
 
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
@@ -54,6 +60,7 @@ async def get_sales_report(
         "total_orders": data.total_orders,
         "average_ticket": str(data.average_ticket),
         "by_category": {k: str(v) for k, v in data.by_category.items()},
+        "trends": data.trends,
     }
 
 
@@ -71,6 +78,7 @@ async def get_order_insights(
         "total_orders": data.total_orders,
         "average_items_per_order": data.average_items_per_order,
         "peak_hour": data.peak_hour,
+        "heatmap": data.heatmap,
     }
 
 
@@ -86,6 +94,79 @@ async def get_kitchen_performance(
     return {
         "period": data.period.value,
         "average_prep_time_minutes": data.average_prep_time_minutes,
+        "average_queue_time_minutes": data.average_queue_time_minutes,
         "items_prepared": data.items_prepared,
         "completion_rate": data.completion_rate,
+        "by_station": data.by_station,
+        "sla_compliance_rate": data.sla_compliance_rate,
+        "bottlenecks": data.bottlenecks,
+        "throughput_trends": data.throughput_trends,
+        "std_dev_prep_time_minutes": data.std_dev_prep_time_minutes,
+        "queue_vs_prep_trends": data.queue_vs_prep_trends,
+        "waste_cancelled_value": data.waste_cancelled_value,
+        "waste_cancelled_count": data.waste_cancelled_count,
     }
+
+
+@router.get("/menu-matrix", dependencies=[Depends(require_permission("VIEW_ANALYTICS"))])
+async def get_menu_matrix(
+    tenant_id: CurrentTenantId,
+    mongo: MongoDB,
+    db: DbSession,
+    period: AnalyticsPeriod = Query(default=AnalyticsPeriod.DAY),
+) -> dict[str, Any]:
+    analytics_repo = MongoAnalyticsRepository(mongo)
+    item_repo = SQLAlchemyStockItemRepository(db)
+    recipe_repo = SQLAlchemyRecipeRepository(db, item_repo)
+
+    handler = GetMenuMatrixHandler(analytics_repo, recipe_repo)
+    return await handler.handle(GetMenuMatrixQuery(tenant_id=tenant_id, period=period))
+
+
+@router.get("/demand-forecast", dependencies=[Depends(require_permission("VIEW_ANALYTICS"))])
+async def get_demand_forecast(
+    tenant_id: CurrentTenantId,
+    mongo: MongoDB,
+) -> list[dict[str, Any]]:
+    repo = MongoAnalyticsRepository(mongo)
+    return await repo.get_demand_forecast(tenant_id)
+
+
+@router.get("/order-funnel", dependencies=[Depends(require_permission("VIEW_ANALYTICS"))])
+async def get_order_funnel(
+    tenant_id: CurrentTenantId,
+    mongo: MongoDB,
+    period: AnalyticsPeriod = Query(default=AnalyticsPeriod.DAY),
+) -> dict[str, Any]:
+    repo = MongoAnalyticsRepository(mongo)
+    return await repo.get_order_funnel(tenant_id, period)
+
+
+@router.get("/table-performance", dependencies=[Depends(require_permission("VIEW_ANALYTICS"))])
+async def get_table_performance(
+    tenant_id: CurrentTenantId,
+    mongo: MongoDB,
+    period: AnalyticsPeriod = Query(default=AnalyticsPeriod.DAY),
+) -> list[dict[str, Any]]:
+    repo = MongoAnalyticsRepository(mongo)
+    return await repo.get_table_performance(tenant_id, period)
+
+
+@router.get("/combo-recommendations", dependencies=[Depends(require_permission("VIEW_ANALYTICS"))])
+async def get_combo_recommendations(
+    tenant_id: CurrentTenantId,
+    mongo: MongoDB,
+) -> list[dict[str, Any]]:
+    repo = MongoAnalyticsRepository(mongo)
+    return await repo.get_combo_recommendations(tenant_id)
+
+
+@router.get(
+    "/cannibalization-warnings", dependencies=[Depends(require_permission("VIEW_ANALYTICS"))]
+)
+async def get_cannibalization_warnings(
+    tenant_id: CurrentTenantId,
+    mongo: MongoDB,
+) -> list[dict[str, Any]]:
+    repo = MongoAnalyticsRepository(mongo)
+    return await repo.get_cannibalization_warnings(tenant_id)

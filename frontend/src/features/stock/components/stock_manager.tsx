@@ -1,5 +1,6 @@
 import {
   AlertTriangle,
+  Edit2,
   FileSpreadsheet,
   History,
   Minus,
@@ -8,7 +9,7 @@ import {
   RotateCcw,
   Search,
   Sliders,
-  TrendingDown,
+  Trash2,
   Utensils,
   X,
 } from 'lucide-react'
@@ -46,11 +47,13 @@ interface StockMovement {
 
 interface StockItemRowProps {
   item: StockItem
-  onOpenAction: (item: StockItem, type: 'ADD' | 'DEDUCT' | 'ADJUST' | 'MIN_LEVEL') => void
+  onOpenAction: (item: StockItem, type: 'ADD' | 'DEDUCT' | 'ADJUST') => void
   onViewHistory: (item: StockItem) => void
+  onEdit: (item: StockItem) => void
+  onDelete: (item: StockItem) => void
 }
 
-function StockItemRow({ item, onOpenAction, onViewHistory }: StockItemRowProps) {
+function StockItemRow({ item, onOpenAction, onViewHistory, onEdit, onDelete }: StockItemRowProps) {
   return (
     <tr
       className={`hover:bg-white/[0.02] transition-colors border-b border-gray-900/60 ${item.is_low_stock ? 'bg-rose-500/[0.02]' : ''}`}
@@ -74,9 +77,13 @@ function StockItemRow({ item, onOpenAction, onViewHistory }: StockItemRowProps) 
         <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-gray-900/40 text-gray-400 border border-gray-850">
           {item.category === 'RAW_MATERIAL'
             ? 'Insumo Base'
-            : item.category === 'BEVERAGE'
-              ? 'Bebida'
-              : 'Embalagem'}
+            : item.category === 'SUPPLEMENT'
+              ? 'Suplemento'
+              : item.category === 'BEVERAGE'
+                ? 'Bebida'
+                : item.category === 'PACKAGING'
+                  ? 'Embalagem'
+                  : 'Outros'}
         </span>
       </td>
       <td className="px-5 py-4 font-mono font-bold text-xs text-gray-200">
@@ -118,11 +125,19 @@ function StockItemRow({ item, onOpenAction, onViewHistory }: StockItemRowProps) 
         </button>
         <button
           type="button"
-          onClick={() => onOpenAction(item, 'MIN_LEVEL')}
-          className="p-2 rounded-lg bg-gray-900/40 border border-gray-850 hover:border-amber-500/30 hover:text-amber-400 text-gray-400 transition"
-          title="Alterar Limiar Mínimo"
+          onClick={() => onEdit(item)}
+          className="p-2 rounded-lg bg-gray-900/40 border border-gray-850 hover:border-blue-500/30 hover:text-blue-400 text-gray-400 transition"
+          title="Editar Insumo"
         >
-          <TrendingDown className="h-3.5 w-3.5" />
+          <Edit2 className="h-3.5 w-3.5" />
+        </button>
+        <button
+          type="button"
+          onClick={() => onDelete(item)}
+          className="p-2 rounded-lg bg-gray-900/40 border border-gray-850 hover:border-red-500/30 hover:text-red-400 text-gray-400 transition"
+          title="Excluir Insumo"
+        >
+          <Trash2 className="h-3.5 w-3.5" />
         </button>
         <button
           type="button"
@@ -139,11 +154,13 @@ function StockItemRow({ item, onOpenAction, onViewHistory }: StockItemRowProps) 
 
 interface StockTableProps {
   items: StockItem[]
-  onOpenAction: (item: StockItem, type: 'ADD' | 'DEDUCT' | 'ADJUST' | 'MIN_LEVEL') => void
+  onOpenAction: (item: StockItem, type: 'ADD' | 'DEDUCT' | 'ADJUST') => void
   onViewHistory: (item: StockItem) => void
+  onEdit: (item: StockItem) => void
+  onDelete: (item: StockItem) => void
 }
 
-function StockTable({ items, onOpenAction, onViewHistory }: StockTableProps) {
+function StockTable({ items, onOpenAction, onViewHistory, onEdit, onDelete }: StockTableProps) {
   return (
     <div className="rounded-2xl border border-gray-900 bg-gray-950/10 overflow-hidden backdrop-blur-md glass-card">
       <div className="overflow-x-auto">
@@ -174,6 +191,8 @@ function StockTable({ items, onOpenAction, onViewHistory }: StockTableProps) {
                   item={item}
                   onOpenAction={onOpenAction}
                   onViewHistory={onViewHistory}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
                 />
               ))
             )}
@@ -186,11 +205,13 @@ function StockTable({ items, onOpenAction, onViewHistory }: StockTableProps) {
 
 interface StockActionCardProps {
   activeItem: StockItem
-  actionType: 'ADD' | 'DEDUCT' | 'ADJUST' | 'MIN_LEVEL'
+  actionType: 'ADD' | 'DEDUCT' | 'ADJUST'
   actionValue: string
+  actionCost: string
   actionReason: string
   adjustTransactionType: string
   onChangeValue: (val: string) => void
+  onChangeCost: (val: string) => void
   onChangeReason: (val: string) => void
   onChangeAdjustType: (val: string) => void
   onClose: () => void
@@ -202,9 +223,11 @@ function StockActionCard({
   activeItem,
   actionType,
   actionValue,
+  actionCost,
   actionReason,
   adjustTransactionType,
   onChangeValue,
+  onChangeCost,
   onChangeReason,
   onChangeAdjustType,
   onClose,
@@ -220,9 +243,7 @@ function StockActionCard({
               ? 'Registrar Entrada'
               : actionType === 'DEDUCT'
                 ? 'Registrar Retirada'
-                : actionType === 'ADJUST'
-                  ? 'Ajustar Inventário'
-                  : 'Alterar Limiar Mínimo'}
+                : 'Ajustar Inventário'}
           </h3>
           <span className="text-[10px] text-gray-400 font-bold mt-0.5">{activeItem.name}</span>
         </div>
@@ -256,7 +277,7 @@ function StockActionCard({
 
         <div className="space-y-1.5">
           <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
-            {actionType === 'MIN_LEVEL' ? 'Novo Mínimo de Alerta' : 'Quantidade'}
+            Quantidade
           </span>
           <div className="relative">
             <input
@@ -273,26 +294,47 @@ function StockActionCard({
           </div>
         </div>
 
-        {actionType !== 'MIN_LEVEL' && (
+        {actionType === 'ADD' && (
           <div className="space-y-1.5">
             <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
-              Justificativa
+              Custo Unitário (R$)
             </span>
-            <input
-              type="text"
-              placeholder={
-                actionType === 'ADJUST' && adjustTransactionType === 'WASTE'
-                  ? 'Ex: Produto vencido, queda acidental...'
-                  : actionType === 'ADJUST' && adjustTransactionType === 'PRODUCTION'
-                    ? 'Ex: Lote produzido em 08/06/2026'
-                    : 'Ex: Reposição semanal de carga'
-              }
-              value={actionReason}
-              onChange={(e) => onChangeReason(e.target.value)}
-              className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
-            />
+            <div className="relative">
+              <input
+                type="number"
+                step="any"
+                min="0.01"
+                required
+                placeholder="Ex: 25.90"
+                value={actionCost}
+                onChange={(e) => onChangeCost(e.target.value)}
+                className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+              />
+              <span className="absolute right-4 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-500 font-mono">
+                R$
+              </span>
+            </div>
           </div>
         )}
+
+        <div className="space-y-1.5">
+          <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
+            Justificativa
+          </span>
+          <input
+            type="text"
+            placeholder={
+              actionType === 'ADJUST' && adjustTransactionType === 'WASTE'
+                ? 'Ex: Produto vencido, queda acidental...'
+                : actionType === 'ADJUST' && adjustTransactionType === 'PRODUCTION'
+                  ? 'Ex: Lote produzido em 08/06/2026'
+                  : 'Ex: Reposição semanal de carga'
+            }
+            value={actionReason}
+            onChange={(e) => onChangeReason(e.target.value)}
+            className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+          />
+        </div>
 
         <button
           type="button"
@@ -315,6 +357,7 @@ interface CreateStockItemModalProps {
     quantity: number
     unit: string
     minLevel: number
+    costAmount: number
   }) => void
 }
 
@@ -324,6 +367,7 @@ function CreateStockItemModal({ onClose, onSubmit }: CreateStockItemModalProps) 
   const [quantity, setQuantity] = useState('0')
   const [unit, setUnit] = useState('un')
   const [minLevel, setMinLevel] = useState('0')
+  const [costAmount, setCostAmount] = useState('0')
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault()
@@ -334,6 +378,7 @@ function CreateStockItemModal({ onClose, onSubmit }: CreateStockItemModalProps) 
       quantity: Number(quantity),
       unit,
       minLevel: Number(minLevel),
+      costAmount: Number(costAmount) || 0,
     })
   }
 
@@ -379,8 +424,10 @@ function CreateStockItemModal({ onClose, onSubmit }: CreateStockItemModalProps) 
                 className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input bg-[#0c0c12]"
               >
                 <option value="RAW_MATERIAL">Insumo Base</option>
+                <option value="SUPPLEMENT">Suplemento</option>
                 <option value="BEVERAGE">Bebida</option>
                 <option value="PACKAGING">Embalagem</option>
+                <option value="OTHER">Outros</option>
               </select>
             </div>
 
@@ -388,18 +435,24 @@ function CreateStockItemModal({ onClose, onSubmit }: CreateStockItemModalProps) 
               <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
                 Unidade de Medida
               </span>
-              <input
-                type="text"
-                required
-                placeholder="Ex: kg, g, l, un"
+              <select
                 value={unit}
                 onChange={(e) => setUnit(e.target.value)}
-                className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
-              />
+                className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input bg-[#0c0c12]"
+              >
+                <option value="un">Unidade (un)</option>
+                <option value="g">Grama (g)</option>
+                <option value="kg">Quilograma (kg)</option>
+                <option value="ml">Mililitro (ml)</option>
+                <option value="l">Litro (l)</option>
+                <option value="oz">Onça (oz)</option>
+                <option value="lb">Libra (lb)</option>
+                <option value="fl_oz">Onça Líquida (fl_oz)</option>
+              </select>
             </div>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-1.5">
               <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
                 Qtd. Inicial
@@ -410,6 +463,21 @@ function CreateStockItemModal({ onClose, onSubmit }: CreateStockItemModalProps) 
                 required
                 value={quantity}
                 onChange={(e) => setQuantity(e.target.value)}
+                className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+              />
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
+                Custo Unit. (R$)
+              </span>
+              <input
+                type="number"
+                step="any"
+                min="0"
+                placeholder="0,00"
+                value={costAmount}
+                onChange={(e) => setCostAmount(e.target.value)}
                 className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
               />
             </div>
@@ -450,15 +518,146 @@ function CreateStockItemModal({ onClose, onSubmit }: CreateStockItemModalProps) 
   )
 }
 
-async function submitStockAction(
+interface EditStockItemModalProps {
+  item: StockItem
+  onClose: () => void
+  onSubmit: (data: { name: string; category: string; unit: string; minLevel: number }) => void
+}
+
+function EditStockItemModal({ item, onClose, onSubmit }: EditStockItemModalProps) {
+  const [name, setName] = useState(item.name)
+  const [category, setCategory] = useState(item.category)
+  const [unit, setUnit] = useState(item.current_quantity_unit)
+  const [minLevel, setMinLevel] = useState(item.min_stock_level.toString())
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!name.trim()) return
+    onSubmit({
+      name,
+      category,
+      unit,
+      minLevel: Number(minLevel),
+    })
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+      <div className="w-full max-w-md rounded-2xl border border-gray-900 bg-[#0c0c12] p-6 space-y-6 shadow-2xl glass-card">
+        <div className="flex items-center justify-between border-b border-gray-900/60 pb-3">
+          <h2 className="text-sm font-black text-white uppercase tracking-wider">Editar Insumo</h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="text-gray-550 hover:text-white transition rounded-lg p-1 hover:bg-white/[0.03]"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSubmit} className="space-y-4 text-xs">
+          <div className="space-y-1.5">
+            <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
+              Nome do Insumo
+            </span>
+            <input
+              type="text"
+              required
+              placeholder="Ex: Queijo Coalho"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+            />
+          </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-1.5">
+              <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
+                Categoria
+              </span>
+              <select
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input bg-[#0c0c12]"
+              >
+                <option value="RAW_MATERIAL">Insumo Base</option>
+                <option value="SUPPLEMENT">Suplemento</option>
+                <option value="BEVERAGE">Bebida</option>
+                <option value="PACKAGING">Embalagem</option>
+                <option value="OTHER">Outros</option>
+              </select>
+            </div>
+
+            <div className="space-y-1.5">
+              <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
+                Unidade de Medida
+              </span>
+              <select
+                value={unit}
+                onChange={(e) => setUnit(e.target.value)}
+                className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input bg-[#0c0c12]"
+              >
+                <option value="un">Unidade (un)</option>
+                <option value="g">Grama (g)</option>
+                <option value="kg">Quilograma (kg)</option>
+                <option value="ml">Mililitro (ml)</option>
+                <option value="l">Litro (l)</option>
+                <option value="oz">Onça (oz)</option>
+                <option value="lb">Libra (lb)</option>
+                <option value="fl_oz">Onça Líquida (fl_oz)</option>
+              </select>
+            </div>
+          </div>
+
+          <div className="space-y-1.5">
+            <span className="block text-[10px] text-gray-500 uppercase font-extrabold">
+              Mínimo Alerta (Estoque Mínimo)
+            </span>
+            <input
+              type="number"
+              step="any"
+              required
+              value={minLevel}
+              onChange={(e) => setMinLevel(e.target.value)}
+              className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+            />
+          </div>
+
+          <div className="flex gap-3 pt-2">
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex-1 rounded-xl border border-gray-850 hover:border-gray-700 bg-gray-900/30 py-3 text-xs font-bold text-gray-300 hover:text-white transition"
+            >
+              Cancelar
+            </button>
+            <button
+              type="submit"
+              className="flex-1 rounded-xl bg-brand-500 hover:bg-brand-600 active:scale-[0.98] py-3 text-xs font-bold text-white transition shadow-lg shadow-brand-500/10"
+            >
+              Salvar Alterações
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+  )
+}
+
+function submitStockAction(
   itemId: number,
-  type: 'ADD' | 'DEDUCT' | 'ADJUST' | 'MIN_LEVEL',
+  type: 'ADD' | 'DEDUCT' | 'ADJUST',
   value: number,
   reason: string,
+  costAmount?: number,
   adjustTransactionType = 'ADJUSTMENT',
 ) {
   if (type === 'ADD') {
-    return httpClient.post(`/v1/stock/items/${itemId}/add`, { quantity: value, reason })
+    return httpClient.post(`/v1/stock/items/${itemId}/add`, {
+      quantity: value,
+      cost_amount: costAmount ?? 0,
+      reason,
+    })
   }
   if (type === 'DEDUCT') {
     return httpClient.post(`/v1/stock/items/${itemId}/deduct`, { quantity: value, reason })
@@ -469,9 +668,6 @@ async function submitStockAction(
       reason,
       transaction_type: adjustTransactionType,
     })
-  }
-  if (type === 'MIN_LEVEL') {
-    return httpClient.put(`/v1/stock/items/${itemId}/min-level`, { min_stock_level: value })
   }
 }
 
@@ -609,14 +805,33 @@ function HistoryPanel({
   )
 }
 
+function getTabStyles(isActive: boolean): string {
+  if (isActive) {
+    return 'border-brand-500 text-brand-400 font-extrabold bg-brand-500/5'
+  }
+  return 'border-transparent text-gray-450 hover:text-gray-200 hover:bg-gray-900/10'
+}
+
+function getTabCounterStyles(isActive: boolean): string {
+  if (isActive) {
+    return 'bg-brand-500/20 text-brand-300'
+  }
+  return 'bg-gray-900 text-gray-500'
+}
+
 export default function StockManager() {
   const [stockItems, setStockItems] = useState<StockItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
-  const [filterTab, setFilterTab] = useState<'ALL' | 'LOW'>('ALL')
+  const [filterTab, setFilterTab] = useState<
+    'ALL' | 'RAW_MATERIAL' | 'BEVERAGE' | 'PACKAGING' | 'SUPPLEMENT' | 'OTHER'
+  >('ALL')
+  const [showOnlyLowStock, setShowOnlyLowStock] = useState(false)
 
   const [showCreateModal, setShowCreateModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [editingItem, setEditingItem] = useState<StockItem | null>(null)
   const [activeHistoryItem, setActiveHistoryItem] = useState<StockItem | null>(null)
   const [historyMovements, setHistoryMovements] = useState<StockMovement[]>([])
   const [isLoadingHistory, setIsLoadingHistory] = useState(false)
@@ -624,10 +839,9 @@ export default function StockManager() {
   const [isLoadingConsumedBy, setIsLoadingConsumedBy] = useState(false)
 
   const [actionItemId, setActionItemId] = useState<number | null>(null)
-  const [actionType, setActionType] = useState<'ADD' | 'DEDUCT' | 'ADJUST' | 'MIN_LEVEL' | null>(
-    null,
-  )
+  const [actionType, setActionType] = useState<'ADD' | 'DEDUCT' | 'ADJUST' | null>(null)
   const [actionValue, setActionValue] = useState('')
+  const [actionCost, setActionCost] = useState('')
   const [actionReason, setActionReason] = useState('')
   const [adjustTransactionType, setAdjustTransactionType] = useState('ADJUSTMENT')
   const [isSubmittingAction, setIsSubmittingAction] = useState(false)
@@ -655,12 +869,14 @@ export default function StockManager() {
     quantity: number
     unit: string
     minLevel: number
+    costAmount: number
   }) => {
     try {
       await httpClient.post('/v1/stock/items', {
         name: data.name,
         category: data.category,
         current_quantity: data.quantity,
+        initial_cost_amount: data.costAmount,
         unit: data.unit,
         min_stock_level: data.minLevel,
       })
@@ -671,11 +887,53 @@ export default function StockManager() {
     }
   }
 
-  const handleOpenAction = (item: StockItem, type: 'ADD' | 'DEDUCT' | 'ADJUST' | 'MIN_LEVEL') => {
+  const handleEditItemClick = (item: StockItem) => {
+    setEditingItem(item)
+    setShowEditModal(true)
+  }
+
+  const handleEditItemSubmit = async (data: {
+    name: string
+    category: string
+    unit: string
+    minLevel: number
+  }) => {
+    if (!editingItem) return
+    try {
+      await httpClient.put(`/v1/stock/items/${editingItem.id}`, {
+        name: data.name,
+        category: data.category,
+        unit: data.unit,
+        min_stock_level: data.minLevel,
+      })
+      setShowEditModal(false)
+      setEditingItem(null)
+      fetchStock()
+    } catch (_err) {
+      alert('Erro ao atualizar item de estoque. Tente novamente.')
+    }
+  }
+
+  const handleDeleteItem = async (item: StockItem) => {
+    const confirmed = window.confirm(`Deseja realmente remover o insumo "${item.name}"?`)
+    if (!confirmed) return
+    try {
+      await httpClient.delete(`/v1/stock/items/${item.id}`)
+      fetchStock()
+      if (activeHistoryItem?.id === item.id) {
+        setActiveHistoryItem(null)
+      }
+    } catch (_err) {
+      alert('Erro ao excluir item de estoque. Verifique se ele está associado a alguma receita.')
+    }
+  }
+
+  const handleOpenAction = (item: StockItem, type: 'ADD' | 'DEDUCT' | 'ADJUST') => {
     setActionItemId(item.id)
     setActionType(type)
     setActionValue('')
-    setActionReason(type === 'MIN_LEVEL' ? '' : 'Ajuste manual')
+    setActionCost('')
+    setActionReason('Ajuste manual')
   }
 
   const handleCloseAction = () => {
@@ -697,6 +955,7 @@ export default function StockManager() {
         actionType,
         valueNum,
         actionReason || 'Operação manual',
+        actionType === 'ADD' ? Number(actionCost) || 0 : undefined,
         adjustTransactionType,
       )
       handleCloseAction()
@@ -731,15 +990,49 @@ export default function StockManager() {
     return stockItems.find((item) => item.id === actionItemId)
   }
 
-  // Filter items based on search query and tab filter
+  // Filter items based on search query, category tab, and low stock toggle
   const filteredItems = stockItems.filter((item) => {
     const matchesSearch = item.name.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesTab = filterTab === 'ALL' || item.is_low_stock
-    return matchesSearch && matchesTab
+    const matchesTab = filterTab === 'ALL' || item.category === filterTab
+    const matchesLowStock = !showOnlyLowStock || item.is_low_stock
+    return matchesSearch && matchesTab && matchesLowStock
   })
 
   const lowStockCount = stockItems.filter((item) => item.is_low_stock).length
   const activeItem = getActiveItem()
+
+  const tabs: {
+    id: 'ALL' | 'RAW_MATERIAL' | 'BEVERAGE' | 'PACKAGING' | 'SUPPLEMENT' | 'OTHER'
+    label: string
+    count: number
+  }[] = [
+    { id: 'ALL', label: 'Todos', count: stockItems.length },
+    {
+      id: 'RAW_MATERIAL',
+      label: 'Insumos Base',
+      count: stockItems.filter((i) => i.category === 'RAW_MATERIAL').length,
+    },
+    {
+      id: 'BEVERAGE',
+      label: 'Bebidas',
+      count: stockItems.filter((i) => i.category === 'BEVERAGE').length,
+    },
+    {
+      id: 'PACKAGING',
+      label: 'Embalagens',
+      count: stockItems.filter((i) => i.category === 'PACKAGING').length,
+    },
+    {
+      id: 'SUPPLEMENT',
+      label: 'Suplementos',
+      count: stockItems.filter((i) => i.category === 'SUPPLEMENT').length,
+    },
+    {
+      id: 'OTHER',
+      label: 'Outros',
+      count: stockItems.filter((i) => i.category === 'OTHER').length,
+    },
+  ]
 
   return (
     <div className="space-y-6">
@@ -786,36 +1079,57 @@ export default function StockManager() {
         <div className="grid gap-6 lg:grid-cols-3">
           {/* Main List Column */}
           <div className="lg:col-span-2 space-y-4">
-            {/* Filters and Search toolbar */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-gray-950/20 border border-gray-900 rounded-2xl p-4 glass-card">
-              <div className="flex gap-1">
-                <button
-                  type="button"
-                  onClick={() => setFilterTab('ALL')}
-                  className={`px-4 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition ${
-                    filterTab === 'ALL'
-                      ? 'bg-brand-500 text-white shadow-md'
-                      : 'bg-white/[0.02] border border-gray-900 text-gray-400 hover:text-gray-200'
-                  }`}
-                >
-                  Todos ({stockItems.length})
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setFilterTab('LOW')}
-                  className={`px-4 py-2 rounded-xl text-[10px] font-extrabold uppercase tracking-wider transition flex items-center gap-1.5 ${
-                    filterTab === 'LOW'
-                      ? 'bg-rose-600 text-white shadow-md'
-                      : 'bg-white/[0.02] border border-gray-900 text-gray-400 hover:text-rose-400'
-                  }`}
-                >
-                  {lowStockCount > 0 && (
-                    <span className="h-2 w-2 rounded-full bg-white animate-ping" />
-                  )}
-                  Alerta Crítico ({lowStockCount})
-                </button>
-              </div>
+            {/* Tabs Navigation */}
+            <div className="flex border-b border-gray-900/60 overflow-x-auto no-scrollbar whitespace-nowrap scroll-smooth">
+              {tabs.map((tab) => {
+                const isActive = filterTab === tab.id
+                return (
+                  <button
+                    type="button"
+                    key={tab.id}
+                    onClick={() => setFilterTab(tab.id)}
+                    className={`flex items-center gap-1.5 px-4 py-3 text-xs font-bold transition-all duration-300 border-b-2 whitespace-nowrap cursor-pointer select-none ${getTabStyles(
+                      isActive,
+                    )}`}
+                  >
+                    {tab.label}
+                    <span
+                      className={`text-[9px] px-1.5 py-0.5 rounded-full font-mono font-bold ${getTabCounterStyles(
+                        isActive,
+                      )}`}
+                    >
+                      {tab.count}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
 
+            {/* Search toolbar */}
+            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 bg-gray-950/20 border border-gray-900 rounded-2xl p-4 glass-card">
+              <div className="flex flex-wrap items-center gap-2.5">
+                <span className="text-xs font-bold text-gray-400">
+                  Visualizando {filteredItems.length} de {stockItems.length} itens
+                </span>
+                {lowStockCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowOnlyLowStock(!showOnlyLowStock)}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-[10px] font-black uppercase tracking-wider transition cursor-pointer select-none border ${
+                      showOnlyLowStock
+                        ? 'bg-rose-600 border-rose-600 text-white shadow-md shadow-rose-600/10'
+                        : 'bg-rose-500/5 border-rose-500/20 text-rose-400 hover:bg-rose-500/10'
+                    }`}
+                  >
+                    <span
+                      className={`h-1.5 w-1.5 rounded-full bg-current ${
+                        !showOnlyLowStock ? 'animate-pulse' : ''
+                      }`}
+                    />
+                    Apenas Críticos ({lowStockCount})
+                  </button>
+                )}
+              </div>
               <div className="relative w-full sm:w-64">
                 <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-gray-500" />
                 <input
@@ -832,6 +1146,8 @@ export default function StockManager() {
               items={filteredItems}
               onOpenAction={handleOpenAction}
               onViewHistory={handleViewHistory}
+              onEdit={handleEditItemClick}
+              onDelete={handleDeleteItem}
             />
           </div>
 
@@ -842,9 +1158,11 @@ export default function StockManager() {
                 activeItem={activeItem}
                 actionType={actionType}
                 actionValue={actionValue}
+                actionCost={actionCost}
                 actionReason={actionReason}
                 adjustTransactionType={adjustTransactionType}
                 onChangeValue={setActionValue}
+                onChangeCost={setActionCost}
                 onChangeReason={setActionReason}
                 onChangeAdjustType={setAdjustTransactionType}
                 onClose={handleCloseAction}
@@ -877,6 +1195,18 @@ export default function StockManager() {
         <CreateStockItemModal
           onClose={() => setShowCreateModal(false)}
           onSubmit={handleCreateItemSubmit}
+        />
+      )}
+
+      {/* Edit Item Modal */}
+      {showEditModal && editingItem && (
+        <EditStockItemModal
+          item={editingItem}
+          onClose={() => {
+            setShowEditModal(false)
+            setEditingItem(null)
+          }}
+          onSubmit={handleEditItemSubmit}
         />
       )}
     </div>

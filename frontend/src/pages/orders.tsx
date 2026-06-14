@@ -103,7 +103,7 @@ export default function OrdersPage() {
                         </div>
                         <button
                           type="button"
-                          onClick={() => dismissReadyItem(item.id)}
+                          onClick={() => dismissReadyItem(item)}
                           className="rounded-lg bg-rose-500 hover:bg-rose-600 active:scale-95 text-white font-bold text-[9px] px-2.5 py-1.5 transition"
                         >
                           Entregue

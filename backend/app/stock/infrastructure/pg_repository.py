@@ -4,9 +4,11 @@ from typing import TYPE_CHECKING
 
 from sqlalchemy import delete, select
 
+from app.shared.domain_events import register_pending_events
 from app.stock.domain.enums import TransactionType
 from app.stock.domain.measured_quantity import MeasuredQuantity
 from app.stock.domain.recipe import Recipe, RecipeIngredient
+from app.stock.domain.stock_events import StockItemCreated
 from app.stock.domain.stock_item import CompositeStockItem, SimpleStockItem, StockItem
 from app.stock.domain.transaction import StockTransaction
 from app.stock.infrastructure.orm_models import (
@@ -82,16 +84,21 @@ class SQLAlchemyStockItemRepository:
             orm.is_active = item.is_active
             orm.type = item_type
             orm.unit = unit
+            is_new = False
         else:
-            orm = StockItemORM(
-                tenant_id=item.tenant_id,
-                name=item.name,
-                category=item.category,
-                type=item_type,
-                unit=unit,
-                min_stock_level=item.min_stock_level,
-                is_active=item.is_active,
-            )
+            is_new = True
+            orm_kwargs = {
+                "tenant_id": item.tenant_id,
+                "name": item.name,
+                "category": item.category,
+                "type": item_type,
+                "unit": unit,
+                "min_stock_level": item.min_stock_level,
+                "is_active": item.is_active,
+            }
+            if item.id > 0:
+                orm_kwargs["id"] = item.id
+            orm = StockItemORM(**orm_kwargs)
             self._session.add(orm)
 
         await self._session.flush()
@@ -129,12 +136,27 @@ class SQLAlchemyStockItemRepository:
                     transaction_type=tx.type.value,
                     quantity_value=tx.quantity.value,
                     quantity_unit=tx.quantity.unit,
+                    cost_amount=tx.cost_amount,
                     reason=tx.reason,
                     occurred_at=tx.occurred_at,
                 )
                 self._session.add(tx_orm)
 
         await self._session.flush()
+
+        if is_new:
+            item.add_event(
+                StockItemCreated(
+                    item_id=item.id,
+                    tenant_id=item.tenant_id,
+                    name=item.name,
+                    category=item.category,
+                    unit=unit,
+                    min_stock_level=item.min_stock_level,
+                )
+            )
+
+        register_pending_events(item.collect_events())
 
     async def delete(self, id: int, tenant_id: str) -> None:
         stmt = select(StockItemORM).where(
@@ -160,6 +182,7 @@ class SQLAlchemyStockItemRepository:
                 id=t.id,
                 quantity=MeasuredQuantity(t.quantity_value, t.quantity_unit),
                 type=TransactionType(t.transaction_type),
+                cost_amount=t.cost_amount,
                 reason=t.reason,
                 occurred_at=t.occurred_at,
             )
@@ -272,3 +295,5 @@ class SQLAlchemyRecipeRepository:
             self._session.add(ing_orm)
 
         await self._session.flush()
+
+        register_pending_events(recipe.collect_events())

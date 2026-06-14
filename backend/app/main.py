@@ -10,6 +10,7 @@ from app.analytics.api.routes import router as analytics_router
 
 # Import routers
 from app.auth.api.routes import router as auth_router
+from app.auth.application.audit_listener import register_audit_listeners
 from app.kitchen.api.routes import router as kitchen_router
 from app.menu.api.price_list_routes import router as price_list_router
 from app.menu.api.routes import router as menu_router
@@ -24,6 +25,8 @@ from app.stock.api.routes import router as stock_router
 
 settings = get_settings()
 setup_logging(settings)
+
+register_audit_listeners()
 
 
 @asynccontextmanager

@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 if TYPE_CHECKING:
+    from app.shared.domain_events import DomainEvent
     from app.stock.domain.measured_quantity import MeasuredQuantity
     from app.stock.domain.stock_item import StockItem
+
+from app.stock.domain.stock_events import RecipeSaved
 
 
 class RecipeIngredient:
@@ -28,6 +32,21 @@ class Recipe:
         self.menu_item_id: int = menu_item_id
         self.tenant_id: str = tenant_id
         self._ingredients: list[RecipeIngredient] = ingredients or []
+        self._events: list[DomainEvent] = []
+
+    def collect_events(self) -> list[DomainEvent]:
+        events = list(self._events)
+        self._events.clear()
+        return events
+
+    def record_saved(self) -> None:
+        self._events.append(
+            RecipeSaved(
+                menu_item_id=self.menu_item_id,
+                tenant_id=self.tenant_id,
+                ingredient_count=len(self._ingredients),
+            )
+        )
 
     def add_ingredient(self, item: StockItem, quantity: MeasuredQuantity) -> None:
         # Check if already exists, update or append
@@ -42,9 +61,11 @@ class Recipe:
         return list(self._ingredients)
 
     def calculate_total_cost(self) -> float:
-        # Cost calculation could resolve menu_item pricing or assume a mock/zero cost base in stock.
-        # Let's return a simple double for cost as UML suggests or default 0.0 unless integrated.
-        return 0.0
+        total = Decimal("0.0")
+        for ing in self._ingredients:
+            unit_cost = ing.stock_item.get_unit_cost()
+            total += ing.quantity.value * unit_cost
+        return float(total)
 
     def __repr__(self) -> str:
         return f"Recipe(id={self.id}, menu_item={self.menu_item_id}, ingredients={len(self._ingredients)})"

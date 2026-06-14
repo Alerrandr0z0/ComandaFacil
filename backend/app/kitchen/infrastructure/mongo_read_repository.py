@@ -47,4 +47,16 @@ class MongoKitchenReadRepository:
                     if completed_at >= fifteen_minutes_ago:
                         active_items.append(item)
 
+        for item in active_items:
+            _format_datetimes(item)
+
         return active_items
+
+
+def _format_datetimes(item: dict[str, Any]) -> None:
+    for field in ("created_at", "started_at", "completed_at"):
+        val = item.get(field)
+        if val and isinstance(val, datetime.datetime):
+            if val.tzinfo is None:
+                val = val.replace(tzinfo=datetime.UTC)
+            item[field] = val.isoformat()

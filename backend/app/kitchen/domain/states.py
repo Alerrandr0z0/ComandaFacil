@@ -62,6 +62,23 @@ class Preparing(IKitchenItemState):
         item._state = Cancelled()  # type: ignore[reportPrivateUsage]
 
 
+class Surplus(IKitchenItemState):
+    """State representing a surplus item waiting in the virtual pool."""
+
+    @property
+    def name(self) -> str:
+        return "SURPLUS"
+
+    def prepare(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
+        raise ValueError("Cannot prepare a surplus item.")
+
+    def mark_as_ready(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
+        raise ValueError("Surplus item is already ready.")
+
+    def cancel(self, item: KitchenOrderItem) -> None:
+        item._state = Cancelled()  # type: ignore[reportPrivateUsage]
+
+
 class Ready(IKitchenItemState):
     """Terminal state representing completed preparation."""
 
@@ -75,8 +92,8 @@ class Ready(IKitchenItemState):
     def mark_as_ready(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
         raise ValueError("Item already ready.")
 
-    def cancel(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
-        raise ValueError("Cannot cancel a ready item.")
+    def cancel(self, item: KitchenOrderItem) -> None:
+        item._state = Surplus()  # type: ignore[reportPrivateUsage]
 
 
 class Cancelled(IKitchenItemState):

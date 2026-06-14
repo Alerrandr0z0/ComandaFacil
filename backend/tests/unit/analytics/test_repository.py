@@ -60,6 +60,14 @@ class InMemoryAnalyticsRepository(AnalyticsRepository):
         assert self.kitchen is not None
         return self.kitchen
 
+    async def get_menu_items_sales(
+        self,
+        tenant_id: str,
+        period: AnalyticsPeriod = AnalyticsPeriod.DAY,
+        date_range: DateRange | None = None,
+    ) -> list[dict[str, Any]]:
+        return []
+
 
 def _dashboard() -> DashboardData:
     return DashboardData(
@@ -94,6 +102,7 @@ def _kitchen_performance() -> KitchenPerformance:
     return KitchenPerformance(
         period=AnalyticsPeriod.DAY,
         average_prep_time_minutes=8.5,
+        average_queue_time_minutes=4.0,
         items_prepared=200,
         completion_rate=0.95,
     )

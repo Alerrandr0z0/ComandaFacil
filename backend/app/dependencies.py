@@ -4,16 +4,19 @@ from typing import Annotated
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from motor.motor_asyncio import AsyncIOMotorDatabase
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.auth.domain.employee import Employee
 from app.auth.domain.session import Session
+from app.auth.infrastructure.orm_models import EmployeePermissionORM
 from app.auth.infrastructure.repositories import (
     SQLAlchemyEmployeeRepository,
     SQLAlchemySessionRepository,
     SQLAlchemyTenantRepository,
 )
 from app.settings import Settings, get_settings
+from app.shared.actor_context import ActorInfo, current_actor_var
 from app.shared.database import get_async_session, get_mongo_db
 from app.shared.tenant_context import tenant_context_var
 
@@ -87,6 +90,8 @@ async def get_current_employee(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authenticated employee not found.",
         )
+    # Set current actor context
+    current_actor_var.set(ActorInfo(id=employee.id, name=employee.name))
     return employee
 
 
@@ -122,7 +127,9 @@ def require_permission(action: str) -> Callable[..., Awaitable[Employee]]:
                 detail="Franquia inativa.",
             )
 
-        if not current_employee.permits(action, tenant):
+        if not await _check_custom_permission(
+            db, tenant_id, action, current_employee
+        ) and not current_employee.permits(action, tenant):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"Funcionário não possui permissão para executar esta ação: {action}",
@@ -130,3 +137,22 @@ def require_permission(action: str) -> Callable[..., Awaitable[Employee]]:
         return current_employee
 
     return dependency
+
+
+async def _check_custom_permission(
+    db: DbSession,
+    tenant_id: int,
+    action: str,
+    employee: Employee,
+) -> bool | None:
+    """Check employee_permissions table for a custom override. Returns True/False if found, None if not configured."""
+    stmt = select(EmployeePermissionORM).where(
+        EmployeePermissionORM.tenant_id == tenant_id,
+        EmployeePermissionORM.employee_id == employee.id,
+        EmployeePermissionORM.action == action,
+    )
+    result = await db.execute(stmt)
+    override = result.scalar_one_or_none()
+    if override is not None:
+        return override.granted
+    return None

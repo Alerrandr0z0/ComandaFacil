@@ -190,7 +190,12 @@ def test_price_list_creation() -> None:
 
     now = datetime.datetime.now(datetime.UTC)
     pl = PriceList(
-        id=1, tenant_id="test", menu_id=1, name="Happy Hour", description="Preços promocionais", valid_from=now
+        id=1,
+        tenant_id="test",
+        menu_id=1,
+        name="Happy Hour",
+        description="Preços promocionais",
+        valid_from=now,
     )
     assert pl.id == 1
     assert pl.name == "Happy Hour"
@@ -258,12 +263,20 @@ def test_price_list_is_valid_now() -> None:
 
     now = datetime.datetime.now(datetime.UTC)
     pl = PriceList(
-        id=1, tenant_id="test", menu_id=1, name="Happy Hour", valid_from=now - datetime.timedelta(hours=1)
+        id=1,
+        tenant_id="test",
+        menu_id=1,
+        name="Happy Hour",
+        valid_from=now - datetime.timedelta(hours=1),
     )
     assert pl.is_valid_now() is True
 
     future = PriceList(
-        id=2, tenant_id="test", menu_id=1, name="Futuro", valid_from=now + datetime.timedelta(days=30)
+        id=2,
+        tenant_id="test",
+        menu_id=1,
+        name="Futuro",
+        valid_from=now + datetime.timedelta(days=30),
     )
     assert future.is_valid_now() is False
 

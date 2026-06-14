@@ -45,6 +45,9 @@ class _MockCollection:
         self._name = name
         self._filter: dict[str, Any] = {}
         self._projection: dict[str, Any] = {}
+        self._sort_key: str | None = None
+        self._sort_dir: int = 1
+        self._limit: int | None = None
 
     async def update_one(
         self,
@@ -55,7 +58,19 @@ class _MockCollection:
     ) -> None:
         key = _doc_key(filter)
         if not key:
+            # Fallback: find matching document
+            matched_key = None
+            coll = self._store.setdefault(self._name, {})
+            for k, doc in coll.items():
+                if _match(doc, filter):
+                    matched_key = k
+                    break
+            if matched_key:
+                existing = coll[matched_key]
+                if "$set" in update:
+                    existing.update(update["$set"])
             return
+
         coll = self._store.setdefault(self._name, {})
         existing = coll.get(key, {})
         # Apply $set
@@ -70,6 +85,14 @@ class _MockCollection:
         key = _doc_key(filter)
         if key:
             self._store.setdefault(self._name, {})[key] = doc
+
+    async def insert_one(self, doc: dict[str, Any], **kwargs: Any) -> None:
+        import uuid
+        key = _doc_key(doc) or doc.get("_id")
+        if not key:
+            key = str(uuid.uuid4())
+            doc["_id"] = key
+        self._store.setdefault(self._name, {})[key] = doc
 
     async def delete_one(self, filter: dict[str, Any]) -> None:
         key = _doc_key(filter)
@@ -86,17 +109,38 @@ class _MockCollection:
                 return dict(doc)
         return None
 
-    async def to_list(self, length: int) -> list[dict[str, Any]]:
+    async def to_list(self, length: int | None = None) -> list[dict[str, Any]]:
         docs = list(self._store.get(self._name, {}).values())
-        if not self._filter:
-            return docs
-        return [d for d in docs if _match(d, self._filter)]
+        filtered = docs
+        if self._filter:
+            filtered = [d for d in docs if _match(d, self._filter)]
+
+        if self._sort_key:
+            def get_val(d: dict[str, Any]) -> Any:
+                return d.get(self._sort_key, "")
+            filtered.sort(key=get_val, reverse=(self._sort_dir == -1))
+
+        if self._limit is not None:
+            filtered = filtered[:self._limit]
+        elif length is not None:
+            filtered = filtered[:length]
+
+        return filtered
 
     def find(
         self, filter: dict[str, Any], projection: dict[str, Any] | None = None
     ) -> _MockCollection:
         self._filter = filter
         self._projection = projection or {}
+        return self
+
+    def sort(self, key: str, direction: int = 1) -> _MockCollection:
+        self._sort_key = key
+        self._sort_dir = direction
+        return self
+
+    def limit(self, limit: int) -> _MockCollection:
+        self._limit = limit
         return self
 
 

@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 from decimal import Decimal
+from typing import Any
 
 import pytest
 
@@ -16,6 +17,7 @@ from app.analytics.application.queries import (
     GetSalesReportQuery,
 )
 from app.analytics.domain.enums import AnalyticsPeriod
+from app.analytics.domain.repository import AnalyticsRepository
 from app.analytics.domain.value_objects import (
     DashboardData,
     DateRange,
@@ -25,7 +27,7 @@ from app.analytics.domain.value_objects import (
 )
 
 
-class InMemoryAnalyticsRepository:
+class InMemoryAnalyticsRepository(AnalyticsRepository):
     def __init__(self) -> None:
         self.dashboard: DashboardData | None = None
         self.sales: SalesReportData | None = None
@@ -34,6 +36,7 @@ class InMemoryAnalyticsRepository:
         self.last_tenant_id: str | None = None
         self.last_period: AnalyticsPeriod | None = None
         self.last_date_range: DateRange | None = None
+        self.menu_item_sales: list[dict[str, Any]] = []
 
     async def get_dashboard(
         self,
@@ -82,6 +85,17 @@ class InMemoryAnalyticsRepository:
         self.last_date_range = date_range
         assert self.kitchen is not None
         return self.kitchen
+
+    async def get_menu_items_sales(
+        self,
+        tenant_id: str,
+        period: AnalyticsPeriod = AnalyticsPeriod.DAY,
+        date_range: DateRange | None = None,
+    ) -> list[dict[str, Any]]:
+        self.last_tenant_id = tenant_id
+        self.last_period = period
+        self.last_date_range = date_range
+        return self.menu_item_sales
 
 
 # ─── Happy path: data exists ─────────────────────────────────────────────────
@@ -152,6 +166,7 @@ async def test_get_kitchen_performance_when_data_exists_then_returns() -> None:
     expected = KitchenPerformance(
         period=AnalyticsPeriod.DAY,
         average_prep_time_minutes=8.5,
+        average_queue_time_minutes=5.0,
         items_prepared=200,
         completion_rate=0.95,
     )
@@ -302,6 +317,7 @@ async def test_all_handlers_when_tenant_id_then_passed_to_repo(
     repo.kitchen = KitchenPerformance(
         period=AnalyticsPeriod.DAY,
         average_prep_time_minutes=0.0,
+        average_queue_time_minutes=0.0,
         items_prepared=0,
         completion_rate=0.0,
     )

@@ -163,3 +163,20 @@ def test_gateway_response_value_object() -> None:
     assert res.success is True
     assert res.gateway_ref == "ch_stripe_999"
     assert res.error_message is None
+
+
+def test_payment_repository_protocol() -> None:
+    from app.payment.domain.repository import PaymentRepository
+
+    class DummyPaymentRepository:
+        async def find_by_id(self, id: int, tenant_id: str) -> Payment | None:
+            return None
+
+        async def find_by_order(self, order_id: int, tenant_id: str) -> Payment | None:
+            return None
+
+        async def save(self, payment: Payment) -> None:
+            pass
+
+    repo = DummyPaymentRepository()
+    assert isinstance(repo, PaymentRepository)

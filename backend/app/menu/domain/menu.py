@@ -25,7 +25,7 @@ class MenuItem:
     MenuItem (Aggregate Root) representing a catalog item (product) in the system.
     """
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         id: int,
         tenant_id: str,

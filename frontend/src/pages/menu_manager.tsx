@@ -82,7 +82,7 @@ export default function MenuManagerPage() {
 
   const [basePrices, setBasePrices] = useState<Record<number, number>>({})
   const [priceLists, setPriceLists] = useState<PriceListSummary[]>([])
-  const [showPriceLists, setShowPriceLists] = useState(false)
+  const [showPriceDrawer, setShowPriceDrawer] = useState(false)
   const [isCreatingPriceList, setIsCreatingPriceList] = useState(false)
   const [newPriceListName, setNewPriceListName] = useState('')
   const [isLinkingItem, setIsLinkingItem] = useState(false)
@@ -430,14 +430,32 @@ export default function MenuManagerPage() {
                       {selectedMenu.description || 'Sem descrição cadastrada.'}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleOpenLink}
-                    className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-bold text-emerald-400 border border-emerald-500/10 hover:border-emerald-500/20 transition flex items-center gap-1"
-                  >
-                    <Link2 className="h-3.5 w-3.5" />
-                    Vincular Existente
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowPriceDrawer(true)
+                        fetchPriceLists()
+                      }}
+                      className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-bold text-amber-400 border border-amber-500/10 hover:border-amber-500/25 transition flex items-center gap-1"
+                    >
+                      <Star className="h-3.5 w-3.5" />
+                      Preços Especiais
+                      {priceLists.length > 0 && (
+                        <span className="ml-0.5 text-[9px] bg-amber-500/15 border border-amber-500/20 px-1.5 py-0.5 rounded-full">
+                          {priceLists.length}
+                        </span>
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleOpenLink}
+                      className="rounded-lg bg-gray-900 px-3 py-1.5 text-xs font-bold text-emerald-400 border border-emerald-500/10 hover:border-emerald-500/20 transition flex items-center gap-1"
+                    >
+                      <Link2 className="h-3.5 w-3.5" />
+                      Vincular Existente
+                    </button>
+                  </div>
                 </div>
 
                 {selectedMenu.items.length === 0 ? (
@@ -539,43 +557,66 @@ export default function MenuManagerPage() {
           </div>
         </div>
 
-        {/* PriceList section */}
-        {selectedMenu && (
-          <div className="border border-gray-900/60 rounded-2xl bg-gray-950/10 p-5 backdrop-blur-md glass-card">
-            <button
-              type="button"
-              onClick={() => setShowPriceLists(!showPriceLists)}
-              className="w-full flex items-center justify-between text-left"
-            >
-              <div className="flex items-center gap-2">
-                <Star
-                  className={`h-4 w-4 ${showPriceLists ? 'text-brand-400' : 'text-gray-600'}`}
-                />
-                <h3 className="text-xs font-extrabold uppercase tracking-wider text-gray-300">
-                  Preços Especiais
-                </h3>
-                {priceLists.length > 0 && (
-                  <span className="text-[9px] text-gray-500 bg-gray-900 px-2 py-0.5 rounded-full">
-                    {priceLists.length} lista{priceLists.length !== 1 ? 's' : ''}
-                  </span>
-                )}
+        {/* Price Lists Drawer */}
+        {showPriceDrawer && selectedMenu && (
+          <>
+            {/* Backdrop */}
+            {/* biome-ignore lint/a11y/noStaticElementInteractions: backdrop is a presentation dismiss target */}
+            <div
+              role="presentation"
+              className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm"
+              onClick={() => {
+                setShowPriceDrawer(false)
+                setIsCreatingPriceList(false)
+                setNewPriceListName('')
+              }}
+            />
+            {/* Drawer panel */}
+            <aside className="fixed right-0 top-0 z-50 h-full w-full max-w-sm border-l border-gray-900 bg-[#07070f] shadow-2xl flex flex-col animate-slide-in-right">
+              {/* Drawer header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b border-gray-900/60">
+                <div>
+                  <h3 className="text-sm font-black text-white uppercase tracking-wide flex items-center gap-2">
+                    <Star className="h-4 w-4 text-amber-400" />
+                    Preços Especiais
+                  </h3>
+                  <p className="text-[10px] text-gray-500 mt-0.5 font-medium">
+                    {selectedMenu.name}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowPriceDrawer(false)
+                    setIsCreatingPriceList(false)
+                    setNewPriceListName('')
+                  }}
+                  className="rounded-lg p-2 border border-gray-800 text-gray-400 hover:text-white hover:bg-white/[0.03] transition"
+                  aria-label="Fechar painel"
+                >
+                  ✕
+                </button>
               </div>
-              <span className="text-[10px] text-gray-600">{showPriceLists ? '▲' : '▼'}</span>
-            </button>
 
-            {showPriceLists && (
-              <div className="mt-4 space-y-3 border-t border-gray-900/40 pt-4">
+              {/* Drawer body */}
+              <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
                 {priceLists.length === 0 && !isCreatingPriceList ? (
-                  <div className="text-center py-4">
-                    <p className="text-[10px] text-gray-500 italic mb-3">
-                      Nenhuma lista de preços especial. Crie uma para definir preços diferenciados.
-                    </p>
+                  <div className="flex flex-col items-center justify-center py-16 space-y-4 text-center">
+                    <div className="h-12 w-12 rounded-2xl bg-amber-500/5 border border-amber-500/10 flex items-center justify-center">
+                      <Star className="h-5 w-5 text-amber-500/40" />
+                    </div>
+                    <div>
+                      <p className="text-xs font-bold text-gray-400">Nenhuma lista de preços</p>
+                      <p className="text-[10px] text-gray-600 mt-1 max-w-[200px]">
+                        Crie listas para promoções, happy hour ou fins de semana
+                      </p>
+                    </div>
                     <button
                       type="button"
                       onClick={() => setIsCreatingPriceList(true)}
-                      className="rounded-lg bg-gray-900 px-3 py-1.5 text-[10px] font-bold text-brand-400 border border-brand-500/10 hover:bg-gray-850 transition"
+                      className="rounded-xl bg-brand-500 hover:bg-brand-600 px-4 py-2 text-xs font-bold text-white transition"
                     >
-                      Criar Lista de Preços
+                      Criar Primeira Lista
                     </button>
                   </div>
                 ) : (
@@ -583,27 +624,29 @@ export default function MenuManagerPage() {
                     {priceLists.map((pl) => (
                       <div
                         key={pl.id}
-                        className={`p-3 rounded-xl border transition ${
+                        className={`p-3.5 rounded-xl border transition ${
                           pl.is_active_for_menu
-                            ? 'border-brand-500/30 bg-brand-950/10'
+                            ? 'border-amber-500/30 bg-amber-950/10'
                             : 'border-gray-900/60 bg-gray-950/20 hover:border-gray-800'
                         }`}
                       >
                         <div className="flex items-center justify-between">
                           <div className="flex items-center gap-2 min-w-0">
                             {pl.is_active_for_menu ? (
-                              <Check className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                              <Check className="h-3.5 w-3.5 text-amber-400 shrink-0" />
                             ) : (
-                              <div className="h-3.5 w-3.5 shrink-0" />
+                              <div className="h-3.5 w-3.5 rounded-full border border-gray-700 shrink-0" />
                             )}
-                            <span className="text-xs font-bold text-gray-200 truncate">
-                              {pl.name}
-                            </span>
-                            {pl.is_active_for_menu && (
-                              <span className="text-[8px] font-extrabold uppercase text-emerald-400 px-1.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20">
-                                Ativo
+                            <div className="min-w-0">
+                              <span className="text-xs font-bold text-gray-200 truncate block">
+                                {pl.name}
                               </span>
-                            )}
+                              {pl.is_active_for_menu && (
+                                <span className="text-[8px] font-extrabold uppercase text-amber-400">
+                                  Ativo
+                                </span>
+                              )}
+                            </div>
                           </div>
                           <div className="flex items-center gap-2 shrink-0">
                             <span className="text-[9px] text-gray-600">
@@ -620,53 +663,66 @@ export default function MenuManagerPage() {
                             )}
                           </div>
                         </div>
-                        {pl.description && (
-                          <p className="text-[9px] text-gray-600 mt-1 ml-5.5">{pl.description}</p>
+                        {pl.valid_until && (
+                          <p className="text-[9px] text-gray-600 mt-1.5 ml-5">
+                            Válido até {new Date(pl.valid_until).toLocaleDateString('pt-BR')}
+                          </p>
                         )}
                       </div>
                     ))}
-
-                    {isCreatingPriceList ? (
-                      <form onSubmit={handleCreatePriceList} className="flex gap-2 pt-1">
-                        <input
-                          type="text"
-                          required
-                          placeholder="Ex: Happy Hour, Fim de Semana..."
-                          value={newPriceListName}
-                          onChange={(e) => setNewPriceListName(e.target.value)}
-                          className="flex-1 rounded-lg px-3 py-1.5 text-[10px] text-white glass-input"
-                        />
-                        <button
-                          type="submit"
-                          className="rounded-lg bg-brand-500 hover:bg-brand-600 px-3 py-1.5 text-[10px] font-bold text-white transition"
-                        >
-                          Criar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setIsCreatingPriceList(false)
-                            setNewPriceListName('')
-                          }}
-                          className="rounded-lg border border-gray-800 px-3 py-1.5 text-[10px] font-bold text-gray-400 transition"
-                        >
-                          Cancelar
-                        </button>
-                      </form>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => setIsCreatingPriceList(true)}
-                        className="w-full mt-1 rounded-lg border border-dashed border-gray-800 hover:border-gray-700 py-2 text-[10px] font-bold text-gray-500 hover:text-gray-300 transition"
-                      >
-                        + Nova Lista de Preços
-                      </button>
-                    )}
                   </div>
                 )}
               </div>
-            )}
-          </div>
+
+              {/* Drawer footer */}
+              <div className="px-5 py-4 border-t border-gray-900/60">
+                {isCreatingPriceList ? (
+                  <form onSubmit={handleCreatePriceList} className="space-y-3">
+                    <div className="space-y-1.5">
+                      <span className="block text-[10px] uppercase font-extrabold text-gray-400">
+                        Nome da Lista
+                      </span>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Ex: Happy Hour, Fim de Semana..."
+                        value={newPriceListName}
+                        onChange={(e) => setNewPriceListName(e.target.value)}
+                        className="w-full rounded-xl px-4 py-3 text-xs text-white glass-input"
+                      />
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCreatingPriceList(false)
+                          setNewPriceListName('')
+                        }}
+                        className="flex-1 rounded-xl border border-gray-850 py-2.5 text-xs font-bold text-gray-400 hover:bg-white/[0.02] transition"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="submit"
+                        className="flex-1 rounded-xl bg-brand-500 hover:bg-brand-600 py-2.5 text-xs font-bold text-white transition"
+                      >
+                        Criar Lista
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingPriceList(true)}
+                    className="w-full rounded-xl border border-dashed border-gray-800 hover:border-amber-500/20 hover:text-amber-400 py-2.5 text-xs font-bold text-gray-500 transition flex items-center justify-center gap-1.5"
+                  >
+                    <Plus className="h-3.5 w-3.5" />
+                    Nova Lista de Preços
+                  </button>
+                )}
+              </div>
+            </aside>
+          </>
         )}
 
         {/* Modal: Create Menu */}

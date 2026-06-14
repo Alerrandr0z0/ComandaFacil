@@ -30,6 +30,7 @@ export interface OrderItem {
   notes: string
   subtotal: number
   status: OrderItemStatus
+  kitchen_states?: string[]
 }
 
 export interface OrderForm {
@@ -41,6 +42,7 @@ export interface OrderForm {
   total: number
   fulfillment: OrderFulfillment
   items: OrderItem[]
+  created_at: string
 }
 
 export interface OpenTableOptions {
@@ -236,11 +238,8 @@ export function useOrderDrawer(onOrderChanged?: () => void) {
 
     try {
       for (const item of draft) {
-        // Unique random ID for item instance
-        const itemInstanceId = Math.floor(Math.random() * 1000000000)
-
         await httpClient.post(`/v1/order/${activeOrder.id}/items`, {
-          id: itemInstanceId,
+          id: 0,
           menu_item_id: item.menuItem.id,
           name_cpy: item.menuItem.name,
           price_cpy: item.price,

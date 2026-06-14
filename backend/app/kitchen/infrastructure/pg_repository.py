@@ -7,13 +7,14 @@ from sqlalchemy import select
 from app.kitchen.domain.kitchen_item import KitchenOrderItem
 from app.kitchen.domain.kitchen_station import Beverage, Grill, KitchenStation
 from app.kitchen.domain.repository import KitchenOrderItemRepository, KitchenStationRepository
-from app.kitchen.domain.states import Cancelled, Preparing, Ready, Waiting
+from app.kitchen.domain.states import Cancelled, Preparing, Ready, Surplus, Waiting
 from app.kitchen.infrastructure.orm_models import (
     BeverageORM,
     GrillORM,
     KitchenOrderItemORM,
     KitchenStationORM,
 )
+from app.shared.domain_events import register_pending_events
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +34,7 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
         orm = result.scalar_one_or_none()
         if not orm:
             return None
-        return self._map_to_domain(orm)
+        return self.map_to_domain(orm)
 
     async def find_by_correlation(
         self, correlation_id: int, tenant_id: str
@@ -43,10 +44,10 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
             KitchenOrderItemORM.tenant_id == tenant_id,
         )
         result = await self._session.execute(stmt)
-        orm = result.scalar_one_or_none()
+        orm = result.scalars().first()
         if not orm:
             return None
-        return self._map_to_domain(orm)
+        return self.map_to_domain(orm)
 
     async def find_by_station(self, station_type: str, tenant_id: str) -> list[KitchenOrderItem]:
         stmt = select(KitchenOrderItemORM).where(
@@ -55,7 +56,7 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
         )
         result = await self._session.execute(stmt)
         orms = result.scalars().all()
-        return [self._map_to_domain(o) for o in orms]
+        return [self.map_to_domain(o) for o in orms]
 
     async def save(self, item: KitchenOrderItem) -> None:
         stmt = select(KitchenOrderItemORM).where(KitchenOrderItemORM.id == item.id)
@@ -84,8 +85,9 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
             self._session.add(orm)
 
         await self._session.flush()
+        register_pending_events(item.collect_events())
 
-    def _map_to_domain(self, orm: KitchenOrderItemORM) -> KitchenOrderItem:
+    def map_to_domain(self, orm: KitchenOrderItemORM) -> KitchenOrderItem:
         item = KitchenOrderItem(
             id=orm.id,
             correlation_id=orm.correlation_id,
@@ -95,12 +97,14 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
             preparation_profile=orm.preparation_profile,
             notes=orm.notes or "",
         )
+        item.collect_events()
         # Map state string back to pure domain state objects
         state_map = {
             "WAITING": Waiting(),
             "PREPARING": Preparing(),
             "READY": Ready(),
             "CANCELLED": Cancelled(),
+            "SURPLUS": Surplus(),
         }
         item._state = state_map.get(orm.state, Waiting())  # type: ignore[reportPrivateUsage]
         return item

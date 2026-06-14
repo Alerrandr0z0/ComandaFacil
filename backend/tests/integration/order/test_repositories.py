@@ -152,6 +152,9 @@ async def test_mongo_order_history_repository() -> None:
         ) -> None:
             self.data[filter["order_id"]] = doc
 
+        async def insert_one(self, doc: dict[str, Any], **kwargs: Any) -> None:
+            self.data[doc["order_id"]] = doc
+
         async def find_one(
             self, filter: dict[str, Any], projection: dict[str, Any] | None = None
         ) -> dict[str, Any] | None:
@@ -168,6 +171,12 @@ async def test_mongo_order_history_repository() -> None:
         def find(
             self, filter: dict[str, Any], projection: dict[str, Any] | None = None
         ) -> MockCollection:
+            return self
+
+        def sort(self, *args: Any, **kwargs: Any) -> MockCollection:
+            return self
+
+        def limit(self, *args: Any, **kwargs: Any) -> MockCollection:
             return self
 
     class MockDB:

@@ -1,24 +1,35 @@
 from __future__ import annotations
 
+import datetime
 from typing import TYPE_CHECKING
 
+from app.order.domain.order_events import OrderItemAdded
 from app.order.domain.states import Closed, IOrderState, Open
 from app.shared.money import Money
 
 if TYPE_CHECKING:
     from app.order.domain.fulfillment import IFulfillmentStrategy
     from app.order.domain.order_item import OrderFormItem
+    from app.shared.domain_events import DomainEvent
 
 
 class OrderForm:
-    def __init__(self, id: int, tenant_id: str, display_code: str = "") -> None:
+    def __init__(
+        self,
+        id: int,
+        tenant_id: str,
+        display_code: str = "",
+        created_at: datetime.datetime | None = None,
+    ) -> None:
         self.id: int = id
         self.tenant_id: str = tenant_id
         self.display_code: str = display_code or str(id)
+        self.created_at: datetime.datetime = created_at or datetime.datetime.now(datetime.UTC)
         self._items: list[OrderFormItem] = []
         self._state: IOrderState = Open()
         self.fulfillment_strategy: IFulfillmentStrategy | None = None
         self._payment_requested: bool = False
+        self._events: list[DomainEvent] = []
 
     @property
     def items(self) -> list[OrderFormItem]:
@@ -33,6 +44,26 @@ class OrderForm:
 
     def add_item(self, item: OrderFormItem) -> None:
         self._state.add_item(self, item)
+        self._events.append(
+            OrderItemAdded(
+                order_id=self.id,
+                tenant_id=self.tenant_id,
+                item_id=item.id,
+                menu_item_id=item.menu_item_id,
+                name=item.name_cpy,
+                quantity=item.quantity,
+                price=item.price_cpy.amount,
+                notes=item.notes or "",
+            )
+        )
+
+    def record_event(self, event: DomainEvent) -> None:
+        self._events.append(event)
+
+    def collect_events(self) -> list[DomainEvent]:
+        events = list(self._events)
+        self._events.clear()
+        return events
 
     def request_payment(self) -> None:
         self._state.request_payment(self)

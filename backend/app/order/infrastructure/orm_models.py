@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import datetime
 from decimal import Decimal  # noqa: TC003
 
+import sqlalchemy as sa
 from sqlalchemy import Boolean, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -18,6 +20,12 @@ class OrderFormORM(Base):
     display_code: Mapped[str] = mapped_column(String(100), nullable=False)
     state: Mapped[str] = mapped_column(String(50), nullable=False, default="OPEN")
     payment_requested: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        sa.DateTime(timezone=True),
+        nullable=False,
+        default=lambda: datetime.datetime.now(datetime.UTC),
+        server_default=sa.func.now(),
+    )
 
     # Strategy pattern flattened fields
     fulfillment_type: Mapped[str | None] = mapped_column(String(50), nullable=True)
@@ -62,6 +70,9 @@ class OrderFormItemORM(Base):
     price_cpy: Mapped[Decimal] = mapped_column(Numeric(10, 2), nullable=False)
     station_type_cpy: Mapped[str] = mapped_column(String(100), nullable=False)
     quantity: Mapped[int] = mapped_column(Integer, nullable=False)
+    delivered_quantity: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=sa.text("0")
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="WAITING")
 

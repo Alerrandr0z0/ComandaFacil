@@ -96,13 +96,20 @@ class UserTenantRole:
     """
 
     def __init__(
-        self, id: int, tenant_id: int, employee_id: int, role_type: RoleType, is_active: bool = True
+        self,
+        id: int,
+        tenant_id: int,
+        employee_id: int,
+        role_type: RoleType,
+        is_active: bool = True,
+        removed: bool = False,
     ) -> None:
         self.id: Final[int] = id
         self.tenant_id: Final[int] = tenant_id
         self.employee_id: Final[int] = employee_id
         self.role_type: RoleType = role_type
         self.is_active: bool = is_active
+        self.removed: bool = removed
         self.assigned_at: Final[datetime.datetime] = datetime.datetime.now(datetime.UTC)
 
     def is_expired(self) -> bool:
@@ -112,6 +119,11 @@ class UserTenantRole:
     def deactivate(self) -> None:
         """Deactivates/suspends the role assignment."""
         self.is_active = False
+
+    def mark_removed(self) -> None:
+        """Soft-deletes the role assignment."""
+        self.is_active = False
+        self.removed = True
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(id={self.id}, tenant_id={self.tenant_id}, employee_id={self.employee_id}, role_type={self.role_type!r}, is_active={self.is_active})"
@@ -199,6 +211,11 @@ class Employee:
             if role.tenant_id == tenant.id and role.is_active:
                 return role
         raise DomainException("Funcionário não possui cargo ativo nesta franquia.")
+
+    def mark_removed(self, tenant: Tenant) -> None:
+        """Soft-deletes the role assignment for a specific tenant."""
+        role = self.get_role_for_tenant(tenant)
+        role.mark_removed()
 
     def remove_role(self, tenant: Tenant) -> None:
         """Removes the role assignment mapping associated with a specific tenant."""

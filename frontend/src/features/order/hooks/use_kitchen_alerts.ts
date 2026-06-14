@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { useTenant } from '@/shared/hooks/useTenant'
+import { httpClient } from '@/shared/lib/http_client'
 
 export interface ReadyItem {
   id: number
@@ -115,8 +116,13 @@ export function useKitchenAlerts() {
     }
   }, [tenantId])
 
-  const dismissReadyItem = (itemId: number) => {
-    setReadyItems((prev) => prev.filter((item) => item.id !== itemId))
+  const dismissReadyItem = async (item: ReadyItem) => {
+    setReadyItems((prev) => prev.filter((i) => i.id !== item.id))
+    try {
+      await httpClient.patch(`/v1/order/items/${item.correlation_id}/deliver?qty=1`)
+    } catch {
+      // Best-effort — item already removed from local state
+    }
   }
 
   return {

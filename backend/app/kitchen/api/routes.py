@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, BackgroundTasks, Depends, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, status
 from sqlalchemy import select
 
 from app.dependencies import CurrentTenantId, DbSession, MongoDB, require_permission
@@ -31,11 +31,23 @@ from app.stock.infrastructure.pg_repository import (
 router = APIRouter(prefix="/kitchen", tags=["Kitchen"])
 
 
+async def _sync_order_item_status(session: DbSession, correlation_id: int, status: str) -> None:
+    """Update OrderFormItem status to reflect kitchen state."""
+    try:
+        stmt = select(OrderFormItemORM).where(OrderFormItemORM.id == correlation_id)
+        result = await session.execute(stmt)
+        item_orm = result.scalar_one_or_none()
+        if item_orm:
+            item_orm.status = status
+            await session.commit()
+    except Exception:
+        pass
+
+
 @router.patch("/items/{id}/prepare", dependencies=[Depends(require_permission("PREPARE_ITEM"))])
 async def prepare_item(
     id: int,
     session: DbSession,
-    background_tasks: BackgroundTasks,
     mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> dict[str, str]:
@@ -43,7 +55,10 @@ async def prepare_item(
     repo = SQLAlchemyKitchenOrderItemRepository(session)
     handler = PrepareKitchenItemHandler(repo)
     updated_item = await handler.handle(PrepareKitchenItemCommand(item_id=id, tenant_id=tenant_id))
-    background_tasks.add_task(KitchenReadModelSync(mongo).sync, updated_item)
+    await _sync_order_item_status(session, updated_item.correlation_id, "PREPARING")
+    await session.commit()
+    sync = KitchenReadModelSync(mongo)
+    await sync.sync(updated_item)
     return {"status": "success", "state": updated_item.state.name}
 
 
@@ -51,17 +66,22 @@ async def prepare_item(
 async def mark_item_ready(
     id: int,
     session: DbSession,
-    background_tasks: BackgroundTasks,
     mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> dict[str, str]:
     """Transitions a kitchen order item to the READY state, scoped to tenant.
-    Auto-deducts stock ingredients via recipe if one exists."""
+    Syncs status back to OrderFormItem and auto-deducts stock."""
     repo = SQLAlchemyKitchenOrderItemRepository(session)
     handler = MarkKitchenItemReadyHandler(repo)
-    updated_item = await handler.handle(
-        MarkKitchenItemReadyCommand(item_id=id, tenant_id=tenant_id)
-    )
+    try:
+        updated_item = await handler.handle(
+            MarkKitchenItemReadyCommand(item_id=id, tenant_id=tenant_id)
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+    # Sync status back to order item
+    await _sync_order_item_status(session, updated_item.correlation_id, "READY")
 
     # Auto-deduct stock via recipe
     try:
@@ -75,11 +95,12 @@ async def mark_item_ready(
             recipe_repo = SQLAlchemyRecipeRepository(session, item_repo)
             stock_service = StockService(item_repo, recipe_repo)
             await stock_service.deduct_by_recipe(menu_item_id, tenant_id)
-            await session.commit()
     except Exception:
-        pass  # Stock deduction is best-effort (e.g., no recipe or insufficient stock)
+        pass
 
-    background_tasks.add_task(KitchenReadModelSync(mongo).sync, updated_item)
+    await session.commit()
+    sync = KitchenReadModelSync(mongo)
+    await sync.sync(updated_item)
     return {"status": "success", "state": updated_item.state.name}
 
 
@@ -87,15 +108,18 @@ async def mark_item_ready(
 async def cancel_item(
     id: int,
     session: DbSession,
-    background_tasks: BackgroundTasks,
     mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> dict[str, str]:
-    """Transitions a kitchen order item to the CANCELLED state, scoped to tenant."""
+    """Transitions a kitchen order item to the CANCELLED state, scoped to tenant.
+    Syncs status back to OrderFormItem."""
     repo = SQLAlchemyKitchenOrderItemRepository(session)
     handler = CancelKitchenItemHandler(repo)
     updated_item = await handler.handle(CancelKitchenItemCommand(item_id=id, tenant_id=tenant_id))
-    background_tasks.add_task(KitchenReadModelSync(mongo).sync, updated_item)
+    await _sync_order_item_status(session, updated_item.correlation_id, "CANCELED")
+    await session.commit()
+    sync = KitchenReadModelSync(mongo)
+    await sync.sync(updated_item)
     return {"status": "success", "state": updated_item.state.name}
 
 
@@ -149,6 +173,7 @@ async def websocket_endpoint(
                         "name_cpy": item.get("name_cpy", ""),
                         "station_type_cpy": item.get("station_type_cpy", ""),
                         "state": "READY",
+                        "menu_item_id": item.get("menu_item_id"),
                     },
                 }
             )

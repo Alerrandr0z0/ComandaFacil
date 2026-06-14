@@ -1,5 +1,19 @@
-import { Lock, Mail, Power, RefreshCcw, Shield, Trash, UserPlus, Users } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import {
+  ClipboardList,
+  History,
+  Lock,
+  Power,
+  RefreshCcw,
+  Search,
+  Shield,
+  ShieldCheck,
+  SlidersHorizontal,
+  Trash,
+  UserPlus,
+  Users,
+  X,
+} from 'lucide-react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from '@/features/auth/auth_context'
 import Layout from '@/shared/components/layout'
 import { useTenant } from '@/shared/hooks/useTenant'
@@ -13,73 +27,121 @@ interface Employee {
   is_active: boolean
 }
 
-interface EmployeeCardProps {
-  emp: Employee
-  currentEmployee: { id: number } | null
-  getRoleBadgeClasses: (role: string | null) => string
-  formatRoleLabel: (role: string | null) => string
-  onToggleActive: (emp: Employee) => void
-  onDelete: (emp: Employee) => void
-  onAssignRole: (emp: Employee) => void
+interface PermissionOverride {
+  id: number
+  employee_id: number
+  action: string
+  granted: boolean
 }
 
-function EmployeeCard({
+interface AuditEntry {
+  id: number
+  actor_name: string
+  action: string
+  entity_type: string | null
+  entity_id: string | null
+  details: string | null
+  created_at: string | null
+}
+
+const ALL_ACTIONS = [
+  'MANAGE_MENU',
+  'CREATE_ORDER',
+  'ADJUST_STOCK',
+  'MANAGE_EMPLOYEES',
+  'VIEW_ANALYTICS',
+]
+
+const ACTION_LABELS: Record<string, string> = {
+  MANAGE_MENU: 'Gerenciar Cardápio',
+  CREATE_ORDER: 'Criar Comandas',
+  ADJUST_STOCK: 'Ajustar Estoque',
+  MANAGE_EMPLOYEES: 'Gerenciar Colaboradores',
+  VIEW_ANALYTICS: 'Ver Analytics',
+}
+
+const ROLE_LABELS: Record<string, string> = {
+  MANAGER: 'Gerente',
+  WAITER: 'Garçom',
+  COOK: 'Cozinheiro',
+  CASHIER: 'Operador de Caixa',
+}
+
+const ROLE_COLORS: Record<string, string> = {
+  MANAGER: 'border-amber-500/20 bg-amber-950/10 text-amber-400',
+  WAITER: 'border-sky-500/20 bg-sky-950/10 text-sky-400',
+  COOK: 'border-emerald-500/20 bg-emerald-950/10 text-emerald-400',
+  CASHIER: 'border-purple-500/20 bg-purple-950/10 text-purple-400',
+}
+
+function formatRoleLabel(role: string | null) {
+  if (!role) return 'Sem Cargo Ativo'
+  return ROLE_LABELS[role] || role
+}
+
+function EmployeeRow({
   emp,
-  currentEmployee,
-  getRoleBadgeClasses,
-  formatRoleLabel,
+  isSelf,
+  onAssignRole,
+  onEditPermissions,
   onToggleActive,
   onDelete,
-  onAssignRole,
-}: EmployeeCardProps) {
-  const isSelf = emp.id === currentEmployee?.id
+}: {
+  emp: Employee
+  isSelf: boolean
+  onAssignRole: (emp: Employee) => void
+  onEditPermissions: (emp: Employee) => void
+  onToggleActive: (emp: Employee) => void
+  onDelete: (emp: Employee) => void
+}) {
   return (
-    <div
-      className={`p-5 rounded-2xl border border-gray-900 bg-gray-950/15 flex flex-col justify-between transition-all duration-300 hover:border-gray-800 ${
-        isSelf ? 'border-brand-500/40 bg-brand-950/2' : ''
-      }`}
-    >
-      <div>
-        <div className="flex items-start justify-between">
-          <div>
-            <h4 className="text-xs font-bold text-gray-200">
-              {emp.name}
-              {isSelf && (
-                <span className="text-[9px] text-brand-400 ml-1.5 font-normal">(Você)</span>
-              )}
-            </h4>
-            <p className="text-[10px] text-gray-500 mt-0.5">ID: {emp.id}</p>
-          </div>
-          <div className="flex items-center gap-1.5">
-            <span
-              className={`text-[8px] px-1.5 py-0.5 rounded-full border uppercase tracking-wider font-extrabold ${
-                emp.is_active
-                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-400'
-                  : 'border-rose-500/25 bg-rose-500/10 text-rose-450'
-              }`}
-            >
-              {emp.is_active ? 'Ativo' : 'Suspenso'}
-            </span>
-            <span
-              className={`text-[9px] px-2 py-0.5 rounded-full border uppercase tracking-wider font-extrabold ${getRoleBadgeClasses(
-                emp.role,
-              )}`}
-            >
-              {formatRoleLabel(emp.role)}
-            </span>
-          </div>
-        </div>
-
-        <div className="mt-4 space-y-1.5 text-xs text-gray-400">
-          <div className="flex items-center gap-2">
-            <Mail className="h-3.5 w-3.5 text-gray-600" />
-            <span className="truncate">{emp.email}</span>
-          </div>
-        </div>
-      </div>
-
-      <div className="mt-5 pt-3.5 border-t border-gray-900/40 flex justify-between items-center">
-        <div className="flex gap-1.5">
+    <tr className={`transition-colors hover:bg-gray-950/30 ${isSelf ? 'bg-brand-950/5' : ''}`}>
+      <td className="px-4 py-3 text-gray-500 font-mono">{emp.id}</td>
+      <td className="px-4 py-3">
+        <span className="text-gray-200 font-semibold">
+          {emp.name}
+          {isSelf && <span className="text-[9px] text-brand-400 ml-1.5 font-normal">(Você)</span>}
+        </span>
+      </td>
+      <td className="px-4 py-3 text-gray-400">{emp.email}</td>
+      <td className="px-4 py-3">
+        <span
+          className={`inline-block text-[9px] px-2 py-0.5 rounded-full border uppercase tracking-wider font-extrabold ${
+            ROLE_COLORS[emp.role ?? ''] || 'border-gray-800 bg-gray-900 text-gray-500'
+          }`}
+        >
+          {formatRoleLabel(emp.role)}
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        <span
+          className={`inline-block text-[8px] px-1.5 py-0.5 rounded-full border uppercase tracking-wider font-extrabold ${
+            emp.is_active
+              ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-400'
+              : 'border-rose-500/25 bg-rose-500/10 text-rose-450'
+          }`}
+        >
+          {emp.is_active ? 'Ativo' : 'Suspenso'}
+        </span>
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center justify-end gap-1">
+          <button
+            type="button"
+            onClick={() => onEditPermissions(emp)}
+            className="p-1.5 rounded-lg border border-gray-850 bg-gray-950/40 text-gray-500 hover:text-brand-400 hover:border-brand-500/30 transition"
+            title="Permissões Individuais"
+          >
+            <ShieldCheck className="h-3.5 w-3.5" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onAssignRole(emp)}
+            className="p-1.5 rounded-lg border border-gray-850 bg-gray-950/40 text-gray-500 hover:text-brand-400 hover:border-brand-500/30 transition"
+            title="Atribuir Cargo"
+          >
+            <Shield className="h-3.5 w-3.5" />
+          </button>
           {!isSelf && (
             <>
               <button
@@ -105,17 +167,51 @@ function EmployeeCard({
             </>
           )}
         </div>
+      </td>
+    </tr>
+  )
+}
 
-        <button
-          type="button"
-          onClick={() => onAssignRole(emp)}
-          className="rounded-lg bg-gray-900 border border-gray-850 hover:bg-gray-850 px-3 py-1.5 text-[10px] font-bold text-brand-400 hover:text-white transition flex items-center gap-1"
-        >
-          <Shield className="h-3 w-3" />
-          Alterar Cargo
-        </button>
-      </div>
-    </div>
+function PermissionCell({
+  action,
+  permissions,
+  onToggle,
+}: {
+  action: string
+  permissions: PermissionOverride[]
+  onToggle: (action: string, granted: boolean | null, permissionId?: number) => void
+}) {
+  const override = permissions.find((p) => p.action === action)
+  const state = override === undefined ? null : override.granted
+  return (
+    <td className="px-3 py-2.5 text-center">
+      <button
+        type="button"
+        onClick={() => onToggle(action, state, override?.id)}
+        className={`inline-flex items-center justify-center w-7 h-7 rounded-lg border transition ${
+          state === true
+            ? 'border-emerald-500/30 bg-emerald-500/15 text-emerald-400'
+            : state === false
+              ? 'border-rose-500/30 bg-rose-500/15 text-rose-400'
+              : 'border-gray-800 bg-gray-950/40 text-gray-600 hover:border-gray-700 hover:text-gray-400'
+        }`}
+        title={
+          state === null
+            ? 'Clique para conceder'
+            : state
+              ? 'Clique para negar'
+              : 'Clique para remover override'
+        }
+      >
+        {state === true ? (
+          <ShieldCheck className="h-3.5 w-3.5" />
+        ) : state === false ? (
+          <X className="h-3.5 w-3.5" />
+        ) : (
+          <span className="text-gray-600">&mdash;</span>
+        )}
+      </button>
+    </td>
   )
 }
 
@@ -125,21 +221,32 @@ export default function EmployeesPage() {
 
   const [employees, setEmployees] = useState<Employee[]>([])
   const [isLoading, setIsLoading] = useState(true)
+
+  const [searchQuery, setSearchQuery] = useState('')
+  const [roleFilter, setRoleFilter] = useState<string>('all')
+  const [statusFilter, setStatusFilter] = useState<string>('all')
+
   const [isCreatingEmployee, setIsCreatingEmployee] = useState(false)
   const [isAssigningRole, setIsAssigningRole] = useState<Employee | null>(null)
 
-  // Registration Form State
   const [newEmpId, setNewEmpId] = useState('')
   const [newEmpName, setNewEmpName] = useState('')
   const [newEmpEmail, setNewEmpEmail] = useState('')
   const [newEmpPassword, setNewEmpPassword] = useState('')
   const [isSubmittingRegister, setIsSubmittingRegister] = useState(false)
 
-  // Role Assignment State
   const [selectedRole, setSelectedRole] = useState<'MANAGER' | 'WAITER' | 'COOK' | 'CASHIER'>(
     'WAITER',
   )
   const [isSubmittingRole, setIsSubmittingRole] = useState(false)
+
+  const [permissions, setPermissions] = useState<PermissionOverride[]>([])
+  const [permissionsTarget, setPermissionsTarget] = useState<Employee | null>(null)
+  const [isLoadingPermissions, setIsLoadingPermissions] = useState(false)
+
+  const [auditLogs, setAuditLogs] = useState<AuditEntry[]>([])
+  const [isAuditOpen, setIsAuditOpen] = useState(false)
+  const [isLoadingAudit, setIsLoadingAudit] = useState(false)
 
   const fetchEmployees = useCallback(async () => {
     setIsLoading(true)
@@ -152,9 +259,61 @@ export default function EmployeesPage() {
     }
   }, [])
 
+  const fetchPermissions = useCallback(async (employeeId: number) => {
+    setIsLoadingPermissions(true)
+    try {
+      const res = await httpClient.get<PermissionOverride[]>(
+        `/v1/auth/employees/${employeeId}/permissions`,
+      )
+      setPermissions(res.data || [])
+    } catch (_err) {
+    } finally {
+      setIsLoadingPermissions(false)
+    }
+  }, [])
+
+  const fetchAuditLogs = useCallback(async () => {
+    setIsLoadingAudit(true)
+    try {
+      const res = await httpClient.get<AuditEntry[]>('/v1/auth/audit-logs')
+      setAuditLogs(res.data || [])
+    } catch (_err) {
+    } finally {
+      setIsLoadingAudit(false)
+    }
+  }, [])
+
   useEffect(() => {
     fetchEmployees()
   }, [fetchEmployees])
+
+  const filteredEmployees = useMemo(() => {
+    let result = employees
+
+    if (searchQuery.trim()) {
+      const q = searchQuery.toLowerCase()
+      result = result.filter(
+        (e) =>
+          e.name.toLowerCase().includes(q) ||
+          e.email.toLowerCase().includes(q) ||
+          String(e.id).includes(q),
+      )
+    }
+
+    if (roleFilter !== 'all') {
+      if (roleFilter === 'none') {
+        result = result.filter((e) => e.role === null)
+      } else {
+        result = result.filter((e) => e.role === roleFilter)
+      }
+    }
+
+    if (statusFilter !== 'all') {
+      result = result.filter((e) => (statusFilter === 'active' ? e.is_active : !e.is_active))
+    }
+
+    return result
+  }, [employees, searchQuery, roleFilter, statusFilter])
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -174,14 +333,20 @@ export default function EmployeesPage() {
         password: newEmpPassword,
       })
 
-      // Clean up form
       setNewEmpId('')
       setNewEmpName('')
       setNewEmpEmail('')
       setNewEmpPassword('')
       setIsCreatingEmployee(false)
       fetchEmployees()
-      alert('Colaborador cadastrado no sistema global com sucesso!')
+      setSelectedRole('WAITER')
+      setIsAssigningRole({
+        id: numericId,
+        name: newEmpName.trim(),
+        email: newEmpEmail.trim(),
+        role: null,
+        is_active: true,
+      })
     } catch (err: unknown) {
       const error = err as { response?: { data?: { detail?: string } }; message?: string }
       const msg = error.response?.data?.detail || error.message || 'Erro ao registrar colaborador.'
@@ -209,7 +374,6 @@ export default function EmployeesPage() {
 
       setIsAssigningRole(null)
       fetchEmployees()
-      alert(`Cargo de ${formatRoleLabel(selectedRole)} atribuído a ${isAssigningRole.name}!`)
     } catch (err: unknown) {
       const error = err as { response?: { data?: { detail?: string } }; message?: string }
       const msg = error.response?.data?.detail || error.message || 'Erro ao atribuir cargo.'
@@ -256,41 +420,44 @@ export default function EmployeesPage() {
     }
   }
 
-  const formatRoleLabel = (role: string | null) => {
-    switch (role) {
-      case 'MANAGER':
-        return 'Gerente'
-      case 'WAITER':
-        return 'Garçom'
-      case 'COOK':
-        return 'Cozinheiro'
-      case 'CASHIER':
-        return 'Operador de Caixa'
-      default:
-        return 'Sem Cargo Ativo'
+  const handleTogglePermission = async (
+    action: string,
+    currentGranted: boolean | null,
+    permissionId?: number,
+  ) => {
+    const empId = permissionsTarget?.id
+    if (!empId) return
+    if (permissionId) {
+      await httpClient.delete(`/v1/auth/employees/${empId}/permissions/${permissionId}`)
+    } else {
+      await httpClient.put(`/v1/auth/employees/${empId}/permissions`, {
+        action,
+        granted: !currentGranted,
+      })
     }
+    fetchPermissions(empId)
   }
 
-  const getRoleBadgeClasses = (role: string | null) => {
-    switch (role) {
-      case 'MANAGER':
-        return 'border-amber-500/20 bg-amber-950/10 text-amber-400'
-      case 'WAITER':
-        return 'border-sky-500/20 bg-sky-950/10 text-sky-400'
-      case 'COOK':
-        return 'border-emerald-500/20 bg-emerald-950/10 text-emerald-400'
-      case 'CASHIER':
-        return 'border-purple-500/20 bg-purple-950/10 text-purple-400'
-      default:
-        return 'border-gray-800 bg-gray-900 text-gray-500'
-    }
+  const openPermissions = (emp: Employee) => {
+    setPermissionsTarget(emp)
+    fetchPermissions(emp.id)
+  }
+
+  const closePermissions = () => {
+    setPermissionsTarget(null)
+    setPermissions([])
+  }
+
+  const openAudit = () => {
+    fetchAuditLogs()
+    setIsAuditOpen(true)
   }
 
   return (
     <Layout>
       <div className="space-y-6">
         {/* Page Header */}
-        <div className="flex items-center justify-between border-b border-gray-900/60 pb-3">
+        <div className="flex items-center justify-between border-b border-gray-900/60 pb-3 flex-wrap gap-3">
           <div>
             <h2 className="text-lg font-black text-white tracking-wide uppercase flex items-center gap-2">
               <Users className="h-5 w-5 text-brand-400" />
@@ -301,6 +468,15 @@ export default function EmployeesPage() {
             </p>
           </div>
           <div className="flex gap-2">
+            <button
+              type="button"
+              onClick={openAudit}
+              className="rounded-xl bg-gray-950/40 hover:bg-gray-900 border border-gray-900 px-3 py-2 text-xs font-bold text-gray-400 hover:text-white transition flex items-center gap-1"
+              title="Histórico de Auditoria"
+            >
+              <ClipboardList className="h-3.5 w-3.5" />
+              Auditoria
+            </button>
             <button
               type="button"
               onClick={fetchEmployees}
@@ -327,43 +503,112 @@ export default function EmployeesPage() {
             <p className="font-bold">Como funciona a gestão de acessos?</p>
             <p className="text-blue-400/80 mt-0.5 text-[11px]">
               Primeiro, registre o colaborador no sistema global (e-mail corporativo único e ID
-              numérico). Em seguida, utilize a ação de "Atribuir Cargo" para dar acesso a ele na
-              franquia atual (ID do Tenant: {tenantId}).
+              numérico). Em seguida, utilize a ação de &quot;Atribuir Cargo&quot; para dar acesso a
+              ele na franquia atual (ID do Tenant: {tenantId}).
             </p>
           </div>
         </div>
 
-        {/* Employees Grid */}
-        {isLoading && employees.length === 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {[1, 2, 3].map((n) => (
-              <div
-                key={n}
-                className="h-40 rounded-2xl border border-gray-900 bg-gray-950/20 animate-pulse"
-              />
-            ))}
+        {/* Search & Filters */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-gray-600" />
+            <input
+              type="text"
+              placeholder="Buscar por nome, email ou ID..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full rounded-xl pl-9 pr-4 py-2.5 text-xs text-white glass-input"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery('')}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-600 hover:text-gray-400"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            )}
           </div>
-        ) : employees.length === 0 ? (
+
+          <div className="flex items-center gap-2">
+            <SlidersHorizontal className="h-3.5 w-3.5 text-gray-600" />
+            <select
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
+              className="rounded-xl px-3 py-2.5 text-xs text-white glass-input bg-[#0b0b11]"
+            >
+              <option value="all">Todos os Cargos</option>
+              <option value="none">Sem Cargo</option>
+              <option value="MANAGER">Gerente</option>
+              <option value="WAITER">Garçom</option>
+              <option value="COOK">Cozinheiro</option>
+              <option value="CASHIER">Operador de Caixa</option>
+            </select>
+
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="rounded-xl px-3 py-2.5 text-xs text-white glass-input bg-[#0b0b11]"
+            >
+              <option value="all">Todos os Status</option>
+              <option value="active">Ativo</option>
+              <option value="inactive">Suspenso</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Table */}
+        {isLoading && employees.length === 0 ? (
+          <div className="rounded-2xl border border-gray-900 bg-gray-950/20 animate-pulse h-64" />
+        ) : filteredEmployees.length === 0 ? (
           <div className="border border-dashed border-gray-850 rounded-2xl p-12 text-center text-xs text-gray-500 italic">
-            Nenhum colaborador registrado no sistema.
+            {employees.length === 0
+              ? 'Nenhum colaborador registrado no sistema.'
+              : 'Nenhum colaborador corresponde aos filtros aplicados.'}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {employees.map((emp) => (
-              <EmployeeCard
-                key={emp.id}
-                emp={emp}
-                currentEmployee={currentEmployee}
-                getRoleBadgeClasses={getRoleBadgeClasses}
-                formatRoleLabel={formatRoleLabel}
-                onToggleActive={handleToggleActive}
-                onDelete={handleDeleteEmployee}
-                onAssignRole={(emp) => {
-                  setSelectedRole(emp.role || 'WAITER')
-                  setIsAssigningRole(emp)
-                }}
-              />
-            ))}
+          <div className="overflow-x-auto rounded-2xl border border-gray-900">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-900 bg-gray-950/40">
+                  <th className="text-left px-4 py-3 text-[10px] uppercase font-extrabold text-gray-500 tracking-wider">
+                    ID
+                  </th>
+                  <th className="text-left px-4 py-3 text-[10px] uppercase font-extrabold text-gray-500 tracking-wider">
+                    Nome
+                  </th>
+                  <th className="text-left px-4 py-3 text-[10px] uppercase font-extrabold text-gray-500 tracking-wider">
+                    Email
+                  </th>
+                  <th className="text-left px-4 py-3 text-[10px] uppercase font-extrabold text-gray-500 tracking-wider">
+                    Cargo
+                  </th>
+                  <th className="text-left px-4 py-3 text-[10px] uppercase font-extrabold text-gray-500 tracking-wider">
+                    Status
+                  </th>
+                  <th className="text-right px-4 py-3 text-[10px] uppercase font-extrabold text-gray-500 tracking-wider">
+                    Ações
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-900/60">
+                {filteredEmployees.map((emp) => (
+                  <EmployeeRow
+                    key={emp.id}
+                    emp={emp}
+                    isSelf={emp.id === currentEmployee?.id}
+                    onEditPermissions={openPermissions}
+                    onAssignRole={(e) => {
+                      setSelectedRole(e.role || 'WAITER')
+                      setIsAssigningRole(e)
+                    }}
+                    onToggleActive={handleToggleActive}
+                    onDelete={handleDeleteEmployee}
+                  />
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
 
@@ -525,6 +770,163 @@ export default function EmployeesPage() {
                 </button>
               </div>
             </form>
+          </div>
+        )}
+
+        {/* Modal: Employee Permissions */}
+        {permissionsTarget && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+            <div className="w-full max-w-lg rounded-2xl glass-elevated p-6 space-y-4 max-h-[80vh] flex flex-col">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <ShieldCheck className="h-4 w-4 text-brand-400" />
+                    Permissões: {permissionsTarget.name}
+                  </h3>
+                  <p className="text-xs text-gray-550 mt-1">
+                    Sobrescreva permissões individuais. Deixe como &mdash; para usar a regra padrão
+                    do cargo ({formatRoleLabel(permissionsTarget.role)}).
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={closePermissions}
+                  className="p-1.5 rounded-lg border border-gray-850 hover:bg-gray-900 text-gray-500 hover:text-white transition"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="overflow-x-auto flex-1">
+                {isLoadingPermissions ? (
+                  <div className="h-32 rounded-xl bg-gray-950/20 animate-pulse" />
+                ) : (
+                  <table className="w-full text-xs">
+                    <thead>
+                      <tr className="border-b border-gray-900">
+                        <th className="text-left px-3 py-2 text-[10px] uppercase font-extrabold text-gray-500 tracking-wider">
+                          Ação
+                        </th>
+                        <th className="text-center px-3 py-2 text-[10px] uppercase font-extrabold text-gray-500 tracking-wider">
+                          Status
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-900/60">
+                      {ALL_ACTIONS.map((action) => (
+                        <tr key={action} className="hover:bg-gray-950/30 transition-colors">
+                          <td className="px-3 py-2.5 text-gray-300 font-medium">
+                            {ACTION_LABELS[action]}
+                          </td>
+                          <PermissionCell
+                            action={action}
+                            permissions={permissions}
+                            onToggle={handleTogglePermission}
+                          />
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-gray-900/60">
+                <div className="flex items-center gap-3 text-[10px] text-gray-600">
+                  <span className="flex items-center gap-1">
+                    <ShieldCheck className="h-3 w-3 text-emerald-400" /> Concedido
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <X className="h-3 w-3 text-rose-400" /> Negado
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <span>&mdash;</span> Padrão do cargo
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={closePermissions}
+                  className="rounded-xl bg-brand-500 hover:bg-brand-600 px-4 py-2 text-[10px] font-bold text-white transition"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal: Audit Log */}
+        {isAuditOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fade-in">
+            <div className="w-full max-w-2xl rounded-2xl glass-elevated p-6 space-y-4 max-h-[80vh] flex flex-col">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-1.5">
+                    <History className="h-4 w-4 text-brand-400" />
+                    Histórico de Auditoria
+                  </h3>
+                  <p className="text-xs text-gray-550 mt-1">
+                    Registro de ações realizadas na franquia
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setIsAuditOpen(false)}
+                  className="p-1.5 rounded-lg border border-gray-850 hover:bg-gray-900 text-gray-500 hover:text-white transition"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="overflow-y-auto flex-1 space-y-2">
+                {isLoadingAudit ? (
+                  <div className="h-32 rounded-xl bg-gray-950/20 animate-pulse" />
+                ) : auditLogs.length === 0 ? (
+                  <div className="border border-dashed border-gray-850 rounded-2xl p-8 text-center text-xs text-gray-500 italic">
+                    Nenhum registro de auditoria encontrado.
+                  </div>
+                ) : (
+                  auditLogs.map((entry) => (
+                    <div
+                      key={entry.id}
+                      className="p-3 rounded-xl border border-gray-900 bg-gray-950/15 text-xs"
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="text-gray-200 font-semibold">{entry.action}</span>
+                        <span className="text-[10px] text-gray-600">
+                          {entry.created_at
+                            ? new Date(entry.created_at).toLocaleString('pt-BR')
+                            : ''}
+                        </span>
+                      </div>
+                      <div className="mt-1 text-gray-500 space-y-0.5">
+                        {entry.actor_name && (
+                          <p>
+                            Por: <span className="text-gray-400">{entry.actor_name}</span>
+                          </p>
+                        )}
+                        {entry.entity_type && entry.entity_id && (
+                          <p>
+                            {entry.entity_type}:{' '}
+                            <span className="text-gray-400">{entry.entity_id}</span>
+                          </p>
+                        )}
+                        {entry.details && <p className="text-gray-500">{entry.details}</p>}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+
+              <div className="flex justify-end pt-2 border-t border-gray-900/60">
+                <button
+                  type="button"
+                  onClick={() => setIsAuditOpen(false)}
+                  className="rounded-xl bg-brand-500 hover:bg-brand-600 px-4 py-2 text-[10px] font-bold text-white transition"
+                >
+                  Fechar
+                </button>
+              </div>
+            </div>
           </div>
         )}
       </div>

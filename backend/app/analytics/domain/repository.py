@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 
 from app.analytics.domain.enums import AnalyticsPeriod
 
@@ -43,3 +43,10 @@ class AnalyticsRepository(Protocol):
         period: AnalyticsPeriod = AnalyticsPeriod.DAY,
         date_range: DateRange | None = None,
     ) -> KitchenPerformance: ...
+
+    async def get_menu_items_sales(
+        self,
+        tenant_id: str,
+        period: AnalyticsPeriod = AnalyticsPeriod.DAY,
+        date_range: DateRange | None = None,
+    ) -> list[dict[str, Any]]: ...

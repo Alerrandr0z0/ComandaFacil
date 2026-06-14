@@ -34,7 +34,7 @@ async def sqlite_session() -> AsyncGenerator[AsyncSession, None]:
 
 
 @pytest.fixture
-async def api_client(sqlite_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:
+async def api_client(sqlite_session: AsyncSession) -> AsyncGenerator[AsyncClient, None]:  # noqa: C901
     """Client overriding db_session and mongo_db dependencies to use our temporary SQLite db and a mock MongoDB."""
 
     async def override_db_session() -> AsyncGenerator[AsyncSession, None]:
@@ -49,6 +49,17 @@ async def api_client(sqlite_session: AsyncSession) -> AsyncGenerator[AsyncClient
         ) -> None:
             self.history.append(doc)
 
+        async def insert_one(self, doc: dict[str, Any], **kwargs: Any) -> None:
+            self.history.append(doc)
+
+        async def update_one(
+            self, filter: dict[str, Any], update: dict[str, Any], **kwargs: Any
+        ) -> None:
+            # Simple mock update
+            for doc in self.history:
+                if doc.get("order_id") == filter.get("order_id") and "$set" in update:
+                    doc.update(update["$set"])
+
         async def find_one(
             self, filter: dict[str, Any], projection: dict[str, Any] | None = None
         ) -> dict[str, Any] | None:
@@ -60,6 +71,12 @@ async def api_client(sqlite_session: AsyncSession) -> AsyncGenerator[AsyncClient
         def find(
             self, filter: dict[str, Any], projection: dict[str, Any] | None = None
         ) -> MockCollection:
+            return self
+
+        def sort(self, *args: Any, **kwargs: Any) -> MockCollection:
+            return self
+
+        def limit(self, *args: Any, **kwargs: Any) -> MockCollection:
             return self
 
     collections: dict[str, MockCollection] = {}
@@ -217,3 +234,39 @@ async def test_order_full_payment_and_delivery_flow_success(
     assert history[0]["order_id"] == 103
     assert history[0]["fulfillment"]["table"]["table_number"] == 5
     assert history[0]["items"][0]["name"] == "X-Burger"
+
+
+@pytest.mark.asyncio
+async def test_get_order_timeline_success(
+    api_client: AsyncClient, sqlite_session: AsyncSession
+) -> None:
+    import datetime
+    import hashlib
+
+    from app.auth.infrastructure.orm_models import AuditLogORM
+
+    # 1. Seed some fake audit logs for order 105
+    # Safe tenant hash mapping for franquia_001
+    t_id = int(hashlib.sha256(b"franquia_001").hexdigest(), 16) % 1000000
+
+    log1 = AuditLogORM(
+        tenant_id=t_id,
+        actor_id=502,
+        actor_name="Marcos Garçom",
+        action="ORDER_CREATED",
+        entity_type="order",
+        entity_id="105",
+        details="Comanda ID 105 criada com tipo de atendimento TABLE.",
+        created_at=datetime.datetime.now(datetime.UTC) - datetime.timedelta(minutes=5),
+    )
+    sqlite_session.add(log1)
+    await sqlite_session.commit()
+
+    # 2. Call the timeline endpoint
+    response = await api_client.get("/api/v1/order/105/timeline")
+    assert response.status_code == 200
+    timeline = response.json()
+    assert len(timeline) == 1
+    assert timeline[0]["actor_name"] == "Marcos Garçom"
+    assert timeline[0]["action"] == "ORDER_CREATED"
+    assert timeline[0]["details"] == "Comanda ID 105 criada com tipo de atendimento TABLE."

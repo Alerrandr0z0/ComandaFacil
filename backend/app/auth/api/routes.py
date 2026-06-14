@@ -18,7 +18,11 @@ from app.auth.application.commands import (
     LogoutHandler,
 )
 from app.auth.domain.employee import RoleType
-from app.auth.infrastructure.orm_models import EmployeeORM
+from app.auth.infrastructure.orm_models import (
+    AuditLogORM,
+    EmployeeORM,
+    EmployeePermissionORM,
+)
 from app.auth.infrastructure.repositories import (
     SQLAlchemyEmployeeRepository,
     SQLAlchemySessionRepository,
@@ -102,7 +106,7 @@ async def list_employees(
     db: DbSession,
     tenant_id: str = Depends(get_current_tenant_id),
 ) -> list[EmployeeResponseSchema]:
-    """Lists all registered employees and resolves their active role for the tenant."""
+    """Lists employees with an active (non-removed) role in the current franchise."""
     stmt = select(EmployeeORM).options(selectinload(EmployeeORM.roles))
     result = await db.execute(stmt)
     orms = result.scalars().all()
@@ -116,12 +120,16 @@ async def list_employees(
     for orm in orms:
         active_role = None
         is_active = True
+        has_role = False
         if t_id is not None:
             for r in orm.roles:
-                if r.tenant_id == t_id:
+                if r.tenant_id == t_id and not r.removed:
                     active_role = r.role_type
                     is_active = r.is_active
+                    has_role = True
                     break
+        if not has_role:
+            continue
         response.append(
             EmployeeResponseSchema(
                 id=orm.id,
@@ -308,10 +316,189 @@ async def delete_employee(
         raise HTTPException(status_code=404, detail="Franquia não encontrada.")
 
     try:
-        employee.remove_role(tenant)
+        employee.mark_removed(tenant)
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e)) from e
 
     await emp_repo.save(employee)
     await db.commit()
+    await _log_audit(
+        db,
+        tenant_id=t_id,
+        actor_id=employee.id,
+        actor_name=employee.name,
+        action="EMPLOYEE_REMOVED",
+        entity_type="employee",
+        entity_id=str(employee_id),
+        details=f"Colaborador removido da franquia {t_id}",
+    )
     return {"detail": "Colaborador removido da franquia com sucesso."}
+
+
+# ─── Audit & Permissions ──────────────────────────────────────────────────
+
+
+async def _log_audit(
+    db: DbSession,
+    tenant_id: int,
+    actor_id: int | None,
+    actor_name: str,
+    action: str,
+    entity_type: str | None = None,
+    entity_id: str | None = None,
+    details: str | None = None,
+) -> None:
+    """Helper to persist an audit log entry."""
+    log = AuditLogORM(
+        tenant_id=tenant_id,
+        actor_id=actor_id,
+        actor_name=actor_name,
+        action=action,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        details=details,
+    )
+    db.add(log)
+    await db.flush()
+
+
+@router.get(
+    "/employees/{employee_id}/permissions",
+    response_model=list[dict[str, object]],
+    status_code=status.HTTP_200_OK,
+    summary="List custom permission overrides for an employee",
+    dependencies=[Depends(require_permission("MANAGE_EMPLOYEES"))],
+)
+async def list_employee_permissions(
+    employee_id: int,
+    db: DbSession,
+    tenant_id: str = Depends(get_current_tenant_id),
+) -> list[dict[str, object]]:
+    try:
+        t_id = int(tenant_id)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail="Invalid tenant ID.") from err
+
+    stmt = select(EmployeePermissionORM).where(
+        EmployeePermissionORM.tenant_id == t_id,
+        EmployeePermissionORM.employee_id == employee_id,
+    )
+    result = await db.execute(stmt)
+    orms = result.scalars().all()
+    return [
+        {
+            "id": o.id,
+            "employee_id": o.employee_id,
+            "action": o.action,
+            "granted": o.granted,
+        }
+        for o in orms
+    ]
+
+
+@router.put(
+    "/employees/{employee_id}/permissions",
+    status_code=status.HTTP_200_OK,
+    summary="Upsert a permission override for an employee",
+    dependencies=[Depends(require_permission("MANAGE_EMPLOYEES"))],
+)
+async def upsert_employee_permission(
+    employee_id: int,
+    body: dict[str, object],
+    db: DbSession,
+    tenant_id: str = Depends(get_current_tenant_id),
+) -> dict[str, object]:
+    try:
+        t_id = int(tenant_id)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail="Invalid tenant ID.") from err
+
+    action = str(body.get("action", ""))
+    granted = bool(body.get("granted", True))
+
+    stmt = select(EmployeePermissionORM).where(
+        EmployeePermissionORM.tenant_id == t_id,
+        EmployeePermissionORM.employee_id == employee_id,
+        EmployeePermissionORM.action == action,
+    )
+    result = await db.execute(stmt)
+    orm = result.scalar_one_or_none()
+    if orm:
+        orm.granted = granted
+    else:
+        orm = EmployeePermissionORM(
+            tenant_id=t_id, employee_id=employee_id, action=action, granted=granted
+        )
+        db.add(orm)
+    await db.commit()
+    return {"id": orm.id, "employee_id": employee_id, "action": action, "granted": granted}
+
+
+@router.delete(
+    "/employees/{employee_id}/permissions/{permission_id}",
+    status_code=status.HTTP_200_OK,
+    summary="Delete a permission override for an employee",
+    dependencies=[Depends(require_permission("MANAGE_EMPLOYEES"))],
+)
+async def delete_employee_permission(
+    employee_id: int,
+    permission_id: int,
+    db: DbSession,
+    tenant_id: str = Depends(get_current_tenant_id),
+) -> dict[str, str]:
+    try:
+        t_id = int(tenant_id)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail="Invalid tenant ID.") from err
+
+    stmt = select(EmployeePermissionORM).where(
+        EmployeePermissionORM.id == permission_id,
+        EmployeePermissionORM.tenant_id == t_id,
+        EmployeePermissionORM.employee_id == employee_id,
+    )
+    result = await db.execute(stmt)
+    orm = result.scalar_one_or_none()
+    if not orm:
+        raise HTTPException(status_code=404, detail="Permissão não encontrada.")
+    await db.delete(orm)
+    await db.commit()
+    return {"detail": "Permissão removida."}
+
+
+@router.get(
+    "/audit-logs",
+    response_model=list[dict[str, object]],
+    status_code=status.HTTP_200_OK,
+    summary="Get audit log entries for the franchise",
+    dependencies=[Depends(require_permission("MANAGE_EMPLOYEES"))],
+)
+async def list_audit_logs(
+    db: DbSession,
+    tenant_id: str = Depends(get_current_tenant_id),
+    limit: int = 50,
+) -> list[dict[str, object]]:
+    try:
+        t_id = int(tenant_id)
+    except ValueError as err:
+        raise HTTPException(status_code=400, detail="Invalid tenant ID.") from err
+
+    stmt = (
+        select(AuditLogORM)
+        .where(AuditLogORM.tenant_id == t_id)
+        .order_by(AuditLogORM.created_at.desc())
+        .limit(limit)
+    )
+    result = await db.execute(stmt)
+    orms = result.scalars().all()
+    return [
+        {
+            "id": o.id,
+            "actor_name": o.actor_name,
+            "action": o.action,
+            "entity_type": o.entity_type,
+            "entity_id": o.entity_id,
+            "details": o.details,
+            "created_at": o.created_at.isoformat() if o.created_at else None,
+        }
+        for o in orms
+    ]

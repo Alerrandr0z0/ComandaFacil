@@ -148,7 +148,7 @@ max-complexity = 10
 ]
 
 [tool.ruff.lint.pylint]
-max-args = 8    # Allow up to 8 arguments for dependency-heavy FastAPI routers
+max-args = 10    # Allow up to 8 arguments for dependency-heavy FastAPI routers
 
 [tool.ruff.format]
 quote-style = "double"
@@ -198,6 +198,7 @@ addopts = [
 # ─── Coverage ─────────────────────────────────────────────────────────────────
 [tool.coverage.run]
 source = ["app"]
+concurrency = ["greenlet", "thread"]
 omit = [
     "app/main.py",
     "alembic/*",

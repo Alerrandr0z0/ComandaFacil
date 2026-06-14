@@ -182,11 +182,28 @@ async def test_kds_http_lifecycle_endpoints_success(
 async def test_kds_websocket_and_background_task_dispatch_flow_success(
     api_client: AsyncClient, sqlite_session: AsyncSession
 ) -> None:
-    # Arrange: Setup OrderForm
+    # Arrange: Setup OrderForm and MenuItem
     order_repo = SQLAlchemyOrderRepository(sqlite_session)
     order = OrderForm(id=200, tenant_id="franquia_001")
     order.set_fulfillment_strategy(Table(12))
     await order_repo.save(order)
+
+    from app.menu.domain.menu import MenuItem
+    from app.menu.infrastructure.repositories import SQLAlchemyMenuItemRepository
+    from app.shared.money import Money
+
+    item_repo = SQLAlchemyMenuItemRepository(sqlite_session)
+    menu_item = MenuItem(
+        id=10,
+        tenant_id="franquia_001",
+        name="Milkshake",
+        description="Delicioso",
+        base_price=Money.from_float(18.50),
+        station_type="BEVERAGE",
+        category_name="Bebidas",
+        is_available=True,
+    )
+    await item_repo.save(menu_item)
     await sqlite_session.commit()
 
     # Connect to WebSocket (KDS Display Screen subscribing for BEVERAGE channel)
@@ -241,7 +258,7 @@ async def test_kds_websocket_and_background_task_dispatch_flow_success(
 
         # Act 2: Prepare the item via API
         prep_res = client.patch(
-            "/api/v1/kitchen/items/500/prepare",
+            "/api/v1/kitchen/items/500000/prepare",
             headers={"X-Tenant-ID": "franquia_001"},
         )
         assert prep_res.status_code == 200
@@ -249,7 +266,7 @@ async def test_kds_websocket_and_background_task_dispatch_flow_success(
         # Assert 2: WebSocket should receive preparing event
         event_prep = ws.receive_json()
         assert event_prep["event"] == "ITEM_PREPARING"
-        assert event_prep["item"]["id"] == 500
+        assert event_prep["item"]["id"] == 500000
         assert event_prep["item"]["state"] == "PREPARING"
 
     app.dependency_overrides.clear()

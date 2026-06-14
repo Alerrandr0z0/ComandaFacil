@@ -47,7 +47,12 @@ async def test_simple_stock_item_create_and_find(sqlite_session: AsyncSession) -
     )
     # Add initial transaction
     item.add_transaction(
-        StockTransaction(0, MeasuredQuantity(Decimal("50"), "kg"), TransactionType.INPUT)
+        StockTransaction(
+            0,
+            MeasuredQuantity(Decimal("50"), "kg"),
+            TransactionType.INPUT,
+            cost_amount=Decimal("5.00"),
+        )
     )
 
     await repo.save(item)
@@ -68,12 +73,22 @@ async def test_composite_stock_item_relations_persistence(sqlite_session: AsyncS
     # Children
     c1 = SimpleStockItem(id=10, tenant_id="t1", name="Carne", category="RAW_MATERIAL", unit="un")
     c1.add_transaction(
-        StockTransaction(0, MeasuredQuantity(Decimal("10"), "un"), TransactionType.INPUT)
+        StockTransaction(
+            0,
+            MeasuredQuantity(Decimal("10"), "un"),
+            TransactionType.INPUT,
+            cost_amount=Decimal("3.00"),
+        )
     )
 
     c2 = SimpleStockItem(id=20, tenant_id="t1", name="Pao", category="RAW_MATERIAL", unit="un")
     c2.add_transaction(
-        StockTransaction(0, MeasuredQuantity(Decimal("15"), "un"), TransactionType.INPUT)
+        StockTransaction(
+            0,
+            MeasuredQuantity(Decimal("15"), "un"),
+            TransactionType.INPUT,
+            cost_amount=Decimal("1.50"),
+        )
     )
 
     # Parent Composite
@@ -120,3 +135,68 @@ async def test_recipe_and_ingredients_persistence(sqlite_session: AsyncSession) 
     assert len(ingredients) == 1
     assert ingredients[0].stock_item.name == "Chocolate"
     assert ingredients[0].quantity.value == Decimal("50")
+
+    # Update existing recipe (exercising recipe_repo.save for existing orm)
+    persisted.add_ingredient(item, MeasuredQuantity(Decimal("100"), "g"))
+    await recipe_repo.save(persisted)
+    await sqlite_session.commit()
+
+    updated = await recipe_repo.find_by_menu_item(200, "t1")
+    assert updated is not None
+    assert updated.get_ingredients()[0].quantity.value == Decimal("100")
+
+
+@pytest.mark.asyncio
+async def test_find_all_and_find_low_stock(sqlite_session: AsyncSession) -> None:
+    repo = SQLAlchemyStockItemRepository(sqlite_session)
+
+    # 1. Create items
+    item1 = SimpleStockItem(
+        id=40,
+        tenant_id="franquia_001",
+        name="Queijo",
+        category="RAW_MATERIAL",
+        unit="kg",
+        min_stock_level=5.0,
+    )
+    # has balance 2 (low stock!)
+    item1.add_transaction(
+        StockTransaction(
+            0,
+            MeasuredQuantity(Decimal("2.0"), "kg"),
+            TransactionType.INPUT,
+            cost_amount=Decimal("10.00"),
+        )
+    )
+
+    item2 = SimpleStockItem(
+        id=41,
+        tenant_id="franquia_001",
+        name="Presunto",
+        category="RAW_MATERIAL",
+        unit="kg",
+        min_stock_level=5.0,
+    )
+    # has balance 10 (not low stock)
+    item2.add_transaction(
+        StockTransaction(
+            0,
+            MeasuredQuantity(Decimal("10.0"), "kg"),
+            TransactionType.INPUT,
+            cost_amount=Decimal("8.00"),
+        )
+    )
+
+    await repo.save(item1)
+    await repo.save(item2)
+    await sqlite_session.commit()
+
+    # 2. find_all
+    items = await repo.find_all("franquia_001")
+    assert len(items) == 2
+    assert {i.name for i in items} == {"Queijo", "Presunto"}
+
+    # 3. find_low_stock
+    low_stock = await repo.find_low_stock("franquia_001")
+    assert len(low_stock) == 1
+    assert low_stock[0].name == "Queijo"

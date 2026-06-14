@@ -6,8 +6,10 @@ from typing import TYPE_CHECKING, Final, Protocol, runtime_checkable
 
 from app.stock.domain.enums import TransactionType
 from app.stock.domain.measured_quantity import MeasuredQuantity
+from app.stock.domain.stock_events import StockAdjusted, StockTransactionRegistered
 
 if TYPE_CHECKING:
+    from app.shared.domain_events import DomainEvent
     from app.stock.domain.transaction import StockTransaction
 
 
@@ -31,9 +33,22 @@ class StockItem(ABC):
         self.min_stock_level: float = min_stock_level
         self.is_active: bool = is_active
         self.transactions: list[StockTransaction] = transactions or []
+        self._events: list[DomainEvent] = []
+
+    def add_event(self, event: DomainEvent) -> None:
+        self._events.append(event)
+
+    def collect_events(self) -> list[DomainEvent]:
+        events = list(self._events)
+        self._events.clear()
+        return events
 
     @abstractmethod
     def get_balance(self) -> MeasuredQuantity:
+        pass
+
+    @abstractmethod
+    def get_unit_cost(self) -> Decimal:
         pass
 
     def add_transaction(self, tx: StockTransaction) -> None:
@@ -79,6 +94,39 @@ class SimpleStockItem(StockItem):
         super().__init__(id, tenant_id, name, category, min_stock_level, is_active, transactions)
         self.unit: str = unit
 
+    def add_transaction(self, tx: StockTransaction) -> None:
+        # Calculate old balance before adding the transaction
+        old_balance = self.get_balance()
+
+        super().add_transaction(tx)
+
+        # Raise domain events
+        if tx.type == TransactionType.ADJUSTMENT:
+            self._events.append(
+                StockAdjusted(
+                    item_id=self.id,
+                    tenant_id=self.tenant_id,
+                    name=self.name,
+                    old_quantity=old_balance.value,
+                    new_quantity=tx.quantity.value,
+                    unit=self.unit,
+                    reason=tx.reason,
+                )
+            )
+        else:
+            self._events.append(
+                StockTransactionRegistered(
+                    item_id=self.id,
+                    tenant_id=self.tenant_id,
+                    name=self.name,
+                    quantity=tx.quantity.value,
+                    unit=tx.quantity.unit,
+                    transaction_type=tx.type.name,
+                    cost_amount=tx.cost_amount,
+                    reason=tx.reason,
+                )
+            )
+
     def get_balance(self) -> MeasuredQuantity:
         # Sort transactions to process them chronologically
         sorted_txs = sorted(self.transactions, key=lambda tx: tx.occurred_at)
@@ -103,11 +151,31 @@ class SimpleStockItem(StockItem):
 
         return balance
 
+    def get_unit_cost(self) -> Decimal:
+        input_txs = [
+            tx
+            for tx in self.transactions
+            if tx.type == TransactionType.INPUT and tx.cost_amount > Decimal("0.0")
+        ]
+        if not input_txs:
+            return Decimal("0.0")
+
+        total_cost = sum(
+            (tx.quantity.value * tx.cost_amount for tx in input_txs),
+            Decimal("0.0"),
+        )
+        total_qty = sum((tx.quantity.value for tx in input_txs), Decimal("0.0"))
+
+        if total_qty <= Decimal("0.0"):
+            return Decimal("0.0")
+
+        return total_cost / total_qty
+
 
 class CompositeStockItem(StockItem):
     """Composite item composed of other stock items."""
 
-    def __init__(  # noqa: PLR0913
+    def __init__(
         self,
         id: int,
         tenant_id: str,
@@ -138,6 +206,10 @@ class CompositeStockItem(StockItem):
         for comp in self.components:
             balance = balance.add(comp.get_balance())
         return balance
+
+    def get_unit_cost(self) -> Decimal:
+        # O custo unitário do item composto é a soma recursiva dos custos de seus componentes
+        return sum((comp.get_unit_cost() for comp in self.components), Decimal("0.0"))
 
 
 @runtime_checkable

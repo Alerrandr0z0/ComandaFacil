@@ -14,7 +14,7 @@ interface OrderGridProps {
   onSelectOrder: (orderId: number, order: OrderForm | null) => void
   selectedOrderId: number | null
   readyItems: ReadyItem[]
-  onDismissReadyItem: (itemId: number) => void
+  onDismissReadyItem: (item: ReadyItem) => void
   onNewOrder: () => void
   onActiveOrdersCount?: (count: number) => void
   refreshKey?: number
@@ -72,21 +72,19 @@ function getFulfillmentIcon(type: string | null) {
   }
 }
 
-function useElapsedTime(orderId: number): string {
+function useElapsedTime(orderCreatedAt: string | undefined): string {
   const [elapsedTime, setElapsedTime] = useState<string>('')
 
   useEffect(() => {
-    const key = `cf_order_${orderId}_open_time`
-    let openTime = localStorage.getItem(key)
-    if (!openTime) {
-      openTime = Date.now().toString()
-      localStorage.setItem(key, openTime)
+    if (!orderCreatedAt) {
+      setElapsedTime('')
+      return
     }
 
-    const startTime = parseInt(openTime, 10)
+    const startTime = new Date(orderCreatedAt).getTime()
 
     const updateTimer = () => {
-      const diffMs = Date.now() - startTime
+      const diffMs = Math.max(0, Date.now() - startTime)
       const diffMins = Math.floor(diffMs / 60000)
       const diffSecs = Math.floor((diffMs % 60000) / 1000)
 
@@ -98,7 +96,7 @@ function useElapsedTime(orderId: number): string {
     updateTimer()
     const timer = setInterval(updateTimer, 1000)
     return () => clearInterval(timer)
-  }, [orderId])
+  }, [orderCreatedAt])
 
   return elapsedTime
 }
@@ -107,7 +105,7 @@ function OrderCard({ order, isSelected, readyCount, onSelect, onClearReadyItems 
   const { label: statusLabel, color: statusColor } = getStatusLabel(order)
   const fulfillmentLine = getFulfillmentLine(order)
   const FulfillmentIcon = getFulfillmentIcon(order.fulfillment.type)
-  const elapsedTime = useElapsedTime(order.id)
+  const elapsedTime = useElapsedTime(order.created_at)
   const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0)
   const hasReadyAlert = readyCount > 0
 
@@ -239,7 +237,7 @@ export default function OrderGrid({
     const orderItemIds = order.items.map((item) => item.id)
     const matchingItems = readyItems.filter((item) => orderItemIds.includes(item.correlation_id))
     for (const item of matchingItems) {
-      onDismissReadyItem(item.id)
+      onDismissReadyItem(item)
     }
   }
 

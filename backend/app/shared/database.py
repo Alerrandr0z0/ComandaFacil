@@ -1,4 +1,4 @@
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Awaitable, Callable
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from sqlalchemy.ext.asyncio import (
@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.settings import Settings
+from app.shared.domain_events import EventBus, pending_events_var
 
 # ─── PostgreSQL ────────────────────────────────────────────────────────────────
 
@@ -38,12 +39,32 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
     if session_factory is None:
         raise RuntimeError("PostgreSQL not initialized. Call init_postgres() first.")
     async with session_factory() as session:
+        token = pending_events_var.set([])
+        original_commit = session.commit
+
+        async def commit_with_events(
+            orig_commit: Callable[[], Awaitable[None]] = original_commit,
+        ) -> None:
+            await orig_commit()
+            events = pending_events_var.get()
+            if events:
+                pending_events_var.set([])
+                for event in events:
+                    await EventBus.publish(event)
+
+        session.commit = commit_with_events
+
         try:
             yield session
             await session.commit()
         except Exception:
             await session.rollback()
             raise
+        finally:
+            try:
+                pending_events_var.reset(token)
+            except ValueError:
+                pending_events_var.set(None)
 
 
 # ─── MongoDB ──────────────────────────────────────────────────────────────────

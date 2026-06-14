@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import datetime
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.auth.domain.tenant import PlanType
@@ -61,6 +61,7 @@ class UserTenantRoleORM(Base):
     )
     role_type: Mapped[str] = mapped_column(String(50), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
+    removed: Mapped[bool] = mapped_column(Boolean, default=False)
     assigned_at: Mapped[datetime.datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC)
     )
@@ -89,3 +90,47 @@ class SessionORM(Base):
 
     def __repr__(self) -> str:
         return f"SessionORM(session_id={self.session_id!r}, employee_id={self.employee_id}, tenant_id={self.tenant_id}, expires_at={self.expires_at!r})"
+
+
+class EmployeePermissionORM(Base):
+    """Custom permissions per employee per tenant."""
+
+    __tablename__ = "employee_permissions"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="CASCADE"), nullable=False
+    )
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    granted: Mapped[bool] = mapped_column(Boolean, default=True)
+
+    def __repr__(self) -> str:
+        return f"EmployeePermissionORM(id={self.id}, tenant_id={self.tenant_id}, employee_id={self.employee_id}, action={self.action!r}, granted={self.granted})"
+
+
+class AuditLogORM(Base):
+    """Audit trail for employee actions."""
+
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    tenant_id: Mapped[int] = mapped_column(
+        ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False
+    )
+    actor_id: Mapped[int] = mapped_column(
+        ForeignKey("employees.id", ondelete="SET NULL"), nullable=True
+    )
+    actor_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    action: Mapped[str] = mapped_column(String(100), nullable=False)
+    entity_type: Mapped[str] = mapped_column(String(50), nullable=True)
+    entity_id: Mapped[str] = mapped_column(String(50), nullable=True)
+    details: Mapped[str] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime.datetime] = mapped_column(
+        DateTime(timezone=True), default=lambda: datetime.datetime.now(datetime.UTC)
+    )
+
+    def __repr__(self) -> str:
+        return f"AuditLogORM(id={self.id}, actor_id={self.actor_id}, action={self.action!r})"
