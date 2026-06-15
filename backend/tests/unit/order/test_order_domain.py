@@ -4,7 +4,7 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from app.order.domain.enums import FulfillmentStatus
+from app.order.domain.enums import FulfillmentStatus, OrderItemStatus
 from app.order.domain.fulfillment import Delivery, Table, Takeaway
 from app.order.domain.order_form import OrderForm
 from app.order.domain.order_item import OrderFormItem
@@ -265,3 +265,132 @@ def test_address_validation_property(
     )
     assert addr.street == street
     assert addr.number == number
+
+
+# ─── Item Cancellation ──────────────────────────────────────────────────────────
+
+
+def test_cancel_quantity_when_item_has_delivered_quantity_then_raises_value_error() -> None:
+    # Arrange
+    item = OrderFormItem(
+        id=1,
+        menu_item_id=10,
+        name_cpy="Pizza",
+        price_cpy=Money(Decimal("39.90")),
+        station_type_cpy="Grill",
+        quantity=2,
+        delivered_quantity=1,
+    )
+
+    # Act & Assert
+    # delivered_quantity=1 of 2 → only 1 cancellable; try cancel 2 should fail
+    with pytest.raises(ValueError, match="máximo permitido é 1"):
+        item.cancel_quantity(2)
+
+
+def test_cancel_quantity_when_status_already_canceled_then_cancellable_quantity_zero() -> None:
+    # Arrange
+    item = OrderFormItem(
+        id=1,
+        menu_item_id=10,
+        name_cpy="Pizza",
+        price_cpy=Money(Decimal("39.90")),
+        station_type_cpy="Grill",
+        quantity=1,
+        status=OrderItemStatus.CANCELED,
+    )
+
+    # Act & Assert
+    assert item.cancellable_quantity == 0
+    with pytest.raises(ValueError, match="máximo permitido é 0"):
+        item.cancel_quantity(1)
+
+
+def test_cancel_quantity_when_item_waiting_then_increments_canceled_quantity() -> None:
+    # Arrange
+    item = OrderFormItem(
+        id=1,
+        menu_item_id=10,
+        name_cpy="Pizza",
+        price_cpy=Money(Decimal("39.90")),
+        station_type_cpy="Grill",
+        quantity=2,
+    )
+
+    # Act
+    item.cancel_quantity(1)
+
+    # Assert
+    assert item.quantity == 2  # original quantity preserved
+    assert item.canceled_quantity == 1
+    assert item.status == OrderItemStatus.WAITING
+
+
+def test_cancel_quantity_when_all_units_canceled_then_sets_status_canceled() -> None:
+    # Arrange
+    item = OrderFormItem(
+        id=1,
+        menu_item_id=10,
+        name_cpy="Pizza",
+        price_cpy=Money(Decimal("39.90")),
+        station_type_cpy="Grill",
+        quantity=1,
+        status=OrderItemStatus.PREPARING,
+    )
+
+    # Act
+    item.cancel_quantity(1)
+
+    # Assert
+    assert item.quantity == 1  # original quantity preserved
+    assert item.canceled_quantity == 1
+    assert item.status == OrderItemStatus.CANCELED
+
+
+def test_total_when_item_canceled_then_excludes_it() -> None:
+    # Arrange
+    order = OrderForm(id=1, tenant_id="franquia_001")
+    item1 = OrderFormItem(
+        id=1,
+        menu_item_id=10,
+        name_cpy="Pizza",
+        price_cpy=Money(Decimal("39.90")),
+        station_type_cpy="Grill",
+        quantity=2,
+    )
+    item2 = OrderFormItem(
+        id=2,
+        menu_item_id=11,
+        name_cpy="Suco",
+        price_cpy=Money(Decimal("8.50")),
+        station_type_cpy="Beverage",
+        quantity=1,
+    )
+    order.add_item(item1)
+    order.add_item(item2)
+
+    # Act
+    item2.cancel_quantity(1)
+
+    # Assert - Suco cancelado não entra no total
+    assert order.total() == Money(Decimal("79.80"))  # apenas 2x Pizza
+
+
+def test_cancel_order_when_open_then_records_order_cancelled_event() -> None:
+    # Arrange
+    order = OrderForm(id=1, tenant_id="franquia_001")
+    order.collect_events()  # Clear initial OrderCreated event
+
+    # Act
+    order.cancel()
+
+    # Assert
+    events = order.collect_events()
+    assert len(events) == 1
+    event = events[0]
+    from app.order.domain.order_events import OrderCancelled
+
+    assert isinstance(event, OrderCancelled)
+    assert event.order_id == 1
+    assert event.tenant_id == "franquia_001"
+

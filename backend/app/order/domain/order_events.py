@@ -25,3 +25,21 @@ class OrderCreated(DomainEvent):
     fulfillment_type: str
     display_code: str
     occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass(frozen=True)
+class OrderItemCancelled(DomainEvent):
+    order_id: int
+    tenant_id: str
+    item_id: int
+    name: str
+    quantity: int
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass(frozen=True)
+class OrderCancelled(DomainEvent):
+    order_id: int
+    tenant_id: str
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+

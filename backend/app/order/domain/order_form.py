@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING
 
-from app.order.domain.order_events import OrderItemAdded
+from app.order.domain.order_events import OrderCancelled, OrderItemAdded
 from app.order.domain.states import Closed, IOrderState, Open
 from app.shared.money import Money
 
@@ -73,6 +73,12 @@ class OrderForm:
 
     def cancel(self) -> None:
         self._state.cancel(self)
+        self.record_event(
+            OrderCancelled(
+                order_id=self.id,
+                tenant_id=self.tenant_id,
+            )
+        )
 
     def deliver(self) -> None:
         if self._state.name != "PAID":
@@ -86,8 +92,13 @@ class OrderForm:
     def total(self) -> Money:
         # Soma do subtotal de todos os itens
         subtotal = Money.zero()
+        from app.order.domain.enums import (  # noqa: PLC0415
+            OrderItemStatus,
+        )  # Inline to prevent any potential circular imports
+
         for item in self._items:
-            subtotal += item.calculate_subtotal()
+            if item.status != OrderItemStatus.CANCELED:
+                subtotal += item.calculate_subtotal()
 
         # Adiciona a taxa da estratégia de atendimento se definida
         if self.fulfillment_strategy is not None:
