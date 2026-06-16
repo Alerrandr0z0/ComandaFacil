@@ -54,6 +54,9 @@ Thumbs.db
 playwright-report/
 test-results/
 
+# Build and Temp
+frontend/dev-dist/
+
 # Graphify
 graphify-out/
 
