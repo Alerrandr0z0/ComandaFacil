@@ -59,7 +59,7 @@ class Preparing(IKitchenItemState):
         item._state = Ready()  # type: ignore[reportPrivateUsage]
 
     def cancel(self, item: KitchenOrderItem) -> None:
-        item._state = Cancelled()  # type: ignore[reportPrivateUsage]
+        item._state = CancelRequested()  # type: ignore[reportPrivateUsage]
 
 
 class Surplus(IKitchenItemState):
@@ -93,7 +93,7 @@ class Ready(IKitchenItemState):
         raise ValueError("Item already ready.")
 
     def cancel(self, item: KitchenOrderItem) -> None:
-        item._state = Surplus()  # type: ignore[reportPrivateUsage]
+        item._state = CancelRequested()  # type: ignore[reportPrivateUsage]
 
 
 class Cancelled(IKitchenItemState):
@@ -111,3 +111,20 @@ class Cancelled(IKitchenItemState):
 
     def cancel(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
         raise ValueError("Item already cancelled.")
+
+
+class CancelRequested(IKitchenItemState):
+    """State representing a cancel request pending chef approval."""
+
+    @property
+    def name(self) -> str:
+        return "CANCEL_REQUESTED"
+
+    def prepare(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
+        raise ValueError("Cannot prepare an item with a pending cancel request.")
+
+    def mark_as_ready(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
+        raise ValueError("Cannot mark an item as ready with a pending cancel request.")
+
+    def cancel(self, item: KitchenOrderItem) -> None:  # noqa: ARG002
+        raise ValueError("Cancel request is already pending approval.")

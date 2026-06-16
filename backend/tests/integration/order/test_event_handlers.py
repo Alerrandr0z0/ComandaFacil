@@ -1,21 +1,20 @@
 from __future__ import annotations
 
-import pytest
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
+from app.order.domain.enums import OrderItemStatus
 from app.order.domain.order_form import OrderForm
 from app.order.domain.order_item import OrderFormItem
-from app.order.domain.enums import OrderItemStatus
 from app.order.infrastructure.pg_repository import SQLAlchemyOrderRepository
+from app.shared.base_orm import Base
 from app.shared.money import Money
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from app.shared.base_orm import Base
-from collections.abc import AsyncGenerator
-
 if TYPE_CHECKING:
-    pass
+    from collections.abc import AsyncGenerator
 
 
 @pytest.fixture
@@ -46,8 +45,8 @@ async def sqlite_session() -> AsyncGenerator[AsyncSession, None]:
 async def test_order_item_status_sync_on_kitchen_item_status_changed(
     sqlite_session: AsyncSession,
 ) -> None:
-    from app.order.application.event_handlers import OrderFormItemStatusListener
     from app.kitchen.domain.kitchen_events import KitchenItemStatusChanged
+    from app.order.application.event_handlers import OrderFormItemStatusListener
 
     # Arrange: Setup Order and Item in Postgres
     order_repo = SQLAlchemyOrderRepository(sqlite_session)

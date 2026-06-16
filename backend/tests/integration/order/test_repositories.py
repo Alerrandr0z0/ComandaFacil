@@ -141,7 +141,7 @@ async def test_order_repository_lifecycle_with_delivery(db_session: AsyncSession
 
 
 @pytest.mark.asyncio
-async def test_mongo_order_history_repository() -> None:
+async def test_mongo_order_history_repository() -> None:  # noqa: C901
     # Arrange
     class MockCollection:
         def __init__(self) -> None:

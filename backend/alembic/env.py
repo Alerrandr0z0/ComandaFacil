@@ -25,6 +25,7 @@ for _orm_path in sorted(_context_dir.glob("*/infrastructure/orm_models.py")):
     _ctx = _orm_path.parent.parent.name
     __import__(f"app.{_ctx}.infrastructure.orm_models", fromlist=[""])
 
+import app.shared.outbox  # noqa: E402
 from app.shared.base_orm import Base  # noqa: E402
 
 target_metadata = Base.metadata

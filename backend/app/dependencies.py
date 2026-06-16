@@ -18,6 +18,7 @@ from app.auth.infrastructure.repositories import (
 from app.settings import Settings, get_settings
 from app.shared.actor_context import ActorInfo, current_actor_var
 from app.shared.database import get_async_session, get_mongo_db
+from app.shared.outbox import OutboxWriter
 from app.shared.tenant_context import tenant_context_var
 
 
@@ -156,3 +157,11 @@ async def _check_custom_permission(
     if override is not None:
         return override.granted
     return None
+
+
+def get_outbox_writer(db: DbSession) -> OutboxWriter:
+    """Dependency: outbox writer bound to the current DB session."""
+    return OutboxWriter(db)
+
+
+OutboxWriterDep = Annotated[OutboxWriter, Depends(get_outbox_writer)]

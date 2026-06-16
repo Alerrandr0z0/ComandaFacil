@@ -22,14 +22,37 @@ if TYPE_CHECKING:
 
 @pytest.fixture
 async def sqlite_session() -> AsyncGenerator[AsyncSession, None]:
+    from app.shared import database as _database
+    from app.shared.domain_events import EventBus, pending_events_var
+
     engine = create_async_engine("sqlite+aiosqlite:///:memory:", echo=False)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
-    session_factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
-    async with session_factory() as session:
+    class TestAsyncSession(AsyncSession):
+        async def commit(self) -> None:
+            is_wrapped = getattr(self.commit, "__name__", "") == "commit_with_events"
+            if is_wrapped:
+                await super().commit()
+            else:
+                events = list(pending_events_var.get() or [])
+                pending_events_var.set([])
+                await super().commit()
+                for event in events:
+                    await EventBus.publish(event)
+
+    sf = async_sessionmaker(engine, expire_on_commit=False, class_=TestAsyncSession)
+
+    old_factory = _database.session_factory
+    _database.session_factory = sf
+
+    async with sf() as session:
+        token = pending_events_var.set([])
         yield session
         await session.rollback()
+        pending_events_var.reset(token)
+
+    _database.session_factory = old_factory
     await engine.dispose()
 
 
@@ -270,3 +293,160 @@ async def test_get_order_timeline_success(
     assert timeline[0]["actor_name"] == "Marcos Garçom"
     assert timeline[0]["action"] == "ORDER_CREATED"
     assert timeline[0]["details"] == "Comanda ID 105 criada com tipo de atendimento TABLE."
+
+
+@pytest.mark.asyncio
+async def test_cancel_item_when_active_order_then_sets_item_canceled_and_updates_total(
+    api_client: AsyncClient,
+    sqlite_session: AsyncSession,
+) -> None:
+    from app.menu.domain.menu import MenuItem
+    from app.menu.infrastructure.repositories import SQLAlchemyMenuItemRepository
+    from app.shared.money import Money
+
+    menu_repo = SQLAlchemyMenuItemRepository(sqlite_session)
+    await menu_repo.save(
+        MenuItem(
+            id=10,
+            tenant_id="franquia_001",
+            name="Pizza",
+            description="Pizza",
+            base_price=Money(Decimal("39.90")),
+            station_type="Grill",
+            category_name="Pizza",
+            is_available=True,
+        )
+    )
+    await menu_repo.save(
+        MenuItem(
+            id=11,
+            tenant_id="franquia_001",
+            name="Suco",
+            description="Suco",
+            base_price=Money(Decimal("8.50")),
+            station_type="Beverage",
+            category_name="Suco",
+            is_available=True,
+        )
+    )
+    await sqlite_session.commit()
+
+    # Arrange - criar comanda com 2 itens
+    create_resp = await api_client.post(
+        "/api/v1/order",
+        json={
+            "fulfillment_type": "TABLE",
+            "display_code": "MESA-10",
+            "table_number": 10,
+        },
+        headers={"X-Tenant-ID": "franquia_001"},
+    )
+    assert create_resp.status_code == 201
+    order = create_resp.json()
+    order_id = order["id"]
+
+    # Adicionar item 1: Pizza 39.90 x2 = 79.80
+    item1_resp = await api_client.post(
+        f"/api/v1/order/{order_id}/items",
+        json={
+            "id": 1001,
+            "menu_item_id": 10,
+            "name_cpy": "Pizza",
+            "price_cpy": "39.90",
+            "station_type_cpy": "Grill",
+            "quantity": 2,
+        },
+        headers={"X-Tenant-ID": "franquia_001"},
+    )
+    assert item1_resp.status_code == 201
+
+    # Adicionar item 2: Suco 8.50 x1 = 8.50
+    item2_resp = await api_client.post(
+        f"/api/v1/order/{order_id}/items",
+        json={
+            "id": 1002,
+            "menu_item_id": 11,
+            "name_cpy": "Suco",
+            "price_cpy": "8.50",
+            "station_type_cpy": "Beverage",
+            "quantity": 1,
+        },
+        headers={"X-Tenant-ID": "franquia_001"},
+    )
+    assert item2_resp.status_code == 201
+
+    # Act - cancelar o Suco (item 1002)
+    cancel_resp = await api_client.patch(
+        f"/api/v1/order/{order_id}/items/1002/cancel",
+        headers={"X-Tenant-ID": "franquia_001"},
+    )
+
+    # Assert
+    assert cancel_resp.status_code == 200
+    updated_order = cancel_resp.json()
+
+    # Total deve ser apenas Pizza (79.80), Suco cancelado
+    assert Decimal(updated_order["total"]) == Decimal("79.80")
+
+    # Item 1002 deve estar CANCELED
+    suco = next(i for i in updated_order["items"] if i["id"] == 1002)
+    assert suco["status"] == "CANCELED"
+
+    # Item 1001 deve permanecer WAITING
+    pizza = next(i for i in updated_order["items"] if i["id"] == 1001)
+    assert pizza["status"] == "WAITING"
+
+
+@pytest.mark.asyncio
+async def test_cancel_item_when_order_paid_then_raises_bad_request(
+    api_client: AsyncClient,
+) -> None:
+    # Arrange - criar comanda paga
+    create_resp = await api_client.post(
+        "/api/v1/order",
+        json={
+            "fulfillment_type": "TABLE",
+            "display_code": "MESA-11",
+            "table_number": 11,
+        },
+        headers={"X-Tenant-ID": "franquia_001"},
+    )
+    assert create_resp.status_code == 201
+    order_id = create_resp.json()["id"]
+
+    # Adicionar item
+    item_resp = await api_client.post(
+        f"/api/v1/order/{order_id}/items",
+        json={
+            "id": 2001,
+            "menu_item_id": 10,
+            "name_cpy": "Pizza",
+            "price_cpy": "39.90",
+            "station_type_cpy": "Grill",
+            "quantity": 1,
+        },
+        headers={"X-Tenant-ID": "franquia_001"},
+    )
+    assert item_resp.status_code == 201
+
+    # Request payment then pay the order
+    req_resp = await api_client.post(
+        f"/api/v1/order/{order_id}/request-payment",
+        headers={"X-Tenant-ID": "franquia_001"},
+    )
+    assert req_resp.status_code == 200
+
+    pay_resp = await api_client.post(
+        f"/api/v1/order/{order_id}/process-payment",
+        headers={"X-Tenant-ID": "franquia_001"},
+    )
+    assert pay_resp.status_code == 200
+
+    # Act
+    cancel_resp = await api_client.patch(
+        f"/api/v1/order/{order_id}/items/2001/cancel",
+        headers={"X-Tenant-ID": "franquia_001"},
+    )
+
+    # Assert
+    assert cancel_resp.status_code == 400

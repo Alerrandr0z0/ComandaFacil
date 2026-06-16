@@ -83,6 +83,24 @@ async def api_client(sqlite_session: AsyncSession) -> AsyncGenerator[AsyncClient
             password_hash="hashed_password",
         )
 
+    original_commit = sqlite_session.commit
+
+    async def commit_and_sync() -> None:
+        await original_commit()
+        from app.shared import database as _database
+        from app.shared.outbox import OutboxConsumer
+
+        if _database.session_factory is not None:
+            from typing import Any, cast
+
+            consumer = OutboxConsumer(
+                session_factory=_database.session_factory,
+                mongo_db=cast("Any", mock_db),
+            )
+            await consumer._process_batch()  # type: ignore
+
+    sqlite_session.commit = commit_and_sync
+
     app.dependency_overrides[db_session] = override_db_session
     app.dependency_overrides[mongo_db] = override_mongo_db
     app.dependency_overrides[get_current_employee] = override_current_employee
@@ -802,6 +820,104 @@ async def test_produce_recipe_endpoint_insufficient_stock(
 
     # Assert
     assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_recipes_availability_check(
+    api_client: AsyncClient,
+    sqlite_session: AsyncSession,
+) -> None:
+    from app.stock.infrastructure.orm_models import (
+        RecipeIngredientORM,
+        RecipeORM,
+        StockItemORM,
+        StockTransactionORM,
+    )
+
+    # 1. Arrange: setup stock items
+    # Item A: 10.0 kg
+    item_a = StockItemORM(
+        id=105,
+        tenant_id="franquia_001",
+        name="Stock Item A",
+        category="RAW_MATERIAL",
+        type="SIMPLE",
+        unit="kg",
+        min_stock_level=1.0,
+        is_active=True,
+    )
+    sqlite_session.add(item_a)
+    # Add input transaction for Item A
+    tx_a = StockTransactionORM(
+        id=1005,
+        stock_item_id=105,
+        transaction_type="INPUT",
+        quantity_value=Decimal("10.0"),
+        quantity_unit="kg",
+        cost_amount=Decimal("15.0"),
+    )
+    sqlite_session.add(tx_a)
+
+    # Item B: 1.0 kg
+    item_b = StockItemORM(
+        id=106,
+        tenant_id="franquia_001",
+        name="Stock Item B",
+        category="RAW_MATERIAL",
+        type="SIMPLE",
+        unit="kg",
+        min_stock_level=1.0,
+        is_active=True,
+    )
+    sqlite_session.add(item_b)
+    # Add input transaction for Item B
+    tx_b = StockTransactionORM(
+        id=1006,
+        stock_item_id=106,
+        transaction_type="INPUT",
+        quantity_value=Decimal("1.0"),
+        quantity_unit="kg",
+        cost_amount=Decimal("5.0"),
+    )
+    sqlite_session.add(tx_b)
+
+    # 2. Setup Recipes
+    # Recipe 1 (menu item 301) -> needs 2.0 kg of Item A (Sufficient: 10.0 >= 2.0)
+    recipe_1 = RecipeORM(id=205, menu_item_id=301, tenant_id="franquia_001")
+    sqlite_session.add(recipe_1)
+    ing_1 = RecipeIngredientORM(
+        id=305,
+        recipe_id=205,
+        stock_item_id=105,
+        quantity_value=Decimal("2.0"),
+        quantity_unit="kg",
+    )
+    sqlite_session.add(ing_1)
+
+    # Recipe 2 (menu item 302) -> needs 3.0 kg of Item B (Insufficient: 1.0 < 3.0)
+    recipe_2 = RecipeORM(id=206, menu_item_id=302, tenant_id="franquia_001")
+    sqlite_session.add(recipe_2)
+    ing_2 = RecipeIngredientORM(
+        id=306,
+        recipe_id=206,
+        stock_item_id=106,
+        quantity_value=Decimal("3.0"),
+        quantity_unit="kg",
+    )
+    sqlite_session.add(ing_2)
+
+    await sqlite_session.commit()
+
+    # 3. Act
+    response = await api_client.get("/api/v1/stock/recipes/availability")
+
+    # 4. Assert
+    assert response.status_code == 200
+    data = response.json()
+    assert "availability" in data
+    avail = data["availability"]
+    assert avail.get("301") is True
+    assert avail.get("302") is False
 
 
 @pytest.mark.asyncio

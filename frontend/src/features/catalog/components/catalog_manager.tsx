@@ -34,15 +34,20 @@ export default function CatalogManager() {
   const [editingItem, setEditingItem] = useState<CatalogItem | null>(null)
   const [recipeItem, setRecipeItem] = useState<CatalogItem | null>(null)
   const [form, setForm] = useState(EMPTY_FORM)
+  const [stockStatus, setStockStatus] = useState<Record<number, boolean>>({})
 
-  const fetchItems = useCallback(async () => {
-    setIsLoading(true)
+  const fetchItems = useCallback(async (silent = false) => {
+    if (!silent) setIsLoading(true)
     try {
-      const res = await httpClient.get<CatalogItem[]>('/v1/menu/items')
+      const [res, availRes] = await Promise.all([
+        httpClient.get<CatalogItem[]>('/v1/menu/items'),
+        httpClient.get<{ availability: Record<number, boolean> }>('/v1/stock/recipes/availability'),
+      ])
       setItems(res.data)
+      setStockStatus(availRes.data.availability)
     } catch (_err) {
     } finally {
-      setIsLoading(false)
+      if (!silent) setIsLoading(false)
     }
   }, [])
 
@@ -114,6 +119,12 @@ export default function CatalogManager() {
   }
 
   const handleToggleAvailability = async (item: CatalogItem) => {
+    const originalItems = items
+    // Optimistic update
+    setItems((prev) =>
+      prev.map((i) => (i.id === item.id ? { ...i, is_available: !i.is_available } : i)),
+    )
+
     try {
       await httpClient.patch(`/v1/menu/items/${item.id}`, {
         name: item.name,
@@ -124,8 +135,9 @@ export default function CatalogManager() {
         image_url: item.image_url,
         is_available: !item.is_available,
       })
-      fetchItems()
+      await fetchItems(true) // silent refresh
     } catch (_err) {
+      setItems(originalItems) // revert on failure
       alert('Erro ao alterar disponibilidade.')
     }
   }
@@ -240,10 +252,15 @@ export default function CatalogManager() {
                   <p className="text-[10px] text-gray-550 mt-0.5 line-clamp-2">
                     {item.description || 'Sem descrição.'}
                   </p>
-                  <div className="flex items-center gap-2 mt-2">
+                  <div className="flex items-center gap-2 mt-2 flex-wrap">
                     <span className="text-[9px] uppercase font-bold text-brand-400 px-1.5 py-0.5 rounded bg-brand-500/5 border border-brand-500/10">
                       {item.category}
                     </span>
+                    {stockStatus[item.id] === false && (
+                      <span className="text-[9px] uppercase font-extrabold text-rose-400 px-1.5 py-0.5 rounded bg-rose-550/5 border border-rose-500/20">
+                        ⚠️ Sem Insumo
+                      </span>
+                    )}
                     {item.price !== null && (
                       <span className="text-[10px] font-black text-amber-500">
                         R$ {Number(item.price).toFixed(2)}

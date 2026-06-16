@@ -11,7 +11,7 @@ import {
   TrendingUp,
   Utensils,
 } from 'lucide-react'
-import { useCallback, useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   Area,
   AreaChart,
@@ -1290,27 +1290,15 @@ function MenuMatrixTabView({
     </div>
   )
 }
+import { useQuery, keepPreviousData } from '@tanstack/react-query'
+
 export default function AnalyticsDashboard() {
   const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day')
   const [activeTab, setActiveTab] = useState<'general' | 'kitchen' | 'menu-matrix'>('general')
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [salesReport, setSalesReport] = useState<SalesReport | null>(null)
-  const [kitchenStats, setKitchenStats] = useState<KitchenPerformance | null>(null)
-  const [menuMatrix, setMenuMatrix] = useState<MenuMatrixReport | null>(null)
-  const [orderInsights, setOrderInsights] = useState<OrderInsights | null>(null)
-  const [demandForecast, setDemandForecast] = useState<DemandForecast[] | null>(null)
-  const [orderFunnel, setOrderFunnel] = useState<OrderFunnel | null>(null)
-  const [tablePerf, setTablePerf] = useState<TablePerformance[] | null>(null)
-  const [combos, setCombos] = useState<ComboRecommendation[] | null>(null)
-  const [cannibalization, setCannibalization] = useState<CannibalizationWarning[] | null>(null)
 
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-
-  const fetchAnalytics = useCallback(async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
+  const { data, isLoading, error, refetch, isFetching } = useQuery({
+    queryKey: ['analytics', period],
+    queryFn: async () => {
       const [
         statsRes,
         salesRes,
@@ -1323,62 +1311,62 @@ export default function AnalyticsDashboard() {
         combosRes,
         cannibalRes,
       ] = await Promise.all([
-        httpClient.get<DashboardStats>('/v1/analytics/dashboard', {
-          params: { period: period },
-        }),
-        httpClient.get<SalesReport>('/v1/analytics/sales', {
-          params: { period: period },
-        }),
-        httpClient.get<KitchenPerformance>('/v1/analytics/kitchen', {
-          params: { period: period },
-        }),
-        httpClient.get<MenuMatrixReport>('/v1/analytics/menu-matrix', {
-          params: { period: period },
-        }),
-        httpClient.get<OrderInsights>('/v1/analytics/orders', {
-          params: { period: period },
-        }),
+        httpClient.get<DashboardStats>('/v1/analytics/dashboard', { params: { period } }),
+        httpClient.get<SalesReport>('/v1/analytics/sales', { params: { period } }),
+        httpClient.get<KitchenPerformance>('/v1/analytics/kitchen', { params: { period } }),
+        httpClient.get<MenuMatrixReport>('/v1/analytics/menu-matrix', { params: { period } }),
+        httpClient.get<OrderInsights>('/v1/analytics/orders', { params: { period } }),
         httpClient.get<DemandForecast[]>('/v1/analytics/demand-forecast'),
-        httpClient.get<OrderFunnel>('/v1/analytics/order-funnel', {
-          params: { period: period },
-        }),
+        httpClient.get<OrderFunnel>('/v1/analytics/order-funnel', { params: { period } }),
         httpClient.get<TablePerformance[]>('/v1/analytics/table-performance', {
-          params: { period: period },
+          params: { period },
         }),
         httpClient.get<ComboRecommendation[]>('/v1/analytics/combo-recommendations'),
         httpClient.get<CannibalizationWarning[]>('/v1/analytics/cannibalization-warnings'),
       ])
 
-      setStats(statsRes.data)
-      setSalesReport(salesRes.data)
-      setKitchenStats(kitchenRes.data)
-      setMenuMatrix(matrixRes.data)
-      setOrderInsights(ordersRes.data)
-      setDemandForecast(forecastRes.data)
-      setOrderFunnel(funnelRes.data)
-      setTablePerf(tablesRes.data)
-      setCombos(combosRes.data)
-      setCannibalization(cannibalRes.data)
-    } catch (_err) {
-      setError('Erro ao carregar dados analíticos. Tente novamente.')
-    } finally {
-      setIsLoading(false)
-    }
-  }, [period])
-  useEffect(() => {
-    fetchAnalytics()
-  }, [fetchAnalytics])
+      return {
+        stats: statsRes.data,
+        salesReport: salesRes.data,
+        kitchenStats: kitchenRes.data,
+        menuMatrix: matrixRes.data,
+        orderInsights: ordersRes.data,
+        demandForecast: forecastRes.data,
+        orderFunnel: funnelRes.data,
+        tablePerf: tablesRes.data,
+        combos: combosRes.data,
+        cannibalization: cannibalRes.data,
+      }
+    },
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    placeholderData: keepPreviousData,
+  })
+
+  const {
+    stats = null,
+    salesReport = null,
+    kitchenStats = null,
+    menuMatrix = null,
+    orderInsights = null,
+    demandForecast = null,
+    orderFunnel = null,
+    tablePerf = null,
+    combos = null,
+    cannibalization = null,
+  } = data || {}
 
   // Transform category data for Recharts Bar Chart
-  const categoryChartData = Object.entries(salesReport?.by_category || {}).map(
-    ([category, val]) => ({
-      name: category,
-      valor: Number(val),
-    }),
+  const categoryChartData = useMemo(
+    () =>
+      Object.entries(salesReport?.by_category || {}).map(([category, val]) => ({
+        name: category,
+        valor: Number(val),
+      })),
+    [salesReport?.by_category],
   )
 
   // Real trend data from sales report, merged with demand forecast projections
-  const trendChartData = (() => {
+  const trendChartData = useMemo(() => {
     const trends = salesReport?.trends || []
     if (!demandForecast || demandForecast.length === 0) return trends
 
@@ -1394,7 +1382,7 @@ export default function AnalyticsDashboard() {
       total: trendsMap.get(time) ?? 0,
       projected: forecastMap.get(time),
     }))
-  })()
+  }, [salesReport?.trends, demandForecast])
 
   // Premium harmonized category chart colors
   const chartColors = ['#f97316', '#8b5cf6', '#06b6d4', '#10b981', '#f43f5e']
@@ -1443,7 +1431,7 @@ export default function AnalyticsDashboard() {
 
           <button
             type="button"
-            onClick={fetchAnalytics}
+            onClick={() => refetch()}
             className="rounded-xl bg-gray-900/30 border border-gray-855 p-2.5 text-gray-400 hover:text-white transition-all duration-300"
             title="Atualizar Indicadores"
           >
@@ -1478,7 +1466,7 @@ export default function AnalyticsDashboard() {
         })}
       </div>
 
-      {isLoading && !stats ? (
+      {isFetching && !stats ? (
         <div className="flex py-24 justify-center items-center gap-2.5">
           <Loader2 className="h-6 w-6 animate-spin text-brand-400" />
           <span className="text-xs text-gray-455 font-medium">
@@ -1487,7 +1475,7 @@ export default function AnalyticsDashboard() {
         </div>
       ) : error ? (
         <div className="rounded-2xl border border-red-955 bg-red-950/20 p-6 text-center text-red-400 font-bold text-xs">
-          {error}
+          Erro ao carregar dados analíticos. Tente novamente.
         </div>
       ) : (
         <div className="space-y-6 animate-fade-in">

@@ -73,6 +73,9 @@ class OrderFormItemORM(Base):
     delivered_quantity: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default=sa.text("0")
     )
+    canceled_quantity: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0, server_default=sa.text("0")
+    )
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
     status: Mapped[str] = mapped_column(String(50), nullable=False, default="WAITING")
 

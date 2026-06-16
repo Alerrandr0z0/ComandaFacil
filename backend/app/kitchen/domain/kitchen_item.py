@@ -3,7 +3,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Final
 
 from app.kitchen.domain.kitchen_events import KitchenItemCreated, KitchenItemStatusChanged
-from app.kitchen.domain.states import IKitchenItemState, Ready, Waiting
+from app.kitchen.domain.states import (
+    Cancelled,
+    IKitchenItemState,
+    Preparing,
+    Ready,
+    Surplus,
+    Waiting,
+)
 
 if TYPE_CHECKING:
     from app.shared.domain_events import DomainEvent
@@ -29,6 +36,7 @@ class KitchenOrderItem:
         self.tenant_id: str = tenant_id
         self.preparation_profile: Final[str] = preparation_profile
         self.notes: str = notes
+        self.previous_state: str | None = None
         self._state: IKitchenItemState = Waiting()
         self._events: list[DomainEvent] = []
         self._events.append(
@@ -83,7 +91,40 @@ class KitchenOrderItem:
 
     def cancel(self) -> None:
         old_name = self._state.name
+        if old_name in ("PREPARING", "READY"):
+            self.previous_state = old_name
         self._state.cancel(self)
+        self._record_status_change(old_name, self._state.name)
+
+    def approve_cancel(self, mode: str) -> None:
+        if self._state.name != "CANCEL_REQUESTED":
+            raise ValueError("Item is not in CANCEL_REQUESTED state.")
+        old_name = self._state.name
+        if mode == "WASTE":
+            self._state = Cancelled()
+        elif mode == "SURPLUS":
+            self._state = Surplus()
+            self.correlation_id = 0
+        else:
+            raise ValueError(f"Invalid approval mode: {mode}")
+        self.previous_state = None
+        self._record_status_change(old_name, self._state.name)
+
+    def reject_cancel(self) -> None:
+        if self._state.name != "CANCEL_REQUESTED":
+            raise ValueError("Item is not in CANCEL_REQUESTED state.")
+        if not self.previous_state:
+            raise ValueError("No previous state stored to revert to.")
+        old_name = self._state.name
+        state_map: dict[str, IKitchenItemState] = {
+            "PREPARING": Preparing(),
+            "READY": Ready(),
+        }
+        target_state = state_map.get(self.previous_state)
+        if not target_state:
+            raise ValueError(f"Invalid previous state stored: {self.previous_state}")
+        self._state = target_state
+        self.previous_state = None
         self._record_status_change(old_name, self._state.name)
 
     def reclaim(self, new_correlation_id: int) -> None:

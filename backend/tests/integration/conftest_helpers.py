@@ -88,6 +88,7 @@ class _MockCollection:
 
     async def insert_one(self, doc: dict[str, Any], **kwargs: Any) -> None:
         import uuid
+
         key = _doc_key(doc) or doc.get("_id")
         if not key:
             key = str(uuid.uuid4())
@@ -116,12 +117,15 @@ class _MockCollection:
             filtered = [d for d in docs if _match(d, self._filter)]
 
         if self._sort_key:
+
             def get_val(d: dict[str, Any]) -> Any:
-                return d.get(self._sort_key, "")
+                key = self._sort_key
+                return d.get(key, "") if key is not None else ""
+
             filtered.sort(key=get_val, reverse=(self._sort_dir == -1))
 
         if self._limit is not None:
-            filtered = filtered[:self._limit]
+            filtered = filtered[: self._limit]
         elif length is not None:
             filtered = filtered[:length]
 

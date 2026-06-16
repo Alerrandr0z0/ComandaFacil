@@ -1,3 +1,4 @@
+import logging
 import re
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
@@ -12,29 +13,54 @@ from app.analytics.api.routes import router as analytics_router
 from app.auth.api.routes import router as auth_router
 from app.auth.application.audit_listener import register_audit_listeners
 from app.kitchen.api.routes import router as kitchen_router
+from app.kitchen.application.event_handlers import register_kitchen_listeners
 from app.menu.api.price_list_routes import router as price_list_router
 from app.menu.api.routes import router as menu_router
 from app.order.api.routes import router as order_router
+from app.order.application.event_handlers import register_order_listeners
 from app.payment.api.routes import router as payment_router
 from app.settings import get_settings
+from app.shared import database
 from app.shared.database import close_mongo, close_postgres, init_mongo, init_postgres
 from app.shared.exceptions import DomainException
 from app.shared.logging import setup_logging
+from app.shared.outbox import OutboxConsumer
 from app.shared.tenant_context import tenant_context_var
 from app.stock.api.routes import router as stock_router
+from app.stock.application.event_handlers import register_stock_listeners
 
 settings = get_settings()
 setup_logging(settings)
 
+logger = logging.getLogger("app.main")
+
 register_audit_listeners()
+register_kitchen_listeners()
+register_order_listeners()
+register_stock_listeners()
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI) -> AsyncGenerator[None, None]:
-    """Application lifespan: initialize and close database connections."""
+    """Application lifespan: initialize databases and start outbox consumer."""
     await init_postgres(settings)
     await init_mongo(settings)
+    await database.ensure_indexes()
+
+    # Start outbox consumer (background MongoDB sync)
+    sf = database.session_factory
+    mdb = database.get_mongo_db()
+    if sf is None:
+        logger.warning("session_factory not initialized — outbox consumer disabled")
+    else:
+        consumer = OutboxConsumer(session_factory=sf, mongo_db=mdb, poll_interval=1.0)
+        consumer.start()
+        _app.state.outbox_consumer = consumer
+
     yield
+
+    if hasattr(_app.state, "outbox_consumer"):
+        await _app.state.outbox_consumer.stop()
     await close_postgres()
     await close_mongo()
 

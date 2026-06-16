@@ -1,19 +1,18 @@
 from __future__ import annotations
 
-import pytest
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from app.menu.domain.menu import MenuItem
 from app.menu.infrastructure.repositories import SQLAlchemyMenuItemRepository
+from app.shared.base_orm import Base
 from app.shared.money import Money
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from app.shared.base_orm import Base
-from collections.abc import AsyncGenerator
-
 if TYPE_CHECKING:
-    pass
+    from collections.abc import AsyncGenerator
 
 
 @pytest.fixture
@@ -96,9 +95,9 @@ async def test_cancel_kitchen_order_item_on_order_item_cancelled(
     sqlite_session: AsyncSession,
 ) -> None:
     from app.kitchen.application.event_handlers import CancelKitchenOrderItemListener
-    from app.kitchen.infrastructure.pg_repository import SQLAlchemyKitchenOrderItemRepository
     from app.kitchen.domain.kitchen_item import KitchenOrderItem
-    from app.order.domain.order_events import OrderItemCancelled
+    from app.kitchen.infrastructure.pg_repository import SQLAlchemyKitchenOrderItemRepository
+    from app.order.domain.order_events import OrderItemCancelRequested
 
     # Arrange: Setup KDS item
     kds_repo = SQLAlchemyKitchenOrderItemRepository(sqlite_session)
@@ -112,7 +111,7 @@ async def test_cancel_kitchen_order_item_on_order_item_cancelled(
     await kds_repo.save(item)
     await sqlite_session.commit()
 
-    event = OrderItemCancelled(
+    event = OrderItemCancelRequested(
         order_id=200,
         tenant_id="franquia_001",
         item_id=500,
@@ -135,11 +134,10 @@ async def test_cancel_all_kitchen_items_on_order_cancelled(
     sqlite_session: AsyncSession,
 ) -> None:
     from app.kitchen.application.event_handlers import CancelKitchenOrderItemListener
-    from app.kitchen.infrastructure.pg_repository import SQLAlchemyKitchenOrderItemRepository
     from app.kitchen.domain.kitchen_item import KitchenOrderItem
+    from app.kitchen.infrastructure.pg_repository import SQLAlchemyKitchenOrderItemRepository
     from app.order.domain.order_events import OrderCancelled
     from app.order.infrastructure.orm_models import OrderFormItemORM
-    from app.order.domain.order_form import OrderForm
 
     # Arrange: Setup Order and KDS items
     # We need to simulate the order items in Postgres so the listener can query them
@@ -180,4 +178,3 @@ async def test_cancel_all_kitchen_items_on_order_cancelled(
     persisted = await kds_repo.find_by_id(500000, "franquia_001")
     assert persisted is not None
     assert persisted.state.name == "CANCELLED"
-

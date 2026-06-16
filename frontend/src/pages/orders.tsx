@@ -55,6 +55,7 @@ export default function OrdersPage() {
               onProcessPayment={drawer.processPayment}
               onDeliverOrder={drawer.deliverOrder}
               onCancelOrder={drawer.cancelOrder}
+              onCancelItem={drawer.cancelItem}
             />
           </div>
         ) : (

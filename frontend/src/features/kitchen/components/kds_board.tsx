@@ -11,6 +11,7 @@ import {
 } from 'lucide-react'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useTenant } from '@/shared/hooks/useTenant'
+import { formatDuration } from '@/shared/lib/format_duration'
 import { httpClient } from '@/shared/lib/http_client'
 
 interface KitchenItem {
@@ -18,7 +19,8 @@ interface KitchenItem {
   correlation_id: number
   name_cpy: string
   station_type_cpy: string
-  state: 'WAITING' | 'PREPARING' | 'READY' | 'CANCELLED'
+  state: 'WAITING' | 'PREPARING' | 'READY' | 'CANCELLED' | 'CANCEL_REQUESTED' | 'SURPLUS'
+  previous_state?: 'PREPARING' | 'READY'
   tenant_id?: string
   kitchen_item_id?: number
   preparation_profile?: 'STANDARD' | 'NO_PREP'
@@ -38,8 +40,111 @@ interface KdsColumnProps {
   onAction?: (itemId: number) => void
   onReady?: (itemId: number) => void
   onCancel?: (itemId: number) => void
+  onApproveCancel?: (itemId: number, mode: 'WASTE' | 'SURPLUS') => void
+  onRejectCancel?: (itemId: number) => void
   seenTimestamps: Record<number, number>
   onShowRecipe?: (menuItemId: number, itemName: string) => void
+}
+
+function KdsItemActions({
+  item,
+  showCancel,
+  actionLabel,
+  onAction,
+  onReady,
+  onCancel,
+  onApproveCancel,
+  onRejectCancel,
+  isCancelRequested,
+}: {
+  item: KitchenItem
+  showCancel?: boolean
+  actionLabel?: string
+  onAction?: (itemId: number) => void
+  onReady?: (itemId: number) => void
+  onCancel?: (itemId: number) => void
+  onApproveCancel?: (itemId: number, mode: 'WASTE' | 'SURPLUS') => void
+  onRejectCancel?: (itemId: number) => void
+  isCancelRequested: boolean
+}) {
+  if (isCancelRequested && onApproveCancel && onRejectCancel) {
+    return (
+      <div className="flex gap-1.5 flex-1 justify-end">
+        <button
+          type="button"
+          onClick={() => onRejectCancel(item.id)}
+          className="rounded-xl px-2.5 py-2 border border-gray-800 bg-gray-900 hover:bg-gray-850 text-gray-300 font-bold text-[10px] uppercase tracking-wider transition active:scale-[0.98]"
+        >
+          Recusar
+        </button>
+        <button
+          type="button"
+          onClick={() => onApproveCancel(item.id, 'SURPLUS')}
+          className="rounded-xl px-2.5 py-2 bg-emerald-650 hover:bg-emerald-600 text-white font-bold text-[10px] uppercase tracking-wider shadow-md shadow-emerald-950/20 transition active:scale-[0.98]"
+        >
+          Sobra
+        </button>
+        <button
+          type="button"
+          onClick={() => onApproveCancel(item.id, 'WASTE')}
+          className="rounded-xl px-2.5 py-2 bg-rose-650 hover:bg-rose-600 text-white font-bold text-[10px] uppercase tracking-wider shadow-md shadow-rose-950/20 transition active:scale-[0.98]"
+        >
+          Descarte
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <>
+      {showCancel && onCancel && (
+        <button
+          type="button"
+          onClick={() => onCancel(item.id)}
+          className="rounded-xl p-2.5 border border-red-950/40 bg-red-950/10 hover:bg-red-900/20 text-red-400 transition"
+          title="Cancelar item"
+        >
+          <X className="h-4 w-4" />
+        </button>
+      )}
+      {actionLabel && onAction && (
+        <button
+          type="button"
+          onClick={() => {
+            if (item.state === 'WAITING' && item.preparation_profile === 'NO_PREP' && onReady) {
+              onReady(item.id)
+            } else {
+              onAction(item.id)
+            }
+          }}
+          className={`flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold text-white transition-all duration-300 active:scale-[0.98] ${
+            item.state === 'WAITING'
+              ? item.preparation_profile === 'NO_PREP'
+                ? 'bg-brand-500 hover:bg-brand-600 shadow-md shadow-brand-500/10'
+                : 'bg-amber-500 hover:bg-amber-600 shadow-md shadow-amber-500/10'
+              : 'bg-brand-500 hover:bg-brand-600 shadow-md shadow-brand-500/10'
+          }`}
+        >
+          {item.state === 'WAITING' && item.preparation_profile === 'NO_PREP' ? (
+            <>
+              <Check className="h-3.5 w-3.5" />
+              <span>Pronto</span>
+            </>
+          ) : item.state === 'WAITING' ? (
+            <>
+              <Play className="h-3.5 w-3.5 fill-current" />
+              <span>{actionLabel}</span>
+            </>
+          ) : (
+            <>
+              <Check className="h-3.5 w-3.5" />
+              <span>{actionLabel}</span>
+            </>
+          )}
+        </button>
+      )}
+    </>
+  )
 }
 
 function KdsItemCard({
@@ -49,6 +154,8 @@ function KdsItemCard({
   onAction,
   onReady,
   onCancel,
+  onApproveCancel,
+  onRejectCancel,
   startTime,
   onShowRecipe,
 }: {
@@ -58,6 +165,8 @@ function KdsItemCard({
   onAction?: (itemId: number) => void
   onReady?: (itemId: number) => void
   onCancel?: (itemId: number) => void
+  onApproveCancel?: (itemId: number, mode: 'WASTE' | 'SURPLUS') => void
+  onRejectCancel?: (itemId: number) => void
   startTime: number
   onShowRecipe?: (menuItemId: number, itemName: string) => void
 }) {
@@ -66,9 +175,7 @@ function KdsItemCard({
   useEffect(() => {
     const updateTimer = () => {
       const diffMs = Math.max(0, Date.now() - startTime)
-      const diffMins = Math.floor(diffMs / 60000)
-      const diffSecs = Math.floor((diffMs % 60000) / 1000)
-      setElapsed(`${diffMins}m ${diffSecs}s`)
+      setElapsed(formatDuration(diffMs))
     }
 
     updateTimer()
@@ -77,13 +184,16 @@ function KdsItemCard({
   }, [startTime])
 
   const isWarning = Date.now() - startTime > 10 * 60000 // > 10 mins
+  const isCancelRequested = item.state === 'CANCEL_REQUESTED'
 
   return (
     <div
       className={`flex flex-col justify-between rounded-xl border p-4 space-y-4 transition-all duration-300 ${
-        isWarning
-          ? 'border-rose-500/30 bg-rose-950/5 hover:border-rose-500/40 shadow-md shadow-rose-950/10'
-          : 'border-gray-900 bg-gray-950/20 hover:border-gray-850'
+        isCancelRequested
+          ? 'border-rose-500 bg-rose-950/10 hover:border-rose-450 shadow-md shadow-rose-950/25 animate-pulse'
+          : isWarning
+            ? 'border-rose-500/30 bg-rose-950/5 hover:border-rose-500/40 shadow-md shadow-rose-950/10'
+            : 'border-gray-900 bg-gray-950/20 hover:border-gray-850'
       }`}
     >
       <div className="flex justify-between items-start">
@@ -117,52 +227,17 @@ function KdsItemCard({
             <BookOpen className="h-4 w-4" />
           </button>
         )}
-        {showCancel && onCancel && (
-          <button
-            type="button"
-            onClick={() => onCancel(item.id)}
-            className="rounded-xl p-2.5 border border-red-950/40 bg-red-950/10 hover:bg-red-900/20 text-red-400 transition"
-            title="Cancelar item"
-          >
-            <X className="h-4 w-4" />
-          </button>
-        )}
-        {actionLabel && onAction && (
-          <button
-            type="button"
-            onClick={() => {
-              if (item.state === 'WAITING' && item.preparation_profile === 'NO_PREP' && onReady) {
-                onReady(item.id)
-              } else {
-                onAction(item.id)
-              }
-            }}
-            className={`flex items-center gap-1.5 rounded-xl px-4 py-2.5 text-xs font-bold text-white transition-all duration-300 active:scale-[0.98] ${
-              item.state === 'WAITING'
-                ? item.preparation_profile === 'NO_PREP'
-                  ? 'bg-brand-500 hover:bg-brand-600 shadow-md shadow-brand-500/10'
-                  : 'bg-amber-500 hover:bg-amber-600 shadow-md shadow-amber-500/10'
-                : 'bg-brand-500 hover:bg-brand-600 shadow-md shadow-brand-500/10'
-            }`}
-          >
-            {item.state === 'WAITING' && item.preparation_profile === 'NO_PREP' ? (
-              <>
-                <Check className="h-3.5 w-3.5" />
-                <span>Pronto</span>
-              </>
-            ) : item.state === 'WAITING' ? (
-              <>
-                <Play className="h-3.5 w-3.5 fill-current" />
-                <span>{actionLabel}</span>
-              </>
-            ) : (
-              <>
-                <Check className="h-3.5 w-3.5" />
-                <span>{actionLabel}</span>
-              </>
-            )}
-          </button>
-        )}
+        <KdsItemActions
+          item={item}
+          showCancel={showCancel}
+          actionLabel={actionLabel}
+          onAction={onAction}
+          onReady={onReady}
+          onCancel={onCancel}
+          onApproveCancel={onApproveCancel}
+          onRejectCancel={onRejectCancel}
+          isCancelRequested={isCancelRequested}
+        />
       </div>
     </div>
   )
@@ -178,6 +253,8 @@ function KdsColumn({
   onAction,
   onReady,
   onCancel,
+  onApproveCancel,
+  onRejectCancel,
   seenTimestamps,
   onShowRecipe,
 }: KdsColumnProps) {
@@ -207,6 +284,8 @@ function KdsColumn({
               onAction={onAction}
               onReady={onReady}
               onCancel={onCancel}
+              onApproveCancel={onApproveCancel}
+              onRejectCancel={onRejectCancel}
               startTime={
                 item.state === 'PREPARING' && item.started_at
                   ? new Date(item.started_at).getTime()
@@ -354,7 +433,7 @@ export default function KdsBoard() {
 
       const data = res.data.map((item: KitchenItem) => ({
         ...item,
-        id: item.id || (item.kitchen_item_id as number),
+        id: item.kitchen_item_id ?? item.id,
       }))
 
       // Update seen timestamps dictionary
@@ -466,10 +545,36 @@ export default function KdsBoard() {
     }
   }
 
+  const handleApproveCancel = async (itemId: number, mode: 'WASTE' | 'SURPLUS') => {
+    try {
+      await httpClient.post(`/v1/kitchen/items/${itemId}/cancel/approve`, { mode })
+      fetchItems()
+    } catch (_err) {
+      alert('Erro ao aprovar o cancelamento.')
+    }
+  }
+
+  const handleRejectCancel = async (itemId: number) => {
+    try {
+      await httpClient.post(`/v1/kitchen/items/${itemId}/cancel/reject`)
+      fetchItems()
+    } catch (_err) {
+      alert('Erro ao recusar o cancelamento.')
+    }
+  }
+
   const waitingItems = items.filter((item) => item.state === 'WAITING')
-  const preparingItems = items.filter((item) => item.state === 'PREPARING')
-  const readyItems = items.filter((item) => item.state === 'READY')
-  const cancelledItems = items.filter((item) => item.state === 'CANCELLED')
+  const preparingItems = items.filter(
+    (item) =>
+      item.state === 'PREPARING' ||
+      (item.state === 'CANCEL_REQUESTED' && item.previous_state === 'PREPARING'),
+  )
+  const readyItems = items.filter(
+    (item) =>
+      item.state === 'READY' ||
+      (item.state === 'CANCEL_REQUESTED' && item.previous_state === 'READY'),
+  )
+  const surplusItems = items.filter((item) => item.state === 'SURPLUS')
 
   const handleShowRecipe = (menuItemId: number, itemName: string) => {
     setSelectedRecipe({ id: menuItemId, name: itemName })
@@ -538,7 +643,7 @@ export default function KdsBoard() {
           {error}
         </div>
       ) : (
-        <div className="grid gap-6 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-6 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
           <KdsColumn
             title="Fila de Espera"
             count={waitingItems.length}
@@ -561,6 +666,8 @@ export default function KdsBoard() {
             actionLabel="Pronto"
             onAction={handleReady}
             onCancel={handleCancel}
+            onApproveCancel={handleApproveCancel}
+            onRejectCancel={handleRejectCancel}
             seenTimestamps={seenTimestamps}
             onShowRecipe={handleShowRecipe}
           />
@@ -569,14 +676,16 @@ export default function KdsBoard() {
             count={readyItems.length}
             colorClass="text-emerald-400"
             items={readyItems}
+            onApproveCancel={handleApproveCancel}
+            onRejectCancel={handleRejectCancel}
             seenTimestamps={seenTimestamps}
             onShowRecipe={handleShowRecipe}
           />
           <KdsColumn
-            title="Cancelados (15 min)"
-            count={cancelledItems.length}
-            colorClass="text-rose-450"
-            items={cancelledItems}
+            title="Sobras (15 min)"
+            count={surplusItems.length}
+            colorClass="text-indigo-400"
+            items={surplusItems}
             seenTimestamps={seenTimestamps}
             onShowRecipe={handleShowRecipe}
           />

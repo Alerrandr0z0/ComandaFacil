@@ -393,4 +393,3 @@ def test_cancel_order_when_open_then_records_order_cancelled_event() -> None:
     assert isinstance(event, OrderCancelled)
     assert event.order_id == 1
     assert event.tenant_id == "franquia_001"
-

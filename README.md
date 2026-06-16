@@ -28,6 +28,10 @@ Monorepo:
 
 **CQRS:** Postgres como write database, MongoDB como read model.
 **Multi-tenancy:** `X-Tenant-ID` header → `ContextVar`.
+**Arquitetura Baseada em Eventos (EDA):** Totalmente desacoplada na camada de banco de dados e APIs via `EventBus` e Outbox Pattern.
+- Quando um item é adicionado ou a comanda é cancelada no contexto **Order**, eventos de domínio (`OrderItemAdded`, `OrderCancelled`) são publicados de forma transacional.
+- O contexto **Kitchen (KDS)** consome esses eventos para criar ou cancelar os cartões de preparo de forma assíncrona.
+- Ao mudar o status de um item na cozinha (ex: finalizado), o evento `KitchenItemStatusChanged` é gerado, fazendo com que o contexto **Stock** debite os insumos da receita automaticamente e o contexto **Order** atualize o status da comanda.
 
 ### Contextos (Bounded Contexts)
 

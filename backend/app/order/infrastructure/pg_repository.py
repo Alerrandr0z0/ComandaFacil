@@ -8,6 +8,7 @@ from sqlalchemy.orm import selectinload
 from app.order.domain.delivery_states import AwaitingPickup, Delivered, FailedDelivery, InTransit
 from app.order.domain.enums import FulfillmentStatus, OrderItemStatus
 from app.order.domain.fulfillment import Delivery, IFulfillmentStrategy, Table, Takeaway
+from app.order.domain.order_events import OrderItemAdded
 from app.order.domain.order_form import OrderForm
 from app.order.domain.order_item import OrderFormItem
 from app.order.domain.repository import OrderRepository
@@ -87,14 +88,17 @@ class SQLAlchemyOrderRepository(OrderRepository):
             orm.payment_requested = order._payment_requested  # type: ignore[reportPrivateUsage]
             orm.items.clear()
         else:
-            orm = OrderFormORM(
-                id=order.id,
-                tenant_id=order.tenant_id,
-                display_code=order.display_code,
-                state=order.state.name,
-                payment_requested=order._payment_requested,  # type: ignore[reportPrivateUsage]
-                created_at=order.created_at,
-            )
+            orm_kwargs = {
+                "tenant_id": order.tenant_id,
+                "display_code": order.display_code,
+                "state": order.state.name,
+                "payment_requested": order._payment_requested,  # type: ignore[reportPrivateUsage]
+                "created_at": order.created_at,
+            }
+            if order.id != 0:
+                orm_kwargs["id"] = order.id
+                
+            orm = OrderFormORM(**orm_kwargs)
             self._session.add(orm)
 
         # Map fulfillment strategy fields
@@ -102,7 +106,9 @@ class SQLAlchemyOrderRepository(OrderRepository):
 
         # Re-populate items
         new_item_orms: list[OrderFormItemORM] = []
+        newly_created_map: dict[tuple[int, str], int] = {}
         for item in order.items:
+            is_new = item.id == 0
             item_kwargs: dict[str, object] = {
                 "order_id": order.id,
                 "menu_item_id": item.menu_item_id,
@@ -111,23 +117,54 @@ class SQLAlchemyOrderRepository(OrderRepository):
                 "station_type_cpy": item.station_type_cpy,
                 "quantity": item.quantity,
                 "delivered_quantity": item.delivered_quantity,
+                "canceled_quantity": item.canceled_quantity,
                 "notes": item.notes,
                 "status": item.status.value,
             }
-            if item.id != 0:
+            if not is_new:
                 item_kwargs["id"] = item.id
             item_orm = OrderFormItemORM(**item_kwargs)
             orm.items.append(item_orm)
             new_item_orms.append(item_orm)
 
         await self._session.flush()
+        
+        # Update domain order ID if it was auto-generated
+        if order.id == 0:
+            order.id = orm.id
+            if order.display_code == "0":
+                order.display_code = str(orm.id)
+                orm.display_code = order.display_code
 
         # Update domain item IDs from auto-generated ORM IDs
         for domain_item, item_orm in zip(order.items, new_item_orms, strict=True):
             if domain_item.id == 0:
                 domain_item.id = item_orm.id
+                newly_created_map[(domain_item.menu_item_id, domain_item.notes or "")] = item_orm.id
 
-        register_pending_events(order.collect_events())
+        # Map auto-generated IDs onto OrderItemAdded domain events
+        raw_events = order.collect_events()
+        processed_events = []
+        for ev in raw_events:
+            event_to_add = ev
+            if isinstance(ev, OrderItemAdded) and ev.item_id == 0:
+                key = (ev.menu_item_id, ev.notes or "")
+                new_id = newly_created_map.get(key)
+                if new_id is not None:
+                    event_to_add = OrderItemAdded(
+                        order_id=ev.order_id,
+                        tenant_id=ev.tenant_id,
+                        item_id=new_id,
+                        menu_item_id=ev.menu_item_id,
+                        name=ev.name,
+                        quantity=ev.quantity,
+                        price=ev.price,
+                        notes=ev.notes,
+                        occurred_at=ev.occurred_at,
+                    )
+            processed_events.append(event_to_add)
+
+        register_pending_events(processed_events)
 
     async def delete(self, id: int, tenant_id: str) -> None:
         stmt = select(OrderFormORM).where(
@@ -212,6 +249,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
                 station_type_cpy=item_orm.station_type_cpy,
                 quantity=item_orm.quantity,
                 delivered_quantity=item_orm.delivered_quantity,
+                canceled_quantity=item_orm.canceled_quantity,
                 notes=item_orm.notes or "",
                 status=OrderItemStatus(item_orm.status),
             )

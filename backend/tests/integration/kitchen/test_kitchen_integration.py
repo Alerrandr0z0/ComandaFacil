@@ -19,6 +19,9 @@ from app.order.domain.fulfillment import Table
 from app.order.domain.order_form import OrderForm
 from app.order.infrastructure.pg_repository import SQLAlchemyOrderRepository
 from app.shared.base_orm import Base
+from app.shared.database import pending_events_var
+from app.shared.domain_events import EventBus
+from app.shared.outbox import OutboxWriter, serialize_event_for_outbox
 from tests.integration.conftest_helpers import make_mock_db
 
 _KITCHEN_MOCK: list[object] = []
@@ -215,9 +218,43 @@ async def test_kds_websocket_and_background_task_dispatch_flow_success(
 
     from app.dependencies import mongo_db
 
-    # Override session dependency on the TestClient app instance too
+    # Override session dependency with commit_with_events wrapper so domain events
+    # are dispatched after commit (otherwise the WebSocket broadcast never fires)
+    token = pending_events_var.set([])
+    original_commit = sqlite_session.commit
+
+    async def commit_with_events() -> None:
+        events = pending_events_var.get()
+        if events:
+            for event in events:
+                mapped = serialize_event_for_outbox(event)
+                if mapped is not None:
+                    await OutboxWriter(sqlite_session).add_entry(
+                        aggregate_type=mapped["aggregate_type"],
+                        aggregate_id=mapped["aggregate_id"],
+                        event_type=mapped["event_type"],
+                        payload=mapped["payload"],
+                    )
+        await original_commit()
+        if events:
+            pending_events_var.set([])
+            for event in events:
+                await EventBus.publish(event)
+
+    sqlite_session.commit = commit_with_events  # type: ignore[method-assign]
+
     async def override_db_session() -> AsyncGenerator[AsyncSession, None]:
-        yield sqlite_session
+        try:
+            yield sqlite_session
+            await sqlite_session.commit()
+        except Exception:
+            await sqlite_session.rollback()
+            raise
+        finally:
+            try:
+                pending_events_var.reset(token)
+            except ValueError:
+                pending_events_var.set(None)
 
     _store2, mock_db2 = make_mock_db()
 
@@ -270,3 +307,95 @@ async def test_kds_websocket_and_background_task_dispatch_flow_success(
         assert event_prep["item"]["state"] == "PREPARING"
 
     app.dependency_overrides.clear()
+
+
+@pytest.mark.asyncio
+async def test_kds_cancel_request_flow_endpoints_success(
+    api_client: AsyncClient, sqlite_session: AsyncSession
+) -> None:
+    # Arrange: Setup active KDS item in PREPARING state
+    repo = SQLAlchemyKitchenOrderItemRepository(sqlite_session)
+    item = KitchenOrderItem(
+        id=777,
+        correlation_id=777,
+        name_cpy="Salad",
+        station_type_cpy="GRILL",
+        tenant_id="franquia_001",
+    )
+    item.prepare()
+    await repo.save(item)
+    await sqlite_session.commit()
+
+    # Sync to Mongo read model using the mock DB from the fixture
+    from app.kitchen.infrastructure.kitchen_read_sync import KitchenReadModelSync
+
+    await KitchenReadModelSync(_KITCHEN_MOCK[0]).sync(item)
+
+    # Act & Assert 1: Cancel item (transitions to CANCEL_REQUESTED instead of CANCELLED because it's PREPARING)
+    cancel_res = await api_client.patch("/api/v1/kitchen/items/777/cancel")
+    assert cancel_res.status_code == 200
+    assert cancel_res.json()["state"] == "CANCEL_REQUESTED"
+
+    # Verify previous state is PREPARING
+    persisted = await repo.find_by_id(777, "franquia_001")
+    assert persisted is not None
+    assert persisted.state.name == "CANCEL_REQUESTED"
+    assert persisted.previous_state == "PREPARING"
+
+    # Act & Assert 2: Reject cancel request (transitions back to PREPARING)
+    reject_res = await api_client.post("/api/v1/kitchen/items/777/cancel/reject")
+    assert reject_res.status_code == 200
+    assert reject_res.json()["state"] == "PREPARING"
+
+    persisted = await repo.find_by_id(777, "franquia_001")
+    assert persisted is not None
+    assert persisted.state.name == "PREPARING"
+    assert persisted.previous_state is None
+
+    # Act & Assert 3: Cancel it again
+    cancel_res_2 = await api_client.patch("/api/v1/kitchen/items/777/cancel")
+    assert cancel_res_2.status_code == 200
+    assert cancel_res_2.json()["state"] == "CANCEL_REQUESTED"
+
+    # Act & Assert 4: Approve cancel as WASTE (transitions to CANCELLED)
+    approve_waste_res = await api_client.post(
+        "/api/v1/kitchen/items/777/cancel/approve",
+        json={"mode": "WASTE"},
+    )
+    assert approve_waste_res.status_code == 200
+    assert approve_waste_res.json()["state"] == "CANCELLED"
+
+    persisted = await repo.find_by_id(777, "franquia_001")
+    assert persisted is not None
+    assert persisted.state.name == "CANCELLED"
+
+    # Setup another KDS item in READY state to test SURPLUS approval
+    item2 = KitchenOrderItem(
+        id=888,
+        correlation_id=888,
+        name_cpy="Soup",
+        station_type_cpy="GRILL",
+        tenant_id="franquia_001",
+    )
+    item2.prepare()
+    item2.mark_as_ready()
+    await repo.save(item2)
+    await sqlite_session.commit()
+
+    # Cancel item2 (transitions to CANCEL_REQUESTED because it's READY)
+    cancel_res_3 = await api_client.patch("/api/v1/kitchen/items/888/cancel")
+    assert cancel_res_3.status_code == 200
+    assert cancel_res_3.json()["state"] == "CANCEL_REQUESTED"
+
+    # Approve cancel as SURPLUS (transitions to SURPLUS and correlation_id -> 0)
+    approve_surplus_res = await api_client.post(
+        "/api/v1/kitchen/items/888/cancel/approve",
+        json={"mode": "SURPLUS"},
+    )
+    assert approve_surplus_res.status_code == 200
+    assert approve_surplus_res.json()["state"] == "SURPLUS"
+
+    persisted2 = await repo.find_by_id(888, "franquia_001")
+    assert persisted2 is not None
+    assert persisted2.state.name == "SURPLUS"
+    assert persisted2.correlation_id == 0

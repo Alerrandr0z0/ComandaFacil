@@ -190,6 +190,83 @@ class CancelKitchenItemHandler:
         return item
 
 
+@dataclass(frozen=True)
+class ApproveKitchenCancelCommand:
+    item_id: int
+    tenant_id: str
+    mode: str  # "WASTE" or "SURPLUS"
+
+    def __repr__(self) -> str:
+        return f"ApproveKitchenCancelCommand(item_id={self.item_id}, tenant_id={self.tenant_id!r}, mode={self.mode!r})"
+
+
+class ApproveKitchenCancelHandler:
+    def __init__(self, item_repo: KitchenOrderItemRepository) -> None:
+        self._item_repo: Final[KitchenOrderItemRepository] = item_repo
+
+    async def handle(self, command: ApproveKitchenCancelCommand) -> KitchenOrderItem:
+        item = await self._item_repo.find_by_id(command.item_id, command.tenant_id)
+        if not item:
+            raise NotFoundError("Kitchen Item", command.item_id)
+
+        item.approve_cancel(command.mode)
+        await self._item_repo.save(item)
+
+        await kds_ws_manager.broadcast_to_station(
+            tenant_id=item.tenant_id,
+            station_type=item.station_type_cpy,
+            event_data={
+                "event": "ITEM_CANCEL_APPROVED",
+                "item": {
+                    "id": item.id,
+                    "correlation_id": item.correlation_id,
+                    "name_cpy": item.name_cpy,
+                    "station_type_cpy": item.station_type_cpy,
+                    "state": item.state.name,
+                },
+            },
+        )
+        return item
+
+
+@dataclass(frozen=True)
+class RejectKitchenCancelCommand:
+    item_id: int
+    tenant_id: str
+
+    def __repr__(self) -> str:
+        return f"RejectKitchenCancelCommand(item_id={self.item_id}, tenant_id={self.tenant_id!r})"
+
+
+class RejectKitchenCancelHandler:
+    def __init__(self, item_repo: KitchenOrderItemRepository) -> None:
+        self._item_repo: Final[KitchenOrderItemRepository] = item_repo
+
+    async def handle(self, command: RejectKitchenCancelCommand) -> KitchenOrderItem:
+        item = await self._item_repo.find_by_id(command.item_id, command.tenant_id)
+        if not item:
+            raise NotFoundError("Kitchen Item", command.item_id)
+
+        item.reject_cancel()
+        await self._item_repo.save(item)
+
+        await kds_ws_manager.broadcast_to_station(
+            tenant_id=item.tenant_id,
+            station_type=item.station_type_cpy,
+            event_data={
+                "event": "ITEM_CANCEL_REJECTED",
+                "item": {
+                    "id": item.id,
+                    "correlation_id": item.correlation_id,
+                    "name_cpy": item.name_cpy,
+                    "station_type_cpy": item.station_type_cpy,
+                    "state": item.state.name,
+                },
+            },
+        )
+        return item
+
+
 class KitchenService:
     """Facade service corresponding to the Javadoc/UML KitchenService definition."""
 
@@ -199,6 +276,8 @@ class KitchenService:
         self._prepare_handler = PrepareKitchenItemHandler(item_repo)
         self._ready_handler = MarkKitchenItemReadyHandler(item_repo)
         self._cancel_handler = CancelKitchenItemHandler(item_repo)
+        self._approve_cancel_handler = ApproveKitchenCancelHandler(item_repo)
+        self._reject_cancel_handler = RejectKitchenCancelHandler(item_repo)
 
     async def receive_item(
         self,
@@ -230,3 +309,11 @@ class KitchenService:
     async def cancel_item(self, item_id: int, tenant_id: str) -> KitchenOrderItem:
         cmd = CancelKitchenItemCommand(item_id=item_id, tenant_id=tenant_id)
         return await self._cancel_handler.handle(cmd)
+
+    async def approve_cancel(self, item_id: int, tenant_id: str, mode: str) -> KitchenOrderItem:
+        cmd = ApproveKitchenCancelCommand(item_id=item_id, tenant_id=tenant_id, mode=mode)
+        return await self._approve_cancel_handler.handle(cmd)
+
+    async def reject_cancel(self, item_id: int, tenant_id: str) -> KitchenOrderItem:
+        cmd = RejectKitchenCancelCommand(item_id=item_id, tenant_id=tenant_id)
+        return await self._reject_cancel_handler.handle(cmd)

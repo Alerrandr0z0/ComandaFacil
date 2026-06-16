@@ -7,7 +7,7 @@ from sqlalchemy import select
 from app.kitchen.domain.kitchen_item import KitchenOrderItem
 from app.kitchen.domain.kitchen_station import Beverage, Grill, KitchenStation
 from app.kitchen.domain.repository import KitchenOrderItemRepository, KitchenStationRepository
-from app.kitchen.domain.states import Cancelled, Preparing, Ready, Surplus, Waiting
+from app.kitchen.domain.states import Cancelled, CancelRequested, Preparing, Ready, Surplus, Waiting
 from app.kitchen.infrastructure.orm_models import (
     BeverageORM,
     GrillORM,
@@ -71,20 +71,28 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
             orm.state = item.state.name
             orm.preparation_profile = item.preparation_profile
             orm.notes = item.notes
+            orm.previous_state = item.previous_state
         else:
-            orm = KitchenOrderItemORM(
-                id=item.id,
-                correlation_id=item.correlation_id,
-                name_cpy=item.name_cpy,
-                station_type_cpy=item.station_type_cpy,
-                tenant_id=item.tenant_id,
-                state=item.state.name,
-                preparation_profile=item.preparation_profile,
-                notes=item.notes,
-            )
+            orm_kwargs = {
+                "correlation_id": item.correlation_id,
+                "name_cpy": item.name_cpy,
+                "station_type_cpy": item.station_type_cpy,
+                "tenant_id": item.tenant_id,
+                "state": item.state.name,
+                "preparation_profile": item.preparation_profile,
+                "notes": item.notes,
+                "previous_state": item.previous_state,
+            }
+            if item.id != 0:
+                orm_kwargs["id"] = item.id
+                
+            orm = KitchenOrderItemORM(**orm_kwargs)
             self._session.add(orm)
 
         await self._session.flush()
+        if item.id == 0:
+            item.id = orm.id
+            
         register_pending_events(item.collect_events())
 
     def map_to_domain(self, orm: KitchenOrderItemORM) -> KitchenOrderItem:
@@ -98,6 +106,7 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
             notes=orm.notes or "",
         )
         item.collect_events()
+        item.previous_state = orm.previous_state
         # Map state string back to pure domain state objects
         state_map = {
             "WAITING": Waiting(),
@@ -105,6 +114,7 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
             "READY": Ready(),
             "CANCELLED": Cancelled(),
             "SURPLUS": Surplus(),
+            "CANCEL_REQUESTED": CancelRequested(),
         }
         item._state = state_map.get(orm.state, Waiting())  # type: ignore[reportPrivateUsage]
         return item

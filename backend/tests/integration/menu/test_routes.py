@@ -6,7 +6,7 @@ import pytest
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-from app.dependencies import db_session
+from app.dependencies import db_session, mongo_db
 from app.main import app
 from app.menu.domain.menu import Menu, MenuItem
 from app.menu.infrastructure.repositories import (
@@ -46,7 +46,23 @@ async def api_client(sqlite_session: AsyncSession) -> AsyncGenerator[AsyncClient
     async def override_mongo_db() -> object:
         return mock_db
 
-    from app.dependencies import mongo_db
+    original_commit = sqlite_session.commit
+
+    async def commit_and_sync() -> None:
+        await original_commit()
+        from app.shared import database as _database
+        from app.shared.outbox import OutboxConsumer
+
+        if _database.session_factory is not None:
+            from typing import Any, cast
+
+            consumer = OutboxConsumer(
+                session_factory=_database.session_factory,
+                mongo_db=cast("Any", mock_db),
+            )
+            await consumer._process_batch()  # type: ignore
+
+    sqlite_session.commit = commit_and_sync
 
     app.dependency_overrides[db_session] = override_db_session
     app.dependency_overrides[mongo_db] = override_mongo_db

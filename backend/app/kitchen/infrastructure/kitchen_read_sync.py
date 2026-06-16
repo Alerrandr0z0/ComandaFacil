@@ -28,9 +28,19 @@ class KitchenReadModelSync:
             "notes": item.notes,
             "state": state,
             "tenant_id": item.tenant_id,
+            "previous_state": item.previous_state,
         }
+        
+        # Handle menu_item_id: if provided, set it. If not, try to keep existing.
         if menu_item_id is not None:
             set_fields["menu_item_id"] = menu_item_id
+        else:
+            existing = await self._collection.find_one(
+                {"kitchen_item_id": item.id, "tenant_id": item.tenant_id},
+                {"_id": 0, "menu_item_id": 1},
+            )
+            if existing and existing.get("menu_item_id"):
+                set_fields["menu_item_id"] = existing["menu_item_id"]
 
         if is_final:
             set_fields["completed_at"] = now
@@ -39,8 +49,6 @@ class KitchenReadModelSync:
             "kitchen_item_id": item.id,
             "created_at": now,
         }
-        if menu_item_id is not None:
-            set_on_insert["menu_item_id"] = menu_item_id
 
         update_doc: dict[str, Any] = {
             "$set": set_fields,

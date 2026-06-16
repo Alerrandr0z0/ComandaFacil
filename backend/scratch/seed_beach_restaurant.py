@@ -262,22 +262,33 @@ T1_MENU_ITEMS: list[tuple[int, str, str, float, str, str]] = [
 T1_NO_PREP_IDS = {111, 114}
 
 T1_STOCK_ITEMS: list[tuple[int, str, str, str, float, float]] = [
-    (201, "Coco Verde", "BEVERAGE", "un", 10.0, 75000),
-    (202, "Cachaça Artesanal", "BEVERAGE", "ml", 1000.0, 2000000),
-    (203, "Limão", "RAW_MATERIAL", "un", 15.0, 150000),
-    (204, "Peixe Cação", "RAW_MATERIAL", "g", 1000.0, 3000000),
-    (205, "Camarão Médio", "RAW_MATERIAL", "g", 1000.0, 4000000),
-    (206, "Lula Inteira", "RAW_MATERIAL", "g", 1000.0, 2000000),
-    (207, "Polpa de Siri", "RAW_MATERIAL", "g", 500.0, 1000000),
-    (208, "Feijão Preto", "RAW_MATERIAL", "g", 1000.0, 1600000),
-    (209, "Queijo Coalho Espeto", "RAW_MATERIAL", "un", 20.0, 50000),
-    (210, "Batata Pré-Frita Congelada", "RAW_MATERIAL", "g", 2000.0, 5000000),
-    (211, "Abacaxi", "RAW_MATERIAL", "un", 5.0, 40000),
-    (212, "Heineken LN", "BEVERAGE", "un", 24.0, 120000),
-    (213, "Polpa de Açaí", "RAW_MATERIAL", "g", 2000.0, 3000000),
-    (214, "Pudim Caseiro", "RAW_MATERIAL", "un", 5.0, 15000),
-    (215, "Filé Mignon", "RAW_MATERIAL", "g", 1000.0, 2400000),
-    (216, "Pargo Inteiro", "RAW_MATERIAL", "un", 5.0, 15000),
+    # Insumos (Raw Materials)
+    (201, "Coco Verde", "RAW_MATERIAL", "un", 20.0, 1000000.0),
+    (202, "Cachaça Artesanal", "RAW_MATERIAL", "ml", 1000.0, 1000000.0),
+    (203, "Limão", "RAW_MATERIAL", "un", 30.0, 1000000.0),
+    (204, "Peixe Cação", "RAW_MATERIAL", "g", 2000.0, 1000000.0),
+    (205, "Camarão Médio", "RAW_MATERIAL", "g", 2000.0, 1000000.0),
+    (206, "Lula Inteira", "RAW_MATERIAL", "g", 2000.0, 1000000.0),
+    (207, "Polpa de Siri", "RAW_MATERIAL", "g", 1000.0, 1000000.0),
+    (208, "Feijão Preto", "RAW_MATERIAL", "g", 2000.0, 1000000.0),
+    (209, "Queijo Coalho Espeto", "RAW_MATERIAL", "un", 40.0, 1000000.0),
+    (210, "Batata Pré-Frita Congelada", "RAW_MATERIAL", "g", 5000.0, 1000000.0),
+    (211, "Abacaxi", "RAW_MATERIAL", "un", 10.0, 1000000.0),
+    (212, "Heineken LN", "RAW_MATERIAL", "un", 48.0, 1000000.0),
+    (213, "Polpa de Açaí", "RAW_MATERIAL", "g", 5000.0, 1000000.0),
+    (214, "Pudim Caseiro", "RAW_MATERIAL", "un", 10.0, 1000000.0),
+    (215, "Filé Mignon", "RAW_MATERIAL", "g", 2000.0, 1000000.0),
+    (216, "Pargo Inteiro", "RAW_MATERIAL", "un", 10.0, 1000000.0),
+    # Embalagens (Packaging)
+    (217, "Caixa de Isopor Takeaway", "PACKAGING", "un", 50.0, 1000000.0),
+    (218, "Copo Plástico 400ml", "PACKAGING", "un", 100.0, 1000000.0),
+    (219, "Canudo de Papel", "PACKAGING", "un", 100.0, 1000000.0),
+    (220, "Guardanapo de Papel (PCT)", "PACKAGING", "un", 20.0, 1000000.0),
+    # Suplementos/Outros (Supplements/Others)
+    (221, "Detergente Neutro 5L", "SUPPLEMENT", "un", 2.0, 1000000.0),
+    (222, "Álcool em Gel 70% 5L", "SUPPLEMENT", "un", 2.0, 1000000.0),
+    (223, "Papel Toalha Cozinha", "SUPPLEMENT", "un", 12.0, 1000000.0),
+    (224, "Gás GLP 13kg", "OTHER", "un", 1.0, 1000000.0),
 ]
 
 T1_RECIPES: list[tuple[int, int, list[tuple[int, float, str]]]] = [
@@ -392,31 +403,41 @@ T2_MENU_ITEMS: list[tuple[int, str, str, float, str, str]] = [
 T2_NO_PREP_IDS = {309, 310, 311, 312, 313, 314}
 
 T2_STOCK_ITEMS: list[tuple[int, str, str, str, float, float]] = [
-    (401, "Farinha de Trigo", "RAW_MATERIAL", "g", 5000.0, 10000000.0),
-    (402, "Molho de Tomate", "RAW_MATERIAL", "ml", 1000.0, 4000000.0),
-    (403, "Mussarela", "RAW_MATERIAL", "g", 2000.0, 6000000.0),
+    # Insumos (Raw Materials)
+    (401, "Farinha de Trigo", "RAW_MATERIAL", "g", 5000.0, 1000000.0),
+    (402, "Molho de Tomate", "RAW_MATERIAL", "ml", 1000.0, 1000000.0),
+    (403, "Mussarela", "RAW_MATERIAL", "g", 2000.0, 1000000.0),
     (404, "Pepperoni", "RAW_MATERIAL", "g", 500.0, 1000000.0),
     (405, "Presunto", "RAW_MATERIAL", "g", 500.0, 1000000.0),
     (406, "Frango Desfiado", "RAW_MATERIAL", "g", 500.0, 1000000.0),
     (407, "Catupiry", "RAW_MATERIAL", "g", 500.0, 1000000.0),
     (408, "Calabresa", "RAW_MATERIAL", "g", 500.0, 1000000.0),
-    (409, "Provolone", "RAW_MATERIAL", "g", 500.0, 600000.0),
-    (410, "Parmesão", "RAW_MATERIAL", "g", 500.0, 600000.0),
-    (411, "Gorgonzola", "RAW_MATERIAL", "g", 500.0, 400000.0),
-    (412, "Cebola", "RAW_MATERIAL", "un", 50.0, 250000.0),
-    (413, "Pimentão", "RAW_MATERIAL", "un", 50.0, 150000.0),
-    (414, "Ovo", "RAW_MATERIAL", "un", 30.0, 250000.0),
-    (415, "Coca-Cola Lata", "BEVERAGE", "un", 24.0, 250000.0),
-    (416, "Guaraná Lata", "BEVERAGE", "un", 24.0, 200000.0),
-    (417, "Suco de Laranja", "BEVERAGE", "ml", 1000.0, 2000000.0),
-    (418, "Heineken LN", "BEVERAGE", "un", 12.0, 250000.0),
-    (419, "Brahma Chopp", "BEVERAGE", "ml", 5000.0, 4000000.0),
-    (420, "Água Mineral", "BEVERAGE", "un", 12.0, 100000.0),
-    (421, "Massa de Pizza", "RAW_MATERIAL", "un", 20.0, 100000.0),
-    (422, "Banana", "RAW_MATERIAL", "un", 10.0, 50000.0),
-    (423, "Doce de Leite", "RAW_MATERIAL", "g", 500.0, 600000.0),
-    (424, "Chocolate Meio Amargo", "RAW_MATERIAL", "g", 500.0, 400000.0),
+    (409, "Provolone", "RAW_MATERIAL", "g", 500.0, 1000000.0),
+    (410, "Parmesão", "RAW_MATERIAL", "g", 500.0, 1000000.0),
+    (411, "Gorgonzola", "RAW_MATERIAL", "g", 500.0, 1000000.0),
+    (412, "Cebola", "RAW_MATERIAL", "un", 50.0, 1000000.0),
+    (413, "Pimentão", "RAW_MATERIAL", "un", 50.0, 1000000.0),
+    (414, "Ovo", "RAW_MATERIAL", "un", 30.0, 1000000.0),
+    (415, "Coca-Cola Lata", "RAW_MATERIAL", "un", 24.0, 1000000.0),
+    (416, "Guaraná Lata", "RAW_MATERIAL", "un", 24.0, 1000000.0),
+    (417, "Suco de Laranja", "RAW_MATERIAL", "ml", 1000.0, 1000000.0),
+    (418, "Heineken LN", "RAW_MATERIAL", "un", 12.0, 1000000.0),
+    (419, "Brahma Chopp", "RAW_MATERIAL", "ml", 5000.0, 1000000.0),
+    (420, "Água Mineral", "RAW_MATERIAL", "un", 12.0, 1000000.0),
+    (421, "Massa de Pizza", "RAW_MATERIAL", "un", 20.0, 1000000.0),
+    (422, "Banana", "RAW_MATERIAL", "un", 10.0, 1000000.0),
+    (423, "Doce de Leite", "RAW_MATERIAL", "g", 500.0, 1000000.0),
+    (424, "Chocolate Meio Amargo", "RAW_MATERIAL", "g", 500.0, 1000000.0),
     (425, "Sorvete de Creme", "RAW_MATERIAL", "ml", 1000.0, 1000000.0),
+    # Embalagens (Packaging)
+    (426, "Caixa de Pizza G", "PACKAGING", "un", 50.0, 1000000.0),
+    (427, "Caixa de Pizza M", "PACKAGING", "un", 50.0, 1000000.0),
+    (428, "Lacre de Segurança", "PACKAGING", "un", 100.0, 1000000.0),
+    (429, "Guardanapo Personalizado", "PACKAGING", "un", 500.0, 1000000.0),
+    # Suplementos/Outros (Supplements/Others)
+    (430, "Lenha de Eucalipto", "OTHER", "kg", 100.0, 1000000.0),
+    (431, "Detergente Máquina", "SUPPLEMENT", "un", 2.0, 1000000.0),
+    (432, "Esponja de Aço", "SUPPLEMENT", "un", 5.0, 1000000.0),
 ]
 
 T2_RECIPES: list[tuple[int, int, list[tuple[int, float, str]]]] = [
@@ -774,6 +795,7 @@ async def _setup_tenant(
                 quantity_value=Decimal(str(initial_qty)),
                 quantity_unit=unit,
                 cost_amount=Decimal("5.00"),
+                occurred_at=datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.UTC),
             )
             db.add(tx_orm)
             await db.flush()
@@ -793,6 +815,7 @@ async def _setup_tenant(
                         type=TransactionType.INPUT,
                         cost_amount=Decimal("5.00"),
                         reason="Seed initial stock",
+                        occurred_at=datetime.datetime(2020, 1, 1, 0, 0, tzinfo=datetime.UTC),
                     )
                 ],
             )
@@ -1737,7 +1760,7 @@ async def _generate_month(
                         "delivered_quantity": qty,
                         "canceled_quantity": 0,
                         "notes": "",
-                        "status": "READY" if random.random() > 0.05 else "CANCELLED",
+                        "status": "READY" if random.random() > 0.05 else "CANCELED",
                     }
                 )
 
@@ -1979,19 +2002,44 @@ async def _generate_month(
             else:
                 sc["net_qty"] += tx["quantity_value"]
 
+    # Replenish stock every month (add INPUT tx for each stock item)
+    replenish_txs: list[dict[str, Any]] = []
+    for sid, sc in stock_consumption.items():
+        tx_id = next_id("tx")
+        unit = sc["unit"]
+        repl_qty = Decimal("1000000")
+        replenish_txs.append(
+            {
+                "id": tx_id,
+                "stock_item_id": sid,
+                "transaction_type": "INPUT",
+                "quantity_value": repl_qty,
+                "quantity_unit": unit,
+                "reason": "Reabastecimento mensal",
+                "cost_amount": Decimal("25.00"),
+                "occurred_at": datetime.datetime(year, month, 1, 8, 0, tzinfo=datetime.UTC),
+            }
+        )
+    if replenish_txs:
+        all_tx_pg.extend(replenish_txs)
+        await _bulk_insert(StockTransactionORM, replenish_txs)
+
+    # Sync stock read model — calculate net consumption per item
     for sid, sc in stock_consumption.items():
         si_orm = sc["orm"]
-        # Read initial quantity from the first INPUT transaction (seed)
-        seed_tx = await db.scalar(
-            select(StockTransactionORM)
-            .where(
-                StockTransactionORM.stock_item_id == sid,
-                StockTransactionORM.transaction_type == "INPUT",
-            )
-            .order_by(StockTransactionORM.id.asc())
+        # Calculate total balance from all transactions in DB for this item
+        total_qty_stmt = select(StockTransactionORM.transaction_type, StockTransactionORM.quantity_value).where(
+            StockTransactionORM.stock_item_id == sid
         )
-        initial_qty = seed_tx.quantity_value if seed_tx else Decimal("0")
-        current_qty = max(Decimal("0"), initial_qty + sc["net_qty"])
+        txs_res = await db.execute(total_qty_stmt)
+        total_balance = Decimal("0")
+        for tx_type, tx_val in txs_res.all():
+            if tx_type in ("INPUT", "PRODUCTION", "ADJUSTMENT"):
+                total_balance += tx_val
+            elif tx_type in ("OUTPUT", "WASTE"):
+                total_balance -= tx_val
+        
+        current_qty = max(Decimal("0"), total_balance)
         domain_item_simple = SimpleStockItem(
             id=si_orm.id,
             tenant_id=si_orm.tenant_id,
@@ -2005,35 +2053,12 @@ async def _generate_month(
                     id=0,
                     quantity=MeasuredQuantity(current_qty, sc["unit"]),
                     type=TransactionType.INPUT,
-                    cost_amount=Decimal("0.01"),
-                    reason="Balance after historical consumption",
+                    cost_amount=Decimal("1.00"),
+                    reason="Snapshot for sync",
                 )
             ],
         )
         await stock_sync.sync(domain_item_simple)
-
-    # Replenish stock every month (add INPUT tx for each stock item)
-    replenish_txs: list[dict[str, Any]] = []
-    for sid, sc in stock_consumption.items():
-        tx_id = next_id("tx")
-        unit = sc["unit"]
-        repl_qty = Decimal("100") if unit == "un" else Decimal("50000")
-        replenish_txs.append(
-            {
-                "id": tx_id,
-                "stock_item_id": sid,
-                "transaction_type": "INPUT",
-                "quantity_value": repl_qty,
-                "quantity_unit": unit,
-                "reason": "Reabastecimento mensal",
-                "cost_amount": Decimal("25.00"),
-                "occurred_at": datetime.datetime(year, month, 1, 8, 0, tzinfo=datetime.UTC),
-            }
-        )
-        sc["net_qty"] += repl_qty
-    if replenish_txs:
-        all_tx_pg.extend(replenish_txs)
-        await _bulk_insert(StockTransactionORM, replenish_txs)
 
     return total_orders
 
@@ -2069,15 +2094,22 @@ async def seed() -> None:
         print("\n[2/8] Cleaning existing data...")
         for tid_str in (T1, T2):
             tid_int = int(tid_str)
+            
+            # Use subqueries for efficient deletion without argument limits
             await db.execute(
                 delete(KitchenOrderItemORM).where(KitchenOrderItemORM.tenant_id == tid_str)
             )
-            order_ids = (
-                await db.scalars(select(OrderFormORM.id).where(OrderFormORM.tenant_id == tid_str))
-            ).all()
-            all_ids = list({*order_ids, 2, 3, 4, 5, 6, 7})
-            await db.execute(delete(OrderFormItemORM).where(OrderFormItemORM.order_id.in_(all_ids)))
-            await db.execute(delete(OrderFormORM).where(OrderFormORM.id.in_(all_ids)))
+            
+            # Delete order items first (FK constraint)
+            await db.execute(
+                delete(OrderFormItemORM).where(
+                    OrderFormItemORM.order_id.in_(
+                        select(OrderFormORM.id).where(OrderFormORM.tenant_id == tid_str)
+                    )
+                )
+            )
+            
+            await db.execute(delete(OrderFormORM).where(OrderFormORM.tenant_id == tid_str))
             await db.execute(delete(PaymentORM).where(PaymentORM.tenant_id == tid_str))
             await db.execute(
                 delete(EmployeePermissionORM).where(EmployeePermissionORM.tenant_id == tid_int)
@@ -2088,14 +2120,21 @@ async def seed() -> None:
                 delete(UserTenantRoleORM).where(UserTenantRoleORM.tenant_id == tid_int)
             )
 
-            await db.execute(delete(CategoryItemORM))
+            await db.execute(delete(CategoryItemORM).where(
+                CategoryItemORM.menu_id.in_(
+                    select(MenuORM.id).where(MenuORM.tenant_id == tid_str)
+                )
+            ))
             await db.execute(delete(MenuORM).where(MenuORM.tenant_id == tid_str))
-            await db.execute(delete(RecipeIngredientORM))
-            recipe_ids = (
-                await db.scalars(select(RecipeORM.id).where(RecipeORM.tenant_id == tid_str))
-            ).all()
-            if recipe_ids:
-                await db.execute(delete(RecipeORM).where(RecipeORM.id.in_(recipe_ids)))
+            
+            await db.execute(delete(RecipeIngredientORM).where(
+                RecipeIngredientORM.recipe_id.in_(
+                    select(RecipeORM.id).where(RecipeORM.tenant_id == tid_str)
+                )
+            ))
+            
+            await db.execute(delete(RecipeORM).where(RecipeORM.tenant_id == tid_str))
+            
             await db.execute(
                 delete(StockTransactionORM).where(
                     StockTransactionORM.stock_item_id.in_(
@@ -2105,13 +2144,18 @@ async def seed() -> None:
             )
             await db.execute(delete(StockItemORM).where(StockItemORM.tenant_id == tid_str))
             await db.execute(delete(MenuItemORM).where(MenuItemORM.tenant_id == tid_str))
-            await db.execute(delete(PriceListItemORM))
-            await db.execute(delete(PriceListORM).where(PriceListORM.tenant_id == tid_str))
-            await db.execute(
-                delete(EmployeeORM).where(
-                    EmployeeORM.id.in_([e[0] for e in T1_EMPLOYEES + T2_EMPLOYEES])
+            
+            await db.execute(delete(PriceListItemORM).where(
+                PriceListItemORM.price_list_id.in_(
+                    select(PriceListORM.id).where(PriceListORM.tenant_id == tid_str)
                 )
-            )
+            ))
+            await db.execute(delete(PriceListORM).where(PriceListORM.tenant_id == tid_str))
+            
+            # Clean employees only if they belong to these specific seed tenants
+            # (Note: employees table is shared, filtered by roles cleaned above)
+            emp_ids = [e[0] for e in T1_EMPLOYEES + T2_EMPLOYEES]
+            await db.execute(delete(EmployeeORM).where(EmployeeORM.id.in_(emp_ids)))
 
             await mongo_db["stock_read"].delete_many({"tenant_id": tid_str})
             await mongo_db["menu_read_models"].delete_many({"tenant_id": tid_str})
@@ -2155,10 +2199,14 @@ async def seed() -> None:
         print("\n[5/8] Seeding active orders...")
         await _seed_active_orders(db, mongo_db, now)
 
+        # Commit base data before history generation
+        await db.commit()
+        await db.begin()
+
         # ─── Historical orders ─────────────────────────────────────────────
         print("\n[6/8] Generating 1 year of historical orders...")
 
-        # 6 months each for manageable seed time
+        # 2 years of history
         start_year, start_month = 2024, 6
         end_year, end_month = 2026, 6
 
@@ -2289,6 +2337,32 @@ async def seed() -> None:
 
         # ─── Final commit ──────────────────────────────────────────────────
         print("\n[8/8] Final commit...")
+        await db.commit()
+
+        # ─── Sync Sequences ────────────────────────────────────────────────
+        print("\nSyncing PostgreSQL sequences...")
+        tables_to_sync = [
+            ("order_forms", "order_forms_id_seq"),
+            ("order_form_items", "order_form_items_id_seq"),
+            ("kitchen_order_items", "kitchen_order_items_id_seq"),
+            ("payments", "payments_id_seq"),
+            ("stock_items", "stock_items_id_seq"),
+            ("stock_transactions", "stock_transactions_id_seq"),
+            ("recipes", "recipes_id_seq"),
+            ("recipe_ingredients", "recipe_ingredients_id_seq"),
+            ("menus", "menus_id_seq"),
+            ("menu_items", "menu_items_id_seq"),
+            ("employees", "employees_id_seq"),
+        ]
+        
+        from sqlalchemy import text
+        for table, seq in tables_to_sync:
+            max_id_res = await db.execute(text(f"SELECT MAX(id) FROM {table}"))
+            max_id = max_id_res.scalar()
+            if max_id:
+                await db.execute(text(f"SELECT setval('{seq}', {max_id})"))
+                print(f"  Sequence '{seq}' synced to {max_id}")
+        
         await db.commit()
         print("\n✓ Seed concluído com sucesso!")
 

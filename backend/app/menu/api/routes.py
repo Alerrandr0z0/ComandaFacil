@@ -1,14 +1,20 @@
 from __future__ import annotations
 
 import datetime
+import json
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
-from app.dependencies import CurrentTenantId, DbSession, MongoDB, require_permission
+from app.dependencies import (
+    CurrentTenantId,
+    DbSession,
+    OutboxWriterDep,
+    require_permission,
+)
 from app.menu.application.commands import (
     AddMenuItemCommand,
     AddMenuItemHandler,
@@ -30,17 +36,11 @@ from app.menu.application.commands import (
     UpdateCatalogItemHandler,
 )
 from app.menu.application.queries import (
-    GetMenuHandler,
-    GetMenuQuery,
     ListMenuItemsHandler,
     ListMenuItemsQuery,
-    ListMenusHandler,
-    ListMenusQuery,
 )
 from app.menu.domain.menu import PreparationProfile
 from app.menu.domain.price_list import PriceList, PriceListItem
-from app.menu.infrastructure.mongo_read_repository import MongoMenuReadRepository
-from app.menu.infrastructure.mongo_sync import MenuReadModelSync
 from app.menu.infrastructure.orm_models import MenuItemORM, PriceListItemORM
 from app.menu.infrastructure.repositories import (
     SQLAlchemyMenuItemRepository,
@@ -154,8 +154,7 @@ class CatalogItemUpdateSchema(BaseModel):
 async def create_menu(
     schema: MenuCreateSchema,
     db: DbSession,
-    background_tasks: BackgroundTasks,
-    mongo: MongoDB,
+    outbox: OutboxWriterDep,
     tenant_id: CurrentTenantId,
 ) -> MenuResponseSchema:
     repo = SQLAlchemyMenuRepository(db)
@@ -164,11 +163,15 @@ async def create_menu(
         id=schema.id, tenant_id=tenant_id, name=schema.name, description=schema.description
     )
     menu = await handler.handle(command)
-    await db.commit()
-
     menu_doc = await _resolve_menu_doc(db, menu)
-    background_tasks.add_task(MenuReadModelSync(mongo).sync, menu_doc)
-
+    # Write outbox entry instead of background task
+    await outbox.add_entry(
+        aggregate_type="menu",
+        aggregate_id=str(menu.id),
+        event_type="menu.snapshot",
+        payload=_menu_snapshot_payload(menu_doc),
+    )
+    await db.commit()
     return _menu_dict_to_response(menu_doc)
 
 
@@ -179,13 +182,16 @@ async def create_menu(
     summary="List all Menus",
 )
 async def list_menus(
-    mongo: MongoDB,
+    db: DbSession,
     tenant_id: CurrentTenantId,
 ) -> list[MenuResponseSchema]:
-    repo = MongoMenuReadRepository(mongo)
-    handler = ListMenusHandler(repo)
-    menus = await handler.handle(ListMenusQuery(tenant_id=tenant_id))
-    return [_menu_dict_to_response(m) for m in menus]
+    repo = SQLAlchemyMenuRepository(db)
+    menus = await repo.find_all(tenant_id)
+    result: list[MenuResponseSchema] = []
+    for menu in menus:
+        doc = await _resolve_menu_doc(db, menu)
+        result.append(_menu_dict_to_response(doc))
+    return result
 
 
 @router.get(
@@ -327,15 +333,15 @@ async def delete_catalog_item(
 )
 async def get_menu(
     menu_id: int,
-    mongo: MongoDB,
+    db: DbSession,
     tenant_id: CurrentTenantId,
 ) -> MenuResponseSchema:
-    repo = MongoMenuReadRepository(mongo)
-    handler = GetMenuHandler(repo)
-    menu = await handler.handle(GetMenuQuery(menu_id=menu_id, tenant_id=tenant_id))
+    repo = SQLAlchemyMenuRepository(db)
+    menu = await repo.find_by_id(menu_id, tenant_id)
     if not menu:
         raise HTTPException(status_code=404, detail=f"Cardápio '{menu_id}' não encontrado.")
-    return _menu_dict_to_response(menu)
+    doc = await _resolve_menu_doc(db, menu)
+    return _menu_dict_to_response(doc)
 
 
 @router.post(
@@ -349,8 +355,7 @@ async def add_menu_item(
     menu_id: int,
     schema: MenuItemAddSchema,
     db: DbSession,
-    background_tasks: BackgroundTasks,
-    mongo: MongoDB,
+    outbox: OutboxWriterDep,
     tenant_id: CurrentTenantId,
 ) -> MenuItemSchema:
     repo = SQLAlchemyMenuRepository(db)
@@ -375,7 +380,12 @@ async def add_menu_item(
     menu = await repo.find_by_id(menu_id, tenant_id)
     if menu:
         menu_doc = await _resolve_menu_doc(db, menu)
-        background_tasks.add_task(MenuReadModelSync(mongo).sync, menu_doc)
+        await outbox.add_entry(
+            aggregate_type="menu",
+            aggregate_id=str(menu.id),
+            event_type="menu.snapshot",
+            payload=_menu_snapshot_payload(menu_doc),
+        )
 
     price_val = float(schema.base_price)
     if menu and menu.price_list_id:
@@ -411,8 +421,7 @@ async def remove_menu_item(
     menu_id: int,
     item_id: int,
     db: DbSession,
-    background_tasks: BackgroundTasks,
-    mongo: MongoDB,
+    outbox: OutboxWriterDep,
     tenant_id: CurrentTenantId,
 ) -> dict[str, str]:
     repo = SQLAlchemyMenuRepository(db)
@@ -424,7 +433,12 @@ async def remove_menu_item(
     menu = await repo.find_by_id(menu_id, tenant_id)
     if menu:
         menu_doc = await _resolve_menu_doc(db, menu)
-        background_tasks.add_task(MenuReadModelSync(mongo).sync, menu_doc)
+        await outbox.add_entry(
+            aggregate_type="menu",
+            aggregate_id=str(menu.id),
+            event_type="menu.snapshot",
+            payload=_menu_snapshot_payload(menu_doc),
+        )
 
     return {"detail": "Item removido do cardápio com sucesso."}
 
@@ -440,8 +454,7 @@ async def link_menu_item(
     menu_id: int,
     schema: LinkMenuItemSchema,
     db: DbSession,
-    background_tasks: BackgroundTasks,
-    mongo: MongoDB,
+    outbox: OutboxWriterDep,
     tenant_id: CurrentTenantId,
 ) -> MenuItemSchema:
     repo = SQLAlchemyMenuRepository(db)
@@ -459,7 +472,12 @@ async def link_menu_item(
     menu = await repo.find_by_id(menu_id, tenant_id)
     if menu:
         menu_doc = await _resolve_menu_doc(db, menu)
-        background_tasks.add_task(MenuReadModelSync(mongo).sync, menu_doc)
+        await outbox.add_entry(
+            aggregate_type="menu",
+            aggregate_id=str(menu.id),
+            event_type="menu.snapshot",
+            payload=_menu_snapshot_payload(menu_doc),
+        )
 
     return MenuItemSchema(
         id=item.id,
@@ -498,8 +516,7 @@ async def update_menu_item_price(
     item_id: int,
     schema: MenuItemPriceUpdateSchema,
     db: DbSession,
-    background_tasks: BackgroundTasks,
-    mongo: MongoDB,
+    outbox: OutboxWriterDep,
     tenant_id: CurrentTenantId,
 ) -> dict[str, str]:
     menu_repo = SQLAlchemyMenuRepository(db)
@@ -546,11 +563,16 @@ async def update_menu_item_price(
     await price_list_repo.save(price_list)
     await db.commit()
 
-    # Sync menu read models to MongoDB
+    # Sync menu read models via outbox
     updated_menu = await menu_repo.find_by_id(menu_id, tenant_id)
     if updated_menu:
         menu_doc = await _resolve_menu_doc(db, updated_menu)
-        background_tasks.add_task(MenuReadModelSync(mongo).sync, menu_doc)
+        await outbox.add_entry(
+            aggregate_type="menu",
+            aggregate_id=str(updated_menu.id),
+            event_type="menu.snapshot",
+            payload=_menu_snapshot_payload(menu_doc),
+        )
 
     return {"detail": "Preço do item atualizado com sucesso."}
 
@@ -565,8 +587,7 @@ async def clear_menu_item_price(
     menu_id: int,
     item_id: int,
     db: DbSession,
-    background_tasks: BackgroundTasks,
-    mongo: MongoDB,
+    outbox: OutboxWriterDep,
     tenant_id: CurrentTenantId,
 ) -> dict[str, str]:
     menu_repo = SQLAlchemyMenuRepository(db)
@@ -596,7 +617,12 @@ async def clear_menu_item_price(
     updated_menu = await menu_repo.find_by_id(menu_id, tenant_id)
     if updated_menu:
         menu_doc = await _resolve_menu_doc(db, updated_menu)
-        background_tasks.add_task(MenuReadModelSync(mongo).sync, menu_doc)
+        await outbox.add_entry(
+            aggregate_type="menu",
+            aggregate_id=str(updated_menu.id),
+            event_type="menu.snapshot",
+            payload=_menu_snapshot_payload(menu_doc),
+        )
 
     return {"detail": "Preço especial removido com sucesso."}
 
@@ -612,8 +638,7 @@ async def toggle_menu(
     menu_id: int,
     schema: MenuToggleSchema,
     db: DbSession,
-    background_tasks: BackgroundTasks,
-    mongo: MongoDB,
+    outbox: OutboxWriterDep,
     tenant_id: CurrentTenantId,
 ) -> MenuResponseSchema:
     repo = SQLAlchemyMenuRepository(db)
@@ -623,7 +648,12 @@ async def toggle_menu(
     await db.commit()
 
     menu_doc = await _resolve_menu_doc(db, menu)
-    background_tasks.add_task(MenuReadModelSync(mongo).sync, menu_doc)
+    await outbox.add_entry(
+        aggregate_type="menu",
+        aggregate_id=str(menu.id),
+        event_type="menu.snapshot",
+        payload=_menu_snapshot_payload(menu_doc),
+    )
 
     return _menu_to_response_doc(menu_doc)
 
@@ -637,8 +667,7 @@ async def toggle_menu(
 async def delete_menu(
     menu_id: int,
     db: DbSession,
-    background_tasks: BackgroundTasks,
-    mongo: MongoDB,
+    outbox: OutboxWriterDep,
     tenant_id: CurrentTenantId,
 ) -> dict[str, str]:
     repo = SQLAlchemyMenuRepository(db)
@@ -647,7 +676,12 @@ async def delete_menu(
     await handler.handle(command)
     await db.commit()
 
-    background_tasks.add_task(MenuReadModelSync(mongo).remove, menu_id)
+    await outbox.add_entry(
+        aggregate_type="menu",
+        aggregate_id=str(menu_id),
+        event_type="menu.delete",
+        payload=json.dumps({"collection": "menu_read_models", "filter": {"menu_id": menu_id}}),
+    )
 
     return {"detail": "Cardápio removido com sucesso."}
 
@@ -747,8 +781,7 @@ async def activate_menu_price_list(
     menu_id: int,
     price_list_id: int,
     db: DbSession,
-    background_tasks: BackgroundTasks,
-    mongo: MongoDB,
+    outbox: OutboxWriterDep,
     tenant_id: CurrentTenantId,
 ) -> dict[str, str]:
     menu_repo = SQLAlchemyMenuRepository(db)
@@ -772,7 +805,12 @@ async def activate_menu_price_list(
     await db.commit()
 
     menu_doc = await _resolve_menu_doc(db, menu_db)
-    background_tasks.add_task(MenuReadModelSync(mongo).sync, menu_doc)
+    await outbox.add_entry(
+        aggregate_type="menu",
+        aggregate_id=str(menu_db.id),
+        event_type="menu.snapshot",
+        payload=_menu_snapshot_payload(menu_doc),
+    )
 
     return {"detail": "Lista de preços ativada com sucesso."}
 
@@ -867,4 +905,16 @@ def _menu_dict_to_response(data: dict[str, object]) -> MenuResponseSchema:
             )
             for item in items_raw
         ],
+    )
+
+
+def _menu_snapshot_payload(menu_doc: dict[str, Any]) -> str:
+    return json.dumps(
+        {
+            "collection": "menu_read_models",
+            "filter": {
+                "menu_id": menu_doc["menu_id"],
+            },
+            "document": menu_doc,
+        }
     )

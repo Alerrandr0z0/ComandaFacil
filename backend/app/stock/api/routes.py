@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import json
 from decimal import Decimal
 
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
 from sqlalchemy import select
 
@@ -11,6 +12,7 @@ from app.dependencies import (
     CurrentTenantId,
     DbSession,
     MongoDB,
+    OutboxWriterDep,
     require_permission,
 )
 from app.menu.infrastructure.orm_models import MenuItemORM
@@ -25,6 +27,7 @@ from app.stock.application.queries import (
     ListStockItemsHandler,
     ListStockItemsQuery,
 )
+from app.stock.domain.converters import ImperialConverter, MetricConverter
 from app.stock.domain.enums import TransactionType
 from app.stock.domain.measured_quantity import MeasuredQuantity
 from app.stock.domain.recipe import Recipe, RecipeIngredient
@@ -148,8 +151,7 @@ class StockMovementResponseSchema(BaseModel):
 async def create_stock_item(
     schema: StockItemCreateSchema,
     db: DbSession,
-    background_tasks: BackgroundTasks,
-    mongo: MongoDB,
+    outbox: OutboxWriterDep,
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
     repo = SQLAlchemyStockItemRepository(db)
@@ -164,8 +166,14 @@ async def create_stock_item(
         min_stock_level=schema.min_stock_level,
     )
     item = await handler.handle(command)
+    # Write outbox entry for stock snapshot
+    await outbox.add_entry(
+        aggregate_type="stock",
+        aggregate_id=str(item.id),
+        event_type="stock.snapshot",
+        payload=_stock_snapshot_payload(item),
+    )
     await db.commit()
-    background_tasks.add_task(StockReadModelSync(mongo).sync, item)
     return _item_to_response(item)
 
 
@@ -180,7 +188,6 @@ async def update_stock_item(
     item_id: int,
     schema: StockItemUpdateSchema,
     db: DbSession,
-    background_tasks: BackgroundTasks,
     mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
@@ -218,8 +225,7 @@ async def update_stock_item(
     item.set_min_stock_level(schema.min_stock_level)
     await repo.save(item)
     await db.commit()
-
-    background_tasks.add_task(StockReadModelSync(mongo).sync, item)
+    await StockReadModelSync(mongo).sync(item)
     return _item_to_response(item)
 
 
@@ -232,7 +238,6 @@ async def update_stock_item(
 async def delete_stock_item(
     item_id: int,
     db: DbSession,
-    background_tasks: BackgroundTasks,
     mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> None:
@@ -243,8 +248,7 @@ async def delete_stock_item(
 
     await repo.delete(item_id, tenant_id)
     await db.commit()
-
-    background_tasks.add_task(StockReadModelSync(mongo).remove, item_id, tenant_id)
+    await StockReadModelSync(mongo).remove(item_id, tenant_id)
 
 
 @router.get(
@@ -298,7 +302,6 @@ async def add_stock(
     item_id: int,
     schema: StockAddSchema,
     db: DbSession,
-    background_tasks: BackgroundTasks,
     mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
@@ -317,7 +320,7 @@ async def add_stock(
     item = await item_repo.find_by_id(item_id, tenant_id)
     if not item:
         raise HTTPException(status_code=404, detail="StockItem not found")
-    background_tasks.add_task(StockReadModelSync(mongo).sync, item)
+    await StockReadModelSync(mongo).sync(item)
     return _item_to_response(item)
 
 
@@ -332,7 +335,6 @@ async def deduct_stock(
     item_id: int,
     schema: StockDeductSchema,
     db: DbSession,
-    background_tasks: BackgroundTasks,
     mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
@@ -352,7 +354,7 @@ async def deduct_stock(
     item = await item_repo.find_by_id(item_id, tenant_id)
     if not item:
         raise HTTPException(status_code=404, detail="StockItem not found")
-    background_tasks.add_task(StockReadModelSync(mongo).sync, item)
+    await StockReadModelSync(mongo).sync(item)
     return _item_to_response(item)
 
 
@@ -367,7 +369,6 @@ async def set_min_stock_level(
     item_id: int,
     schema: MinStockLevelSchema,
     db: DbSession,
-    background_tasks: BackgroundTasks,
     mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
@@ -379,7 +380,7 @@ async def set_min_stock_level(
     item.set_min_stock_level(schema.min_stock_level)
     await repo.save(item)
     await db.commit()
-    background_tasks.add_task(StockReadModelSync(mongo).sync, item)
+    await StockReadModelSync(mongo).sync(item)
     return _item_to_response(item)
 
 
@@ -394,7 +395,6 @@ async def adjust_stock(
     item_id: int,
     schema: StockAdjustSchema,
     db: DbSession,
-    background_tasks: BackgroundTasks,
     mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> StockItemResponseSchema:
@@ -422,7 +422,7 @@ async def adjust_stock(
     item = await item_repo.find_by_id(item_id, tenant_id)
     if not item:
         raise HTTPException(status_code=404, detail="StockItem not found")
-    background_tasks.add_task(StockReadModelSync(mongo).sync, item)
+    await StockReadModelSync(mongo).sync(item)
     return _item_to_response(item)
 
 
@@ -516,6 +516,12 @@ class RecipeProduceResponseSchema(BaseModel):
     model_config = ConfigDict(frozen=True)
 
 
+class RecipeAvailabilityResponseSchema(BaseModel):
+    availability: dict[int, bool]
+
+    model_config = ConfigDict(frozen=True)
+
+
 # ─── Consumed-By Endpoint ─────────────────────────────────────────────────────
 
 
@@ -563,6 +569,61 @@ async def get_consumed_by(
 
 
 # ─── Recipe Endpoints ─────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/recipes/availability",
+    response_model=RecipeAvailabilityResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Check stock availability for all menu item recipes",
+)
+async def check_recipes_availability(
+    db: DbSession,
+    tenant_id: CurrentTenantId,
+    _current_employee: CurrentEmployee,
+) -> RecipeAvailabilityResponseSchema:
+    item_repo = SQLAlchemyStockItemRepository(db)
+    recipe_repo = SQLAlchemyRecipeRepository(db, item_repo)
+
+    stmt = select(RecipeORM.menu_item_id).where(RecipeORM.tenant_id == tenant_id)
+    result = await db.execute(stmt)
+    menu_item_ids = list(result.scalars().all())
+
+    availability: dict[int, bool] = {}
+    for menu_item_id in menu_item_ids:
+        recipe = await recipe_repo.find_by_menu_item(menu_item_id, tenant_id)
+        if not recipe:
+            continue
+
+        has_sufficient = True
+        for ing in recipe.get_ingredients():
+            balance = ing.stock_item.get_balance()
+            required = ing.quantity
+
+            if balance.unit == required.unit:
+                if balance.value < required.value:
+                    has_sufficient = False
+                    break
+            else:
+                try:
+                    converted_val = MetricConverter().convert(
+                        balance.value, balance.unit, required.unit
+                    )
+                except ValueError:
+                    try:
+                        converted_val = ImperialConverter().convert(
+                            balance.value, balance.unit, required.unit
+                        )
+                    except ValueError:
+                        has_sufficient = False
+                        break
+                if converted_val < required.value:
+                    has_sufficient = False
+                    break
+
+        availability[menu_item_id] = has_sufficient
+
+    return RecipeAvailabilityResponseSchema(availability=availability)
 
 
 @router.get(
@@ -666,7 +727,6 @@ async def save_recipe(
 async def produce_recipe(
     menu_item_id: int,
     db: DbSession,
-    background_tasks: BackgroundTasks,
     mongo: MongoDB,
     tenant_id: CurrentTenantId,
     quantity: int = Query(1, gt=0, description="Number of portions to produce"),
@@ -690,7 +750,7 @@ async def produce_recipe(
         for ing in recipe.get_ingredients():
             item = await item_repo.find_by_id(ing.stock_item.id, tenant_id)
             if item:
-                background_tasks.add_task(StockReadModelSync(mongo).sync, item)
+                await StockReadModelSync(mongo).sync(item)
                 deducted.append(
                     {
                         "stock_item_id": ing.stock_item.id,
@@ -720,6 +780,30 @@ def _item_to_response(item: StockItem) -> StockItemResponseSchema:
         min_stock_level=item.min_stock_level,
         is_active=item.is_active,
         is_low_stock=item.is_low_stock,
+    )
+
+
+def _stock_snapshot_payload(item: StockItem) -> str:
+    balance = item.get_balance()
+    return json.dumps(
+        {
+            "collection": "stock_read",
+            "filter": {
+                "stock_item_id": item.id,
+                "tenant_id": item.tenant_id,
+            },
+            "document": {
+                "stock_item_id": item.id,
+                "tenant_id": item.tenant_id,
+                "name": item.name,
+                "category": item.category,
+                "current_quantity": float(balance.value),
+                "unit": balance.unit,
+                "min_stock_level": item.min_stock_level,
+                "is_low_stock": item.is_low_stock,
+                "is_active": item.is_active,
+            },
+        }
     )
 
 

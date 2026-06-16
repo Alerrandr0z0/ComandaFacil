@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 import datetime
 import hashlib
 import logging
@@ -9,16 +8,11 @@ from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import or_, select
+from sqlalchemy import select
 
 from app.auth.infrastructure.orm_models import AuditLogORM
 from app.dependencies import CurrentTenantId, DbSession, MongoDB, require_permission
-from app.kitchen.domain.kitchen_item import KitchenOrderItem
-from app.kitchen.infrastructure.kitchen_read_sync import KitchenReadModelSync
 from app.kitchen.infrastructure.orm_models import KitchenOrderItemORM
-from app.kitchen.infrastructure.pg_repository import SQLAlchemyKitchenOrderItemRepository
-from app.kitchen.infrastructure.websocket_manager import kds_ws_manager
-from app.menu.infrastructure.repositories import SQLAlchemyMenuItemRepository
 from app.order.application.commands import (
     AddOrderItemCommand,
     AddOrderItemHandler,
@@ -30,6 +24,8 @@ from app.order.application.commands import (
     DeliverOrderHandler,
     ProcessPaymentCommand,
     ProcessPaymentHandler,
+    RequestCancelOrderItemCommand,
+    RequestCancelOrderItemHandler,
     RequestPaymentCommand,
     RequestPaymentHandler,
 )
@@ -44,7 +40,6 @@ from app.order.infrastructure.mongo_repository import OrderHistoryMongoRepositor
 from app.order.infrastructure.order_read_sync import OrderReadModelSync
 from app.order.infrastructure.orm_models import OrderFormItemORM
 from app.order.infrastructure.pg_repository import SQLAlchemyOrderRepository
-from app.shared import database
 
 if TYPE_CHECKING:
     from app.order.domain.order_form import OrderForm
@@ -106,6 +101,7 @@ class OrderItemResponseSchema(BaseModel):
     station_type_cpy: str
     quantity: int
     delivered_quantity: int = 0
+    canceled_quantity: int = 0
     notes: str
     subtotal: Decimal
     status: str
@@ -228,139 +224,6 @@ async def get_order(
     return await _enrich_order(_order_to_response(order), mongo)
 
 
-def _get_notes_condition(notes: str) -> Any:
-    """Helper to build notes matching condition, handling None vs empty string."""
-    if not notes or notes.strip() == "":
-        return or_(
-            KitchenOrderItemORM.notes.is_(None),
-            KitchenOrderItemORM.notes == "",
-        )
-    return KitchenOrderItemORM.notes == notes
-
-
-async def _notify_kitchen(
-    correlation_id: int,
-    menu_item_id: int,
-    notes: str,
-    tenant_id: str,
-    quantity: int = 1,
-    mongo: MongoDB | None = None,
-) -> None:
-    """Helper to synchronously send new order items to the kitchen (called from endpoint).
-    When quantity > 1, creates one KitchenOrderItem per unit so each can be tracked individually."""
-    sf = database.session_factory
-    if sf is None:
-        logger.warning("session_factory is None, skipping kitchen notification")
-        return
-
-    async for session in database.get_async_session():
-        item_repo = SQLAlchemyMenuItemRepository(session)
-        menu_item = await item_repo.find_by_id(menu_item_id, tenant_id)
-        if not menu_item:
-            logger.warning("Menu item %s not found for tenant %s", menu_item_id, tenant_id)
-            return
-
-        kitchen_repo = SQLAlchemyKitchenOrderItemRepository(session)
-        try:
-            notes_cond = _get_notes_condition(notes)
-
-            # Query for surplus items of the same dish and tenant in FIFO order (by id asc)
-            stmt = (
-                select(KitchenOrderItemORM)
-                .where(
-                    KitchenOrderItemORM.state == "SURPLUS",
-                    KitchenOrderItemORM.name_cpy == menu_item.name,
-                    KitchenOrderItemORM.tenant_id == tenant_id,
-                    notes_cond,
-                )
-                .order_by(KitchenOrderItemORM.id.asc())
-            )
-            result = await session.execute(stmt)
-            surplus_orms = list(result.scalars().all())
-
-            items_created: list[KitchenOrderItem] = []
-            for seq in range(quantity):
-                unique_id = correlation_id * 1000 + seq
-                existing = await kitchen_repo.find_by_id(unique_id, tenant_id)
-                if existing:
-                    items_created.append(existing)
-                    continue
-
-                if surplus_orms:
-                    surplus_orm = surplus_orms.pop(0)
-                    item = kitchen_repo.map_to_domain(surplus_orm)
-                    item.reclaim(correlation_id)
-                    item.notes = notes
-                    await kitchen_repo.save(item)
-                    items_created.append(item)
-
-                    # Notify KDS clients of reclaimed ready item
-                    await kds_ws_manager.broadcast_to_station(
-                        tenant_id=tenant_id,
-                        station_type=menu_item.station_type,
-                        event_data={
-                            "event": "ITEM_READY",
-                            "item": {
-                                "id": item.id,
-                                "correlation_id": item.correlation_id,
-                                "name_cpy": item.name_cpy,
-                                "station_type_cpy": item.station_type_cpy,
-                                "state": item.state.name,
-                                "notes": item.notes,
-                            },
-                        },
-                    )
-                else:
-                    item = KitchenOrderItem(
-                        id=unique_id,
-                        correlation_id=correlation_id,
-                        name_cpy=menu_item.name,
-                        station_type_cpy=menu_item.station_type,
-                        tenant_id=tenant_id,
-                        preparation_profile=menu_item.preparation_profile.value,
-                        notes=notes,
-                    )
-                    await kitchen_repo.save(item)
-                    items_created.append(item)
-
-                    # Notify KDS clients connected to this station
-                    await kds_ws_manager.broadcast_to_station(
-                        tenant_id=tenant_id,
-                        station_type=menu_item.station_type,
-                        event_data={
-                            "event": "ITEM_RECEIVED",
-                            "item": {
-                                "id": item.id,
-                                "correlation_id": item.correlation_id,
-                                "name_cpy": item.name_cpy,
-                                "station_type_cpy": item.station_type_cpy,
-                                "state": item.state.name,
-                                "notes": item.notes,
-                                "menu_item_id": menu_item_id,
-                            },
-                        },
-                    )
-
-            await session.commit()
-            logger.info(
-                "Kitchen items created/reclaimed for correlation_id=%s qty=%s",
-                correlation_id,
-                quantity,
-            )
-
-            if mongo is not None:
-                sync = KitchenReadModelSync(mongo)
-                for kitem in items_created:
-                    await sync.sync(kitem, menu_item_id=menu_item_id)
-                logger.info("Kitchen items synced to MongoDB for correlation_id=%s", correlation_id)
-        except Exception:
-            logger.exception(
-                "Failed to notify kitchen for correlation_id=%s menu_item_id=%s",
-                correlation_id,
-                menu_item_id,
-            )
-
-
 @router.post(
     "/{order_id}/items",
     response_model=OrderItemResponseSchema,
@@ -392,16 +255,6 @@ async def add_order_item(
         item = await handler.handle(command)
         await db.commit()
 
-        # Notify the KDS context synchronously
-        await _notify_kitchen(
-            correlation_id=item.id,
-            menu_item_id=item.menu_item_id,
-            notes=item.notes,
-            tenant_id=tenant_id,
-            quantity=item.quantity,
-            mongo=mongo,
-        )
-
         res_schema = OrderItemResponseSchema(
             id=item.id,
             menu_item_id=item.menu_item_id,
@@ -410,6 +263,7 @@ async def add_order_item(
             station_type_cpy=item.station_type_cpy,
             quantity=item.quantity,
             delivered_quantity=item.delivered_quantity,
+            canceled_quantity=item.canceled_quantity,
             notes=item.notes,
             subtotal=item.calculate_subtotal().amount,
             status=item.status.value,
@@ -465,112 +319,6 @@ async def process_payment(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
 
 
-async def _delete_kitchen_read_models(
-    order: OrderForm, tenant_id: str, mongo: MongoDB | None
-) -> None:
-    if mongo is None:
-        return
-    try:
-        order_item_ids = [item.id for item in order.items]
-        await mongo["kitchen_read"].delete_many(
-            {"correlation_id": {"$in": order_item_ids}, "tenant_id": tenant_id}
-        )
-    except Exception:
-        logger.exception("Failed to delete kitchen read models on order cancellation")
-
-
-async def _broadcast_kitchen_cancellations(order: OrderForm, tenant_id: str) -> None:
-    async for session in database.get_async_session():
-        for order_item in order.items:
-            stmt = select(KitchenOrderItemORM).where(
-                KitchenOrderItemORM.correlation_id == order_item.id,
-                KitchenOrderItemORM.tenant_id == tenant_id,
-            )
-            result = await session.execute(stmt)
-            orms = result.scalars().all()
-            for orm in orms:
-                with contextlib.suppress(Exception):
-                    await kds_ws_manager.broadcast_to_station(
-                        tenant_id=tenant_id,
-                        station_type=order_item.station_type_cpy,
-                        event_data={
-                            "event": "ITEM_CANCELLED",
-                            "item": {
-                                "id": orm.id,
-                                "correlation_id": order_item.id,
-                                "state": "CANCELLED",
-                            },
-                        },
-                    )
-
-
-async def _cancel_pg_kitchen_items(
-    order: OrderForm,
-    tenant_id: str,
-    mongo: MongoDB | None = None,
-) -> None:
-    async for session in database.get_async_session():
-        kitchen_repo = SQLAlchemyKitchenOrderItemRepository(session)
-        items_to_sync: list[KitchenOrderItem] = []
-        updated_any = False
-        for order_item in order.items:
-            # Only ready items that are NOT yet delivered can go to surplus
-            undelivered_qty = max(0, order_item.quantity - order_item.delivered_quantity)
-            surplus_count = 0
-
-            stmt = select(KitchenOrderItemORM).where(
-                KitchenOrderItemORM.correlation_id == order_item.id,
-                KitchenOrderItemORM.tenant_id == tenant_id,
-            )
-            result = await session.execute(stmt)
-            orms = result.scalars().all()
-            for orm in orms:
-                kitchen_item = kitchen_repo.map_to_domain(orm)
-                if kitchen_item.state.name == "READY":
-                    if surplus_count < undelivered_qty:
-                        kitchen_item.cancel()  # Transitions to Surplus
-                        kitchen_item.correlation_id = 0
-                        await kitchen_repo.save(kitchen_item)
-                        items_to_sync.append(kitchen_item)
-                        surplus_count += 1
-                        updated_any = True
-                    # If already delivered, it stays in READY state (already consumed on table)
-                elif kitchen_item.state.name not in ("CANCELLED", "SURPLUS"):
-                    kitchen_item.cancel()  # Transitions to Cancelled
-                    await kitchen_repo.save(kitchen_item)
-                    updated_any = True
-
-        if updated_any:
-            await session.commit()
-            logger.info("Updated kitchen items in PG for order cancellation")
-            if mongo is not None and items_to_sync:
-                sync = KitchenReadModelSync(mongo)
-                for kitem in items_to_sync:
-                    await sync.sync(kitem)
-                logger.info("Synced updated SURPLUS kitchen items to MongoDB")
-
-
-async def _cancel_kitchen_items(
-    order: OrderForm,
-    tenant_id: str,
-    mongo: MongoDB | None = None,
-) -> None:
-    """Cancel associated kitchen items for all order items when an order is cancelled.
-    Iterates over all items (one per quantity unit) matching each correlation_id."""
-    sf = database.session_factory
-    if sf is None:
-        return
-
-    # 1. Delete all kitchen read models for this order immediately from MongoDB
-    await _delete_kitchen_read_models(order, tenant_id, mongo)
-
-    # 2. Broadcast ITEM_CANCELLED event to all KDS clients for each unit
-    await _broadcast_kitchen_cancellations(order, tenant_id)
-
-    # 3. Transition states in PostgreSQL and sync surplus items to MongoDB
-    await _cancel_pg_kitchen_items(order, tenant_id, mongo)
-
-
 @router.post(
     "/{order_id}/cancel",
     response_model=OrderResponseSchema,
@@ -581,7 +329,6 @@ async def _cancel_kitchen_items(
 async def cancel_order(
     order_id: int,
     db: DbSession,
-    background_tasks: BackgroundTasks,
     mongo: MongoDB,
     tenant_id: CurrentTenantId,
 ) -> OrderResponseSchema:
@@ -589,15 +336,51 @@ async def cancel_order(
     handler = CancelOrderHandler(repo)
     try:
         order = await handler.handle(CancelOrderCommand(order_id=order_id, tenant_id=tenant_id))
-        # Cascade cancellation to order items and associated kitchen items
+        # Cascade cancellation to order items
         for item in order.items:
-            item.mark_canceled()
+            c_qty = item.cancellable_quantity
+            if c_qty > 0:
+                item.cancel_quantity(c_qty)
         await repo.save(order)
         await db.commit()
         # Sync to history read model (MongoDB)
         mongo_repo = OrderHistoryMongoRepository(mongo)
         await mongo_repo.save(order)
-        background_tasks.add_task(_cancel_kitchen_items, order, tenant_id, mongo)
+        return await _enrich_order(_order_to_response(order), mongo)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
+
+
+@router.patch(
+    "/{order_id}/items/{item_id}/cancel",
+    response_model=OrderResponseSchema,
+    status_code=status.HTTP_200_OK,
+    summary="Cancel units of an order item",
+    dependencies=[Depends(require_permission("CREATE_ORDER"))],
+)
+async def cancel_order_item(
+    order_id: int,
+    item_id: int,
+    db: DbSession,
+    mongo: MongoDB,
+    tenant_id: CurrentTenantId,
+    qty: int = Query(default=0, description="Quantity to cancel (0 = all allowed)"),
+) -> OrderResponseSchema:
+    repo = SQLAlchemyOrderRepository(db)
+    handler = RequestCancelOrderItemHandler(repo)
+    command = RequestCancelOrderItemCommand(
+        order_id=order_id,
+        item_id=item_id,
+        tenant_id=tenant_id,
+        qty=qty,
+    )
+    try:
+        order = await handler.handle(command)
+        await db.commit()
+        # Reload order to pick up any synchronous event listener updates
+        refreshed = await repo.find_by_id(order.id, tenant_id)
+        if refreshed:
+            order = refreshed
         return await _enrich_order(_order_to_response(order), mongo)
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e)) from e
@@ -662,6 +445,7 @@ async def deliver_order_item(
         station_type_cpy=item.station_type_cpy,
         quantity=item.quantity,
         delivered_quantity=item.delivered_quantity,
+        canceled_quantity=item.canceled_quantity,
         notes=item.notes,
         subtotal=item.calculate_subtotal().amount,
         status=item.status.value,
@@ -705,10 +489,12 @@ async def deliver_order(
 async def get_order_history(
     tenant_id: CurrentTenantId,
     mongo: MongoDB,
+    limit: int = Query(1000, ge=1, le=10000, description="Max number of items to return"),
+    start_date: str | None = Query(None, description="ISO timestamp to filter by closed_at >= start_date"),
 ) -> list[dict[str, Any]]:
     mongo_repo = OrderHistoryMongoRepository(mongo)
     handler = GetOrderHistoryHandler(mongo_repo)
-    return await handler.handle(GetOrderHistoryQuery(tenant_id=tenant_id))
+    return await handler.handle(GetOrderHistoryQuery(tenant_id=tenant_id, limit=limit, start_date=start_date))
 
 
 @router.get(
@@ -826,6 +612,7 @@ def _order_to_response(order: OrderForm) -> OrderResponseSchema:
                 station_type_cpy=item.station_type_cpy,
                 quantity=item.quantity,
                 delivered_quantity=item.delivered_quantity,
+                canceled_quantity=item.canceled_quantity,
                 notes=item.notes,
                 subtotal=item.calculate_subtotal().amount,
                 status=item.status.value,
@@ -865,8 +652,18 @@ async def _enrich_order(
         k_states = states_by_item.get(item.id, [])
         k_states.sort(key=_sort_key)
 
-        missing_count = max(0, item.quantity - len(k_states))
-        k_states.extend(["DELIVERED"] * missing_count)
+        present_cancelled = sum(1 for s in k_states if s in ("CANCELLED", "CANCELED"))
+        add_cancelled = max(0, item.canceled_quantity - present_cancelled)
+        add_delivered = item.delivered_quantity
+
+        extra_states = []
+        extra_states.extend(["CANCELLED"] * add_cancelled)
+        extra_states.extend(["DELIVERED"] * add_delivered)
+
+        missing_slots = max(0, item.quantity - len(k_states) - len(extra_states))
+        extra_states.extend(["WAITING"] * missing_slots)
+
+        k_states.extend(extra_states)
         k_states = k_states[: item.quantity]
 
         enriched_items.append(
@@ -878,6 +675,7 @@ async def _enrich_order(
                 station_type_cpy=item.station_type_cpy,
                 quantity=item.quantity,
                 delivered_quantity=item.delivered_quantity,
+                canceled_quantity=item.canceled_quantity,
                 notes=item.notes,
                 subtotal=item.subtotal,
                 status=item.status,
@@ -914,8 +712,18 @@ async def _enrich_order_item(
 
     k_states.sort(key=_sort_key_item)
 
-    missing_count = max(0, item.quantity - len(k_states))
-    k_states.extend(["DELIVERED"] * missing_count)
+    present_cancelled = sum(1 for s in k_states if s in ("CANCELLED", "CANCELED"))
+    add_cancelled = max(0, item.canceled_quantity - present_cancelled)
+    add_delivered = item.delivered_quantity
+
+    extra_states = []
+    extra_states.extend(["CANCELLED"] * add_cancelled)
+    extra_states.extend(["DELIVERED"] * add_delivered)
+
+    missing_slots = max(0, item.quantity - len(k_states) - len(extra_states))
+    extra_states.extend(["WAITING"] * missing_slots)
+
+    k_states.extend(extra_states)
     k_states = k_states[: item.quantity]
 
     return OrderItemResponseSchema(
@@ -926,6 +734,7 @@ async def _enrich_order_item(
         station_type_cpy=item.station_type_cpy,
         quantity=item.quantity,
         delivered_quantity=item.delivered_quantity,
+        canceled_quantity=item.canceled_quantity,
         notes=item.notes,
         subtotal=item.subtotal,
         status=item.status,

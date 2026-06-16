@@ -9,7 +9,8 @@ import {
   User,
   X,
 } from 'lucide-react'
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
+import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
 import { useAuth } from '@/features/auth/auth_context'
 import Layout from '@/shared/components/layout'
 import { httpClient } from '@/shared/lib/http_client'
@@ -427,21 +428,6 @@ function OrderDetailPanel({
   )
 }
 
-const isWithinPeriod = (closedAtStr: string, period: 'today' | 'week' | 'month' | 'all') => {
-  if (period === 'all') return true
-  const closedDate = new Date(closedAtStr)
-  const now = new Date()
-
-  if (period === 'today') {
-    return closedDate.toDateString() === now.toDateString()
-  }
-
-  const diffDays = (now.getTime() - closedDate.getTime()) / (1000 * 3600 * 24)
-  if (period === 'week') return diffDays <= 7
-  if (period === 'month') return diffDays <= 30
-  return true
-}
-
 const matchesSearchTerm = (item: OrderHistory, term: string) => {
   if (!term) return true
   const normalized = term.toLowerCase()
@@ -467,7 +453,24 @@ export default function HistoryPage() {
   const fetchHistory = useCallback(async () => {
     setIsLoading(true)
     try {
-      const res = await httpClient.get<OrderHistory[]>('/v1/order/history/all')
+      let params = ''
+      if (periodFilter === 'today') {
+        const d = new Date()
+        d.setHours(0, 0, 0, 0)
+        params = `?start_date=${d.toISOString()}&limit=2000`
+      } else if (periodFilter === 'week') {
+        const d = new Date()
+        d.setDate(d.getDate() - 7)
+        params = `?start_date=${d.toISOString()}&limit=5000`
+      } else if (periodFilter === 'month') {
+        const d = new Date()
+        d.setDate(d.getDate() - 30)
+        params = `?start_date=${d.toISOString()}&limit=10000`
+      } else {
+        params = '?limit=10000'
+      }
+
+      const res = await httpClient.get<OrderHistory[]>(`/v1/order/history/all${params}`)
       const sorted = (res.data || []).sort(
         (a, b) => new Date(b.closed_at).getTime() - new Date(a.closed_at).getTime(),
       )
@@ -476,7 +479,7 @@ export default function HistoryPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [periodFilter])
 
   useEffect(() => {
     fetchHistory()
@@ -508,9 +511,18 @@ export default function HistoryPage() {
 
   const filteredHistory = useMemo(() => {
     return history.filter(
-      (item) => matchesSearchTerm(item, searchTerm) && isWithinPeriod(item.closed_at, periodFilter),
+      (item) => matchesSearchTerm(item, searchTerm),
     )
-  }, [history, searchTerm, periodFilter])
+  }, [history, searchTerm])
+
+  const parentRef = useRef<HTMLDivElement>(null)
+
+  const rowVirtualizer = useVirtualizer({
+    count: filteredHistory.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 64, // Estimated row height
+    overscan: 10,
+  })
 
   const stats = useMemo(() => {
     let totalSales = 0
@@ -650,75 +662,86 @@ export default function HistoryPage() {
                   </p>
                 </div>
               ) : (
-                <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse">
-                    <thead>
-                      <tr className="border-b border-gray-900 bg-gray-950/40 text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">
-                        <th className="py-3.5 px-4">Comanda ID</th>
-                        <th className="py-3.5 px-4">Horário</th>
-                        <th className="py-3.5 px-4">Modalidade</th>
-                        <th className="py-3.5 px-4">Status</th>
-                        <th className="py-3.5 px-4 text-right">Total</th>
-                        <th className="py-3.5 px-4 text-center">Ações</th>
+                <div 
+                  ref={parentRef} 
+                  className="overflow-auto border border-gray-900/60 rounded-2xl bg-gray-950/10 backdrop-blur-md shadow-lg shadow-black/10" 
+                  style={{ height: '600px' }}
+                >
+                  <table className="w-full text-left border-collapse relative">
+                    <thead className="sticky top-0 z-10 bg-gray-950/90 backdrop-blur-md shadow-sm border-b border-gray-900">
+                      <tr className="text-[10px] uppercase font-extrabold text-gray-400 tracking-wider">
+                        <th className="py-3.5 px-4 w-[15%]">Comanda ID</th>
+                        <th className="py-3.5 px-4 w-[20%]">Horário</th>
+                        <th className="py-3.5 px-4 w-[25%]">Modalidade</th>
+                        <th className="py-3.5 px-4 w-[15%]">Status</th>
+                        <th className="py-3.5 px-4 w-[15%] text-right">Total</th>
+                        <th className="py-3.5 px-4 w-[10%] text-center">Ações</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-900/40 text-xs">
-                      {filteredHistory.map((item) => (
-                        <tr
-                          key={`${item.order_id}_${item.closed_at}`}
-                          onClick={() => setSelectedOrder(item)}
-                          className={`hover:bg-white/[0.02] transition cursor-pointer ${
-                            selectedOrder?.order_id === item.order_id
-                              ? 'bg-brand-500/5 border-l-2 border-l-brand-500'
-                              : ''
-                          }`}
-                        >
-                          <td className="py-4 px-4 font-bold text-gray-200">#{item.order_id}</td>
-                          <td className="py-4 px-4 text-gray-400">{formatDate(item.closed_at)}</td>
-                          <td className="py-4 px-4">
-                            <span className="font-semibold text-gray-300">
-                              {formatFulfillmentType(item.fulfillment.type)}
-                            </span>
-                            {item.fulfillment.type === 'TABLE' && item.fulfillment.table && (
-                              <span className="text-[10px] text-gray-500 ml-1">
-                                (Mesa {item.fulfillment.table.table_number})
+                    <tbody className="text-xs relative" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
+                      {rowVirtualizer.getVirtualItems().map((virtualRow) => {
+                        const item = filteredHistory[virtualRow.index]
+                        return (
+                          <tr
+                            key={`${item.order_id}_${item.closed_at}_${virtualRow.index}`}
+                            onClick={() => setSelectedOrder(item)}
+                            className={`absolute top-0 left-0 w-full flex items-center border-b border-gray-900/40 hover:bg-white/[0.02] transition cursor-pointer ${
+                              selectedOrder?.order_id === item.order_id
+                                ? 'bg-brand-500/5 border-l-2 border-l-brand-500'
+                                : ''
+                            }`}
+                            style={{
+                              height: `${virtualRow.size}px`,
+                              transform: `translateY(${virtualRow.start}px)`,
+                            }}
+                          >
+                            <td className="px-4 font-bold text-gray-200 w-[15%]">#{item.order_id}</td>
+                            <td className="px-4 text-gray-400 w-[20%]">{formatDate(item.closed_at)}</td>
+                            <td className="px-4 w-[25%] truncate">
+                              <span className="font-semibold text-gray-300">
+                                {formatFulfillmentType(item.fulfillment.type)}
                               </span>
-                            )}
-                            {item.fulfillment.type === 'TAKEAWAY' && item.fulfillment.takeaway && (
-                              <span className="text-[10px] text-gray-500 ml-1 block max-w-[120px] truncate">
-                                {item.fulfillment.takeaway.customer_name}
+                              {item.fulfillment.type === 'TABLE' && item.fulfillment.table && (
+                                <span className="text-[10px] text-gray-500 ml-1">
+                                  (Mesa {item.fulfillment.table.table_number})
+                                </span>
+                              )}
+                              {item.fulfillment.type === 'TAKEAWAY' && item.fulfillment.takeaway && (
+                                <span className="text-[10px] text-gray-500 ml-1">
+                                  {item.fulfillment.takeaway.customer_name}
+                                </span>
+                              )}
+                            </td>
+                            <td className="px-4 w-[15%]">
+                              <span
+                                className={`text-[9px] px-2 py-0.5 rounded-full border uppercase tracking-wider font-extrabold ${
+                                  item.state === 'REFUNDED'
+                                    ? 'border-rose-500/20 bg-rose-950/10 text-rose-400'
+                                    : 'border-emerald-500/20 bg-emerald-950/10 text-emerald-400'
+                                }`}
+                              >
+                                {item.state === 'REFUNDED' ? 'Estornado' : 'Pago'}
                               </span>
-                            )}
-                          </td>
-                          <td className="py-4 px-4">
-                            <span
-                              className={`text-[9px] px-2 py-0.5 rounded-full border uppercase tracking-wider font-extrabold ${
-                                item.state === 'REFUNDED'
-                                  ? 'border-rose-500/20 bg-rose-950/10 text-rose-400'
-                                  : 'border-emerald-500/20 bg-emerald-950/10 text-emerald-400'
-                              }`}
-                            >
-                              {item.state === 'REFUNDED' ? 'Estornado' : 'Pago'}
-                            </span>
-                          </td>
-                          <td className="py-4 px-4 text-right font-black text-white">
-                            R$ {parseFloat(item.total).toFixed(2)}
-                          </td>
-                          <td className="py-4 px-4 text-center">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                setSelectedOrder(item)
-                              }}
-                              className="rounded-lg p-1.5 text-gray-400 hover:text-white hover:bg-gray-900 transition"
-                              title="Ver Detalhes"
-                            >
-                              <Eye className="h-4 w-4" />
-                            </button>
-                          </td>
-                        </tr>
-                      ))}
+                            </td>
+                            <td className="px-4 text-right font-black text-white w-[15%]">
+                              R$ {parseFloat(item.total).toFixed(2)}
+                            </td>
+                            <td className="px-4 text-center flex justify-center w-[10%]">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setSelectedOrder(item)
+                                }}
+                                className="rounded-lg p-1.5 text-gray-400 hover:text-white hover:bg-gray-900 transition"
+                                title="Ver Detalhes"
+                              >
+                                <Eye className="h-4 w-4" />
+                              </button>
+                            </td>
+                          </tr>
+                        )
+                      })}
                     </tbody>
                   </table>
                 </div>

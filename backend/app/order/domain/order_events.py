@@ -38,8 +38,17 @@ class OrderItemCancelled(DomainEvent):
 
 
 @dataclass(frozen=True)
+class OrderItemCancelRequested(DomainEvent):
+    order_id: int
+    tenant_id: str
+    item_id: int
+    name: str
+    quantity: int
+    occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+
+
+@dataclass(frozen=True)
 class OrderCancelled(DomainEvent):
     order_id: int
     tenant_id: str
     occurred_at: datetime = field(default_factory=lambda: datetime.now(UTC))
-

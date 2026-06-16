@@ -82,8 +82,17 @@ class OrderHistoryMongoRepository:
         res = await cursor.to_list(length=1)
         return res[0] if res else None
 
-    async def find_all_by_tenant(self, tenant_id: str) -> list[dict[str, Any]]:
-        """Finds all completed order documents for a tenant, sorted by closed_at desc."""
-        cursor = self._collection.find({"tenant_id": tenant_id}, {"_id": 0}).sort("closed_at", -1)
-        res = await cursor.to_list(length=100)
+    async def find_all_by_tenant(
+        self, 
+        tenant_id: str, 
+        limit: int = 1000,
+        start_date: str | None = None
+    ) -> list[dict[str, Any]]:
+        """Finds completed order documents for a tenant, sorted by closed_at desc."""
+        query: dict[str, Any] = {"tenant_id": tenant_id}
+        if start_date:
+            query["closed_at"] = {"$gte": start_date}
+
+        cursor = self._collection.find(query, {"_id": 0}).sort("closed_at", -1)
+        res = await cursor.to_list(length=limit)
         return list(res)

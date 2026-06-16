@@ -33,9 +33,11 @@ class GetOrderHandler:
 @dataclass(frozen=True)
 class GetOrderHistoryQuery:
     tenant_id: str
+    limit: int = 1000
+    start_date: str | None = None
 
     def __repr__(self) -> str:
-        return f"GetOrderHistoryQuery(tenant_id={self.tenant_id!r})"
+        return f"GetOrderHistoryQuery(tenant_id={self.tenant_id!r}, limit={self.limit}, start_date={self.start_date!r})"
 
 
 class GetOrderHistoryHandler:
@@ -43,8 +45,12 @@ class GetOrderHistoryHandler:
         self._mongo_repo: Final[OrderHistoryMongoRepository] = mongo_repo
 
     async def handle(self, query: GetOrderHistoryQuery) -> list[dict[str, Any]]:
-        """Fetch all completed order read models from NoSQL read database."""
-        return await self._mongo_repo.find_all_by_tenant(query.tenant_id)
+        """Fetch completed order read models from NoSQL read database."""
+        return await self._mongo_repo.find_all_by_tenant(
+            query.tenant_id, 
+            limit=query.limit, 
+            start_date=query.start_date
+        )
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"

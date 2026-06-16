@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import (
 
 from app.settings import Settings
 from app.shared.domain_events import EventBus, pending_events_var
+from app.shared.outbox import OutboxWriter, serialize_event_for_outbox
 
 # ─── PostgreSQL ────────────────────────────────────────────────────────────────
 
@@ -45,8 +46,24 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         async def commit_with_events(
             orig_commit: Callable[[], Awaitable[None]] = original_commit,
         ) -> None:
-            await orig_commit()
+            # 1. Write outbox entries for syncable events (same transaction)
+            outbox_writer = OutboxWriter(session)
             events = pending_events_var.get()
+            if events:
+                for event in events:
+                    mapped = serialize_event_for_outbox(event)
+                    if mapped is not None:
+                        await outbox_writer.add_entry(
+                            aggregate_type=mapped["aggregate_type"],
+                            aggregate_id=mapped["aggregate_id"],
+                            event_type=mapped["event_type"],
+                            payload=mapped["payload"],
+                        )
+
+            # 2. Commit business data + outbox entries atomically
+            await orig_commit()
+
+            # 3. Dispatch domain events (audit listeners, etc.)
             if events:
                 pending_events_var.set([])
                 for event in events:
@@ -84,6 +101,24 @@ async def close_mongo() -> None:
     if _mongo_client:
         _mongo_client.close()
         _mongo_client = None
+
+
+async def ensure_indexes() -> None:
+    """Ensure critical MongoDB indexes for performance."""
+    if _mongo_database is None:
+        return
+
+    # orders_read: tenant_id + created_at (compound for analytics)
+    await _mongo_database["orders_read"].create_index([("tenant_id", 1), ("created_at", -1)])
+    
+    # order_history: tenant_id + closed_at
+    await _mongo_database["order_history"].create_index([("tenant_id", 1), ("closed_at", -1)])
+    
+    # kitchen_read: tenant_id + created_at
+    await _mongo_database["kitchen_read"].create_index([("tenant_id", 1), ("created_at", -1)])
+    
+    # stock_read: tenant_id + is_low_stock
+    await _mongo_database["stock_read"].create_index([("tenant_id", 1), ("is_low_stock", 1)])
 
 
 def get_mongo_db() -> AsyncIOMotorDatabase:  # type: ignore[type-arg]

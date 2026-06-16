@@ -18,7 +18,7 @@ from app.menu.domain.price_list_events import (
     PriceListItemUpdated,
     PriceListUpdated,
 )
-from app.order.domain.order_events import OrderCreated, OrderItemAdded
+from app.order.domain.order_events import OrderCreated, OrderItemAdded, OrderItemCancelled
 from app.shared import database
 from app.shared.actor_context import current_actor_var
 from app.shared.domain_events import EventBus
@@ -268,6 +268,16 @@ async def handle_kitchen_item_created(event: KitchenItemCreated) -> None:
     )
 
 
+async def handle_order_item_cancelled(event: OrderItemCancelled) -> None:
+    await _save_audit_log(
+        tenant_id=event.tenant_id,
+        action="ORDER_ITEM_CANCELLED",
+        entity_type="order",
+        entity_id=str(event.order_id),
+        details=f"Item '{event.name}' (ID: {event.item_id}) cancelado da comanda ID {event.order_id}.",
+    )
+
+
 def register_audit_listeners() -> None:
     """Subscribes all audit log handler functions to their corresponding domain events."""
     EventBus.register(StockItemCreated, handle_stock_item_created)
@@ -288,5 +298,6 @@ def register_audit_listeners() -> None:
 
     EventBus.register(OrderCreated, handle_order_created)
     EventBus.register(OrderItemAdded, handle_order_item_added)
+    EventBus.register(OrderItemCancelled, handle_order_item_cancelled)
     EventBus.register(KitchenItemCreated, handle_kitchen_item_created)
     EventBus.register(KitchenItemStatusChanged, handle_kitchen_item_status_changed)

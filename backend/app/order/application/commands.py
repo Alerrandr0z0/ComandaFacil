@@ -5,7 +5,7 @@ from decimal import Decimal  # noqa: TC003
 from typing import TYPE_CHECKING, Final
 
 from app.order.domain.fulfillment import Delivery, Table, Takeaway
-from app.order.domain.order_events import OrderCreated
+from app.order.domain.order_events import OrderCreated, OrderItemCancelled, OrderItemCancelRequested
 from app.order.domain.order_form import OrderForm
 from app.order.domain.order_item import OrderFormItem
 from app.shared.exceptions import ConflictError, NotFoundError
@@ -43,11 +43,8 @@ class CreateOrderHandler:
         self._order_repo: Final[OrderRepository] = order_repo
 
     def _generate_order_id(self, all_orders: list[OrderForm], requested_id: int | None) -> int:
-        return (
-            requested_id
-            if requested_id is not None
-            else (max((o.id for o in all_orders), default=0) + 1)
-        )
+        """Returns requested_id if provided, or 0 to let the database generate one via sequence."""
+        return requested_id if requested_id is not None else 0
 
     def _build_fulfillment(self, command: CreateOrderCommand, order: OrderForm) -> None:
         if command.fulfillment_type == "TABLE":
@@ -235,6 +232,87 @@ class CancelOrderHandler:
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}()"
+
+
+# --- Cancel Single Order Item ---------------------------------------------------
+
+
+@dataclass(frozen=True)
+class CancelOrderItemCommand:
+    order_id: int
+    item_id: int
+    tenant_id: str
+    qty: int = 0  # 0 = cancelar tudo que for permitido
+
+
+class CancelOrderItemHandler:
+    def __init__(self, order_repo: OrderRepository) -> None:
+        self._order_repo: Final[OrderRepository] = order_repo
+
+    async def handle(self, command: CancelOrderItemCommand) -> OrderForm:
+        order = await self._order_repo.find_by_id(command.order_id, command.tenant_id)
+        if not order:
+            raise NotFoundError("Comanda", command.order_id)
+        if order.state.name in ("PAID", "CLOSED"):
+            raise ValueError("Cannot cancel items on a paid or closed order.")
+        item = next((i for i in order.items if i.id == command.item_id), None)
+        if not item:
+            raise NotFoundError("Item da comanda", command.item_id)
+        # Determina a quantidade a cancelar. 0 => cancelar o máximo permitido
+        qty_to_cancel = command.qty or item.cancellable_quantity
+        if qty_to_cancel <= 0:
+            raise ValueError("Nenhuma quantidade elegível para cancelamento.")
+        item.cancel_quantity(qty_to_cancel)
+        order.record_event(
+            OrderItemCancelled(
+                order_id=order.id,
+                tenant_id=order.tenant_id,
+                item_id=item.id,
+                name=item.name_cpy,
+                quantity=qty_to_cancel,
+            )
+        )
+        await self._order_repo.save(order)
+        return order
+
+
+@dataclass(frozen=True)
+class RequestCancelOrderItemCommand:
+    order_id: int
+    item_id: int
+    tenant_id: str
+    qty: int = 0
+
+
+class RequestCancelOrderItemHandler:
+    def __init__(self, order_repo: OrderRepository) -> None:
+        self._order_repo: Final[OrderRepository] = order_repo
+
+    async def handle(self, command: RequestCancelOrderItemCommand) -> OrderForm:
+        order = await self._order_repo.find_by_id(command.order_id, command.tenant_id)
+        if not order:
+            raise NotFoundError("Comanda", command.order_id)
+        if order.state.name in ("PAID", "CLOSED"):
+            raise ValueError("Cannot request cancellation on a paid or closed order.")
+        item = next((i for i in order.items if i.id == command.item_id), None)
+        if not item:
+            raise NotFoundError("Item da comanda", command.item_id)
+
+        qty_to_cancel = command.qty or item.cancellable_quantity
+        if qty_to_cancel <= 0:
+            raise ValueError("Nenhuma quantidade elegível para cancelamento.")
+
+        order.record_event(
+            OrderItemCancelRequested(
+                order_id=order.id,
+                tenant_id=order.tenant_id,
+                item_id=item.id,
+                name=item.name_cpy,
+                quantity=qty_to_cancel,
+            )
+        )
+        await self._order_repo.save(order)
+        return order
 
 
 @dataclass(frozen=True)

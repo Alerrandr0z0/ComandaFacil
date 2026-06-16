@@ -42,6 +42,7 @@ interface OrderDrawerProps {
   ) => Promise<unknown>
   onDeliverOrder: () => Promise<unknown>
   onCancelOrder: () => Promise<unknown>
+  onCancelItem: (orderId: number, itemId: number, qty: number) => Promise<unknown>
 }
 
 const getItemPrice = (item: MenuItem): number => {
@@ -258,6 +259,7 @@ interface ConfirmedItemsListProps {
   isRequestingPayment: boolean
   onDeliverOrder: () => Promise<unknown>
   onCancelOrder: () => Promise<unknown>
+  onCancelItem: (orderId: number, itemId: number, qty: number) => Promise<unknown>
   onRequestPayment: () => Promise<unknown>
   setIsPaymentOpen: (open: boolean) => void
 }
@@ -280,9 +282,12 @@ function ConfirmedItemsList({
   isRequestingPayment,
   onDeliverOrder,
   onCancelOrder,
+  onCancelItem,
   onRequestPayment,
   setIsPaymentOpen,
 }: ConfirmedItemsListProps) {
+  const [cancelMap, setCancelMap] = useState<Record<number, number>>({})
+
   return (
     <div className="p-4 flex-1 flex flex-col justify-between">
       <div>
@@ -295,61 +300,116 @@ function ConfirmedItemsList({
           </div>
         ) : (
           <div className="space-y-2.5 max-h-[300px] overflow-y-auto pr-1">
-            {activeOrder.items.map((item) => (
-              <div
-                key={item.id}
-                className="flex justify-between border-b border-gray-900/60 pb-2 text-xs"
-              >
-                <div className="space-y-0.5 min-w-0 flex-1">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {item.kitchen_states && item.kitchen_states.length > 0 ? (
-                      <div className="flex gap-1 flex-wrap">
-                        {Object.entries(
-                          item.kitchen_states.reduce(
-                            (acc, st) => {
-                              acc[st] = (acc[st] || 0) + 1
-                              return acc
-                            },
-                            {} as Record<string, number>,
-                          ),
-                        ).map(([st, count]) => (
-                          <span
-                            key={st}
-                            className={`rounded-full px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider border ${
-                              statusConfig[st]?.color ||
-                              'border-gray-500/20 bg-gray-950/20 text-gray-400'
-                            }`}
-                            title={`${count}x unidades em status ${statusConfig[st]?.label || st}`}
-                          >
-                            {count > 1 ? `${count}x ` : ''}
-                            {statusConfig[st]?.label || st}
-                          </span>
-                        ))}
-                      </div>
-                    ) : item.status ? (
-                      <span
-                        className={`rounded-full px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider border ${
-                          statusConfig[item.status]?.color ||
-                          'border-gray-500/20 bg-gray-950/20 text-gray-400'
-                        }`}
-                      >
-                        {statusConfig[item.status]?.label || item.status}
+            {activeOrder.items.map((item) => {
+              const delivered = item.delivered_quantity ?? 0
+              return (
+                <div
+                  key={item.id}
+                  className="flex justify-between border-b border-gray-900/60 pb-2 text-xs"
+                >
+                  <div className="space-y-0.5 min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      {item.kitchen_states && item.kitchen_states.length > 0 ? (
+                        <div className="flex gap-1 flex-wrap">
+                          {Object.entries(
+                            item.kitchen_states.reduce(
+                              (acc, st) => {
+                                acc[st] = (acc[st] || 0) + 1
+                                return acc
+                              },
+                              {} as Record<string, number>,
+                            ),
+                          ).map(([st, count]) => (
+                            <span
+                              key={st}
+                              className={`rounded-full px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider border ${
+                                statusConfig[st]?.color ||
+                                'border-gray-500/20 bg-gray-950/20 text-gray-400'
+                              }`}
+                              title={`${count}x unidades em status ${statusConfig[st]?.label || st}`}
+                            >
+                              {count > 1 ? `${count}x ` : ''}
+                              {statusConfig[st]?.label || st}
+                            </span>
+                          ))}
+                        </div>
+                      ) : item.status ? (
+                        <span
+                          className={`rounded-full px-1.5 py-0.5 text-[8px] font-extrabold uppercase tracking-wider border ${
+                            statusConfig[item.status]?.color ||
+                            'border-gray-500/20 bg-gray-950/20 text-gray-400'
+                          }`}
+                        >
+                          {statusConfig[item.status]?.label || item.status}
+                        </span>
+                      ) : null}
+                      <h4 className="font-bold text-gray-200 truncate">{item.name_cpy}</h4>
+                      <span className="text-gray-500 font-medium shrink-0">x{item.quantity}</span>
+                    </div>
+                    {item.notes && (
+                      <span className="text-[9px] italic text-brand-400 font-medium block mt-1">
+                        Obs: {item.notes}
                       </span>
-                    ) : null}
-                    <h4 className="font-bold text-gray-200 truncate">{item.name_cpy}</h4>
-                    <span className="text-gray-500 font-medium shrink-0">x{item.quantity}</span>
+                    )}
                   </div>
-                  {item.notes && (
-                    <span className="text-[9px] italic text-brand-400 font-medium block mt-1">
-                      Obs: {item.notes}
+                  <div className="flex items-center gap-2">
+                    {item.status !== 'CANCELED' && item.status !== 'DELIVERED' && !isPaid && (
+                      <div className="flex items-center gap-1 opacity-60 hover:opacity-100 transition">
+                        <button
+                          type="button"
+                          className="text-xs text-gray-400 hover:text-gray-200"
+                          onClick={() =>
+                            setCancelMap((prev) => ({
+                              ...prev,
+                              [item.id]: Math.max(0, (prev[item.id] ?? 0) - 1),
+                            }))
+                          }
+                        >
+                          −
+                        </button>
+                        <span className="w-4 text-center text-xs">{cancelMap[item.id] ?? 0}</span>
+                        <button
+                          type="button"
+                          className="text-xs text-gray-400 hover:text-gray-200"
+                          onClick={() =>
+                            setCancelMap((prev) => ({
+                              ...prev,
+                              [item.id]: Math.min(
+                                item.quantity - delivered,
+                                (prev[item.id] ?? 0) + 1,
+                              ),
+                            }))
+                          }
+                        >
+                          +
+                        </button>
+                        {(cancelMap[item.id] ?? 0) > 0 && (
+                          <button
+                            type="button"
+                            className="ml-1 text-xs text-rose-500 hover:underline"
+                            onClick={() => {
+                              if (
+                                window.confirm(
+                                  `Cancelar ${cancelMap[item.id]} unidade(s) de "${item.name_cpy}"?`,
+                                )
+                              ) {
+                                onCancelItem(activeOrder.id, item.id, cancelMap[item.id] ?? 0)
+                                setCancelMap((prev) => ({ ...prev, [item.id]: 0 }))
+                              }
+                            }}
+                          >
+                            Aplicar
+                          </button>
+                        )}
+                      </div>
+                    )}
+                    <span className="font-bold text-gray-400 shrink-0">
+                      R$ {Number(item.subtotal).toFixed(2)}
                     </span>
-                  )}
+                  </div>
                 </div>
-                <span className="font-bold text-gray-400 shrink-0 ml-3">
-                  R$ {Number(item.subtotal).toFixed(2)}
-                </span>
-              </div>
-            ))}
+              )
+            })}
           </div>
         )}
       </div>
@@ -811,6 +871,7 @@ export default function OrderDrawer({
   onProcessPayment,
   onDeliverOrder,
   onCancelOrder,
+  onCancelItem,
 }: OrderDrawerProps) {
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedCategory, setSelectedCategory] = useState('Todos')
@@ -922,6 +983,7 @@ export default function OrderDrawer({
               isRequestingPayment={isRequestingPayment}
               onDeliverOrder={onDeliverOrder}
               onCancelOrder={onCancelOrder}
+              onCancelItem={onCancelItem}
               onRequestPayment={onRequestPayment}
               setIsPaymentOpen={setIsPaymentOpen}
             />

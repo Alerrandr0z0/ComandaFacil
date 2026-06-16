@@ -1,5 +1,6 @@
 import { AlertCircle, BellRing, Clock, Coffee, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import { formatDuration } from '@/shared/lib/format_duration'
 import { httpClient } from '@/shared/lib/http_client'
 import type { ReadyItem } from '../hooks/use_kitchen_alerts'
 import type { OrderForm } from '../hooks/use_order_drawer'
@@ -91,12 +92,7 @@ function useElapsedTime(orderCreatedAt: string | undefined): string {
 
     const updateTimer = () => {
       const diffMs = Math.max(0, Date.now() - startTime)
-      const diffMins = Math.floor(diffMs / 60000)
-      const diffSecs = Math.floor((diffMs % 60000) / 1000)
-
-      const minStr = diffMins < 10 ? `0${diffMins}` : diffMins
-      const secStr = diffSecs < 10 ? `0${diffSecs}` : diffSecs
-      setElapsedTime(`${minStr}:${secStr}`)
+      setElapsedTime(formatDuration(diffMs))
     }
 
     updateTimer()

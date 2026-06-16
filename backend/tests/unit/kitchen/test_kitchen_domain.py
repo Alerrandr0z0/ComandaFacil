@@ -65,7 +65,20 @@ def test_kitchen_item_cancel_when_waiting_or_preparing_then_transitions_to_cance
     item2 = KitchenOrderItem(2, 43, "Burguer", "Grill", "franquia_001")
     item2.prepare()
     item2.cancel()
+    assert item2.state.name == "CANCEL_REQUESTED"
+    assert item2.previous_state == "PREPARING"
+
+    # Chef rejects
+    item2.reject_cancel()
+    assert item2.state.name == "PREPARING"
+    assert item2.previous_state is None
+
+    # Cancel again and approve as waste
+    item2.cancel()
+    assert item2.state.name == "CANCEL_REQUESTED"
+    item2.approve_cancel("WASTE")
     assert item2.state.name == "CANCELLED"
+    assert item2.previous_state is None
 
 
 def test_kitchen_item_invalid_transitions_then_raises_value_error() -> None:
@@ -97,7 +110,13 @@ def test_kitchen_item_cancel_when_ready_then_transitions_to_surplus() -> None:
     item.cancel()
 
     # Assert
+    assert item.state.name == "CANCEL_REQUESTED"
+    assert item.previous_state == "READY"
+
+    item.approve_cancel("SURPLUS")
     assert item.state.name == "SURPLUS"
+    assert item.correlation_id == 0
+    assert item.previous_state is None
 
 
 def test_kitchen_item_reclaim_when_surplus_then_transitions_to_ready_with_new_correlation_id() -> (
@@ -108,6 +127,8 @@ def test_kitchen_item_reclaim_when_surplus_then_transitions_to_ready_with_new_co
     item.prepare()
     item.mark_as_ready()
     item.cancel()
+    assert item.state.name == "CANCEL_REQUESTED"
+    item.approve_cancel("SURPLUS")
     assert item.state.name == "SURPLUS"
 
     # Act

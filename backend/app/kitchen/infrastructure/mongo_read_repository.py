@@ -29,9 +29,9 @@ class MongoKitchenReadRepository:
         active_items = []
         for item in all_items:
             state = item.get("state")
-            if state in ("WAITING", "PREPARING"):
+            if state in ("WAITING", "PREPARING", "CANCEL_REQUESTED"):
                 active_items.append(item)
-            elif state in ("READY", "CANCELLED"):
+            elif state in ("READY", "SURPLUS"):
                 completed_at_val = item.get("completed_at")
                 if completed_at_val:
                     if isinstance(completed_at_val, str):

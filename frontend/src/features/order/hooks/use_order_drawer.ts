@@ -31,6 +31,7 @@ export interface OrderItem {
   subtotal: number
   status: OrderItemStatus
   kitchen_states?: string[]
+  delivered_quantity?: number
 }
 
 export interface OrderForm {
@@ -139,6 +140,7 @@ export function useOrderDrawer(onOrderChanged?: () => void) {
   const [isRequestingPayment, setIsRequestingPayment] = useState(false)
   const [isProcessingPayment, setIsProcessingPayment] = useState(false)
   const [isCancelling, setIsCancelling] = useState(false)
+  const [isCancellingItems, setIsCancellingItems] = useState<Set<number>>(new Set())
   const [isDelivering, setIsDelivering] = useState(false)
 
   // Fetch active order by ID
@@ -327,6 +329,27 @@ export function useOrderDrawer(onOrderChanged?: () => void) {
     }
   }
 
+  const cancelItem = async (orderId: number, itemId: number, qty: number = 0) => {
+    setIsCancellingItems((prev) => new Set(prev).add(itemId))
+    try {
+      const res = await httpClient.patch<OrderForm>(
+        `/v1/order/${orderId}/items/${itemId}/cancel?qty=${qty}`,
+      )
+      setActiveOrder(res.data)
+      onOrderChanged?.()
+      return res.data
+    } catch (err) {
+      alert('Erro ao cancelar o item.')
+      throw err
+    } finally {
+      setIsCancellingItems((prev) => {
+        const next = new Set(prev)
+        next.delete(itemId)
+        return next
+      })
+    }
+  }
+
   const cancelOrder = async () => {
     if (!activeOrder) return
     setIsCancelling(true)
@@ -355,6 +378,7 @@ export function useOrderDrawer(onOrderChanged?: () => void) {
     isRequestingPayment,
     isProcessingPayment,
     isCancelling,
+    isCancellingItems,
     isDelivering,
     selectOrder,
     openNewOrderDrawer,
@@ -368,6 +392,7 @@ export function useOrderDrawer(onOrderChanged?: () => void) {
     processPayment,
     deliverOrder,
     cancelOrder,
+    cancelItem,
     fetchActiveOrder,
   }
 }

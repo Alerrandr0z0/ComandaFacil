@@ -1,19 +1,23 @@
 from __future__ import annotations
 
-import pytest
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+import pytest
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
+
 from app.order.infrastructure.orm_models import OrderFormItemORM
-from app.stock.infrastructure.orm_models import RecipeIngredientORM, RecipeORM, StockItemORM, StockTransactionORM
+from app.shared.base_orm import Base
+from app.stock.infrastructure.orm_models import (
+    RecipeIngredientORM,
+    RecipeORM,
+    StockItemORM,
+    StockTransactionORM,
+)
 from app.stock.infrastructure.pg_repository import SQLAlchemyStockItemRepository
 
-from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
-from app.shared.base_orm import Base
-from collections.abc import AsyncGenerator
-
 if TYPE_CHECKING:
-    pass
+    from collections.abc import AsyncGenerator
 
 
 @pytest.fixture
@@ -44,8 +48,8 @@ async def sqlite_session() -> AsyncGenerator[AsyncSession, None]:
 async def test_stock_deduction_on_kitchen_item_status_changed_ready(
     sqlite_session: AsyncSession,
 ) -> None:
-    from app.stock.application.event_handlers import StockDeductionListener
     from app.kitchen.domain.kitchen_events import KitchenItemStatusChanged
+    from app.stock.application.event_handlers import StockDeductionListener
 
     # 1. Arrange: setup order item in PG
     sqlite_session.add(
