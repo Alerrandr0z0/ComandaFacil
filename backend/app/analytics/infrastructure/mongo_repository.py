@@ -139,7 +139,7 @@ class MongoAnalyticsRepository:
             {
                 "$group": {
                     "_id": "$items.category",
-                    "total": {"$sum": "$items.price"},
+                    "total": {"$sum": "$items.subtotal"},
                 }
             },
         ]
@@ -682,6 +682,7 @@ class MongoAnalyticsRepository:
                     "name": {"$first": "$items.name"},
                     "quantity": {"$sum": "$items.quantity"},
                     "revenue": {"$sum": "$items.subtotal"},
+                    "avg_price": {"$avg": "$items.price"},
                 }
             },
         ]
@@ -793,7 +794,7 @@ class MongoAnalyticsRepository:
                 "$project": {
                     "order_id": 1,
                     "created_at": 1,
-                    "closed_at": {"$dateFromString": {"dateString": "$history.closed_at"}},
+                    "closed_at": "$history.closed_at",
                 }
             },
             {
@@ -832,17 +833,9 @@ class MongoAnalyticsRepository:
 
         pipe = [
             {
-                "$project": {
-                    "tenant_id": 1,
-                    "total": 1,
-                    "fulfillment": 1,
-                    "closed_at_date": {"$dateFromString": {"dateString": "$closed_at"}},
-                }
-            },
-            {
                 "$match": {
                     "tenant_id": tenant_id,
-                    "closed_at_date": {"$gte": dr.start, "$lte": dr.end},
+                    "closed_at": {"$gte": dr.start, "$lte": dr.end},
                     "fulfillment.type": "TABLE",
                     "fulfillment.table.table_number": {"$ne": None},
                 }
@@ -850,9 +843,9 @@ class MongoAnalyticsRepository:
             {
                 "$group": {
                     "_id": "$fulfillment.table.table_number",
-                    "total_revenue": {"$sum": {"$toDouble": "$total"}},
+                    "total_revenue": {"$sum": "$total"},
                     "orders_count": {"$sum": 1},
-                    "avg_ticket": {"$avg": {"$toDouble": "$total"}},
+                    "avg_ticket": {"$avg": "$total"},
                 }
             },
             {"$sort": {"_id": 1}},

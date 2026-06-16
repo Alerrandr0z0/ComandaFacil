@@ -561,11 +561,11 @@ def _format_history_item(
         "id": item_id,
         "menu_item_id": menu_item_id,
         "name": name,
-        "price": str(item_price),
+        "price": float(item_price),
         "station_type": station,
         "quantity": qty,
         "notes": "",
-        "subtotal": str(subtotal),
+        "subtotal": float(subtotal),
     }
 
 
@@ -1746,7 +1746,11 @@ async def _generate_month(
                 price = mi["price"]
                 station = mi["station_type"]
                 subtotal = price * qty
-                total_amount += subtotal
+
+                item_status = "READY" if random.random() > 0.05 else "CANCELED"
+
+                if item_status == "READY":
+                    total_amount += subtotal
 
                 order_items_pg.append(
                     {
@@ -1757,10 +1761,10 @@ async def _generate_month(
                         "price_cpy": price,
                         "station_type_cpy": station,
                         "quantity": qty,
-                        "delivered_quantity": qty,
-                        "canceled_quantity": 0,
+                        "delivered_quantity": qty if item_status == "READY" else 0,
+                        "canceled_quantity": 0 if item_status == "READY" else qty,
                         "notes": "",
-                        "status": "READY" if random.random() > 0.05 else "CANCELED",
+                        "status": item_status,
                     }
                 )
 
@@ -1771,8 +1775,8 @@ async def _generate_month(
                         name,
                         price,
                         station,
-                        qty,
-                        subtotal,
+                        0 if item_status == "CANCELED" else qty,
+                        subtotal if item_status == "READY" else Decimal("0.00"),
                     )
                 )
                 history_items_for_mongo.append(
@@ -1782,8 +1786,8 @@ async def _generate_month(
                         name,
                         price,
                         station,
-                        qty,
-                        subtotal,
+                        0 if item_status == "CANCELED" else qty,
+                        subtotal if item_status == "READY" else Decimal("0.00"),
                     )
                 )
                 subtotals_for_audit.append(f"'{name}' (Qtd: {qty}, R$ {fmt_price(price)})")
@@ -1952,15 +1956,15 @@ async def _generate_month(
                 {
                     "order_id": order_id,
                     "tenant_id": tenant_id,
-                    "total": str(total_amount),
+                    "total": float(total_amount),
                     "state": "CLOSED",
                     "fulfillment": {
                         "type": "TABLE",
-                        "fee": "0.00",
+                        "fee": 0.0,
                         "table": {"table_number": table_num},
                     },
                     "items": history_items_for_mongo,
-                    "closed_at": t.isoformat(),
+                    "closed_at": t,
                 }
             )
             all_kitchen_mongo.extend(kitchen_mongo_list)

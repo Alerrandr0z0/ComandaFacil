@@ -35,9 +35,10 @@ class GetOrderHistoryQuery:
     tenant_id: str
     limit: int = 1000
     start_date: str | None = None
+    end_date: str | None = None
 
     def __repr__(self) -> str:
-        return f"GetOrderHistoryQuery(tenant_id={self.tenant_id!r}, limit={self.limit}, start_date={self.start_date!r})"
+        return f"GetOrderHistoryQuery(tenant_id={self.tenant_id!r}, limit={self.limit}, start_date={self.start_date!r}, end_date={self.end_date!r})"
 
 
 class GetOrderHistoryHandler:
@@ -49,7 +50,8 @@ class GetOrderHistoryHandler:
         return await self._mongo_repo.find_all_by_tenant(
             query.tenant_id, 
             limit=query.limit, 
-            start_date=query.start_date
+            start_date=query.start_date,
+            end_date=query.end_date
         )
 
     def __repr__(self) -> str:

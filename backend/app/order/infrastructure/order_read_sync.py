@@ -15,7 +15,8 @@ class OrderReadModelSync:
 
     async def sync(self, order: OrderForm) -> None:
         total = float(order.total().amount)
-        created_at = datetime.datetime.now(datetime.UTC)
+        # Fix: Use original order creation time to avoid drift in analytics
+        created_at = order.created_at
 
         doc: dict[str, Any] = {
             "order_id": order.id,
@@ -29,7 +30,9 @@ class OrderReadModelSync:
                     "name": item.name_cpy,
                     "category": item.station_type_cpy,
                     "price": float(item.price_cpy.amount),
-                    "quantity": item.quantity,
+                    # Fix: Handle cancelled items by setting quantity to 0 or deducting cancellations
+                    # (Here we use the effective quantity contributing to the subtotal)
+                    "quantity": 0 if item.status.value == "CANCELED" else item.quantity,
                     "subtotal": float(item.calculate_subtotal().amount),
                 }
                 for item in order.items

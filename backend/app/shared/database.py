@@ -110,9 +110,13 @@ async def ensure_indexes() -> None:
 
     # orders_read: tenant_id + created_at (compound for analytics)
     await _mongo_database["orders_read"].create_index([("tenant_id", 1), ("created_at", -1)])
+    # items.id is critical for cancelled waste calculation (KDS sync)
+    await _mongo_database["orders_read"].create_index("items.id")
     
     # order_history: tenant_id + closed_at
     await _mongo_database["order_history"].create_index([("tenant_id", 1), ("closed_at", -1)])
+    # order_id is used for funnel lookups
+    await _mongo_database["order_history"].create_index("order_id")
     
     # kitchen_read: tenant_id + created_at
     await _mongo_database["kitchen_read"].create_index([("tenant_id", 1), ("created_at", -1)])

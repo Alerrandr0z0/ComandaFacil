@@ -9,6 +9,7 @@ class PlanType(StrEnum):
     BASIC = "BASIC"
     PRO = "PRO"
     PLUS = "PLUS"
+    PREMIUM = "PREMIUM"
 
 
 class Tenant:

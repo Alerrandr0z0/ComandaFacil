@@ -118,7 +118,9 @@ class GetMenuMatrixHandler:
             name = s["name"]
             qty = s["quantity"]
             rev = s["revenue"]
-            avg_p = float(rev / qty) if qty > 0 else 0.0
+            # Use avg_price directly from the database query which computes from item price
+            # instead of revenue / qty (which fails for 0 subtotal items)
+            avg_p = s.get("avg_price", 0.0)
 
             # Find recipe
             recipe = await self._recipe_repo.find_by_menu_item(menu_item_id, query.tenant_id)
@@ -147,19 +149,19 @@ class GetMenuMatrixHandler:
             prof = "HIGH" if item["margin"] >= avg_margin else "LOW"
 
             if pop == "HIGH" and prof == "HIGH":
-                classif = "STAR"
+                classif = "ELITE"
                 recom = (
-                    "Manter e Destacar: treinar equipe para sugerir e manter a receita idêntica."
+                    "Manter e Destacar: Produto de alta performance. Treinar equipe para manter padrão de excelência."
                 )
             elif pop == "LOW" and prof == "HIGH":
-                classif = "PUZZLE"
-                recom = "Promover: reduzir preço levemente ou destacar visibilidade no cardápio."
+                classif = "OPORTUNIDADE"
+                recom = "Promover: Alta margem com baixo giro. Avaliar ações de marketing ou ajuste estratégico de preço."
             elif pop == "HIGH" and prof == "LOW":
-                classif = "PLOWHORSE"
-                recom = "Reengenharia de Custos: renegociar insumos ou ajustar preço para elevar margem."
+                classif = "ALTO_VOLUME"
+                recom = "Otimização de Custos: Alta demanda com baixa margem. Renegociar insumos para elevar rentabilidade."
             else:
-                classif = "DOG"
-                recom = "Substituir ou Reformular: remover do cardápio ou reformular com novos ingredientes."
+                classif = "BAIXO_DESEMPENHO"
+                recom = "Substituir ou Reformular: Baixa performance global. Avaliar exclusão ou renovação total do item."
 
             item["popularity"] = pop
             item["profitability"] = prof

@@ -1,6 +1,7 @@
 import {
   Activity,
   AlertTriangle,
+  Calendar,
   CheckCircle,
   Clock,
   DollarSign,
@@ -10,6 +11,7 @@ import {
   Sliders,
   TrendingUp,
   Utensils,
+  X,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import {
@@ -85,7 +87,7 @@ interface MenuMatrixItem {
   margin: number
   popularity: 'HIGH' | 'LOW'
   profitability: 'HIGH' | 'LOW'
-  classification: 'STAR' | 'PUZZLE' | 'PLOWHORSE' | 'DOG'
+  classification: 'ELITE' | 'OPORTUNIDADE' | 'ALTO_VOLUME' | 'BAIXO_DESEMPENHO'
   recommendation: string
 }
 
@@ -141,11 +143,11 @@ interface MenuMatrixTableRowProps {
 
 function MenuMatrixTableRow({ item }: MenuMatrixTableRowProps) {
   let badgeStyle = ''
-  if (item.classification === 'STAR') {
+  if (item.classification === 'ELITE') {
     badgeStyle = 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
-  } else if (item.classification === 'PUZZLE') {
+  } else if (item.classification === 'OPORTUNIDADE') {
     badgeStyle = 'bg-brand-500/10 text-brand-400 border border-brand-500/20'
-  } else if (item.classification === 'PLOWHORSE') {
+  } else if (item.classification === 'ALTO_VOLUME') {
     badgeStyle = 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
   } else {
     badgeStyle = 'bg-red-500/10 text-red-400 border border-red-500/20'
@@ -166,9 +168,9 @@ function MenuMatrixTableRow({ item }: MenuMatrixTableRowProps) {
       </td>
       <td className="py-3.5 px-4 text-center">
         <span
-          className={`inline-block px-2 py-0.5 text-[9px] font-extrabold rounded-md ${badgeStyle}`}
+          className={`inline-block px-2 py-0.5 text-[8px] font-extrabold rounded-md whitespace-nowrap ${badgeStyle}`}
         >
-          {item.classification}
+          {item.classification.replace('_', ' ')}
         </span>
       </td>
       <td
@@ -995,20 +997,20 @@ function MarginSandbox({
 
 interface MenuMatrixTabViewProps {
   menuMatrix: MenuMatrixReport | null
-  stars: MenuMatrixItem[]
-  puzzles: MenuMatrixItem[]
-  plowhorses: MenuMatrixItem[]
-  dogs: MenuMatrixItem[]
+  eliteItems: MenuMatrixItem[]
+  oportunidadeItems: MenuMatrixItem[]
+  volumeItems: MenuMatrixItem[]
+  baixoDesempenhoItems: MenuMatrixItem[]
   combos: ComboRecommendation[] | null
   cannibalization: CannibalizationWarning[] | null
 }
 
 function MenuMatrixTabView({
   menuMatrix,
-  stars,
-  puzzles,
-  plowhorses,
-  dogs,
+  eliteItems,
+  oportunidadeItems,
+  volumeItems,
+  baixoDesempenhoItems,
   combos,
   cannibalization,
 }: MenuMatrixTabViewProps) {
@@ -1034,21 +1036,21 @@ function MenuMatrixTabView({
 
         {/* 2x2 Matrix UI */}
         <div className="grid gap-4 md:grid-cols-2">
-          {/* STAR - High Pop, High Profit */}
+          {/* ELITE - High Pop, High Profit */}
           <div className="border border-emerald-500/20 bg-emerald-950/5 rounded-2xl p-5 space-y-3">
             <div className="flex items-center justify-between border-b border-emerald-500/10 pb-2">
               <span className="text-xs font-extrabold uppercase text-emerald-400 tracking-wide flex items-center gap-1.5">
-                ⭐ STAR (Estrela)
+                💎 ELITE
               </span>
               <span className="text-[9px] bg-emerald-500/10 border border-emerald-500/20 text-emerald-300 font-bold px-2 py-0.5 rounded">
                 Alta Venda / Alta Margem
               </span>
             </div>
-            {stars.length === 0 ? (
+            {eliteItems.length === 0 ? (
               <p className="text-[11px] text-gray-555 italic">Sem itens neste quadrante</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
-                {stars.map((item) => (
+                {eliteItems.map((item) => (
                   <span
                     key={item.menu_item_id}
                     className="text-[10px] font-bold bg-gray-900 border border-gray-800 text-white px-2 py-1 rounded-lg"
@@ -1060,21 +1062,21 @@ function MenuMatrixTabView({
             )}
           </div>
 
-          {/* PUZZLE - Low Pop, High Profit */}
+          {/* OPORTUNIDADE - Low Pop, High Profit */}
           <div className="border border-brand-500/20 bg-brand-950/5 rounded-2xl p-5 space-y-3">
             <div className="flex items-center justify-between border-b border-brand-500/10 pb-2">
               <span className="text-xs font-extrabold uppercase text-brand-400 tracking-wide flex items-center gap-1.5">
-                🧩 PUZZLE (Enigma)
+                🚀 OPORTUNIDADE
               </span>
               <span className="text-[9px] bg-brand-500/10 border border-brand-500/20 text-brand-300 font-bold px-2 py-0.5 rounded">
                 Baixa Venda / Alta Margem
               </span>
             </div>
-            {puzzles.length === 0 ? (
+            {oportunidadeItems.length === 0 ? (
               <p className="text-[11px] text-gray-555 italic">Sem itens neste quadrante</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
-                {puzzles.map((item) => (
+                {oportunidadeItems.map((item) => (
                   <span
                     key={item.menu_item_id}
                     className="text-[10px] font-bold bg-gray-900 border border-gray-800 text-white px-2 py-1 rounded-lg"
@@ -1086,21 +1088,21 @@ function MenuMatrixTabView({
             )}
           </div>
 
-          {/* PLOWHORSE - High Pop, Low Profit */}
+          {/* ALTO VOLUME - High Pop, Low Profit */}
           <div className="border border-amber-500/20 bg-amber-950/5 rounded-2xl p-5 space-y-3">
             <div className="flex items-center justify-between border-b border-amber-500/10 pb-2">
               <span className="text-xs font-extrabold uppercase text-amber-400 tracking-wide flex items-center gap-1.5">
-                🐎 PLOWHORSE (Burro de Carga)
+                📈 ALTO VOLUME
               </span>
               <span className="text-[9px] bg-amber-500/10 border border-amber-500/20 text-amber-300 font-bold px-2 py-0.5 rounded">
                 Alta Venda / Baixa Margem
               </span>
             </div>
-            {plowhorses.length === 0 ? (
+            {volumeItems.length === 0 ? (
               <p className="text-[11px] text-gray-555 italic">Sem itens neste quadrante</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
-                {plowhorses.map((item) => (
+                {volumeItems.map((item) => (
                   <span
                     key={item.menu_item_id}
                     className="text-[10px] font-bold bg-gray-900 border border-gray-800 text-white px-2 py-1 rounded-lg"
@@ -1112,21 +1114,21 @@ function MenuMatrixTabView({
             )}
           </div>
 
-          {/* DOG - Low Pop, Low Profit */}
+          {/* BAIXO DESEMPENHO - Low Pop, Low Profit */}
           <div className="border border-red-500/20 bg-red-950/5 rounded-2xl p-5 space-y-3">
             <div className="flex items-center justify-between border-b border-red-500/10 pb-2">
               <span className="text-xs font-extrabold uppercase text-red-400 tracking-wide flex items-center gap-1.5">
-                🐕 DOG (Cachorro)
+                ⚠️ BAIXO DESEMPENHO
               </span>
               <span className="text-[9px] bg-red-500/10 border border-red-500/20 text-red-300 font-bold px-2 py-0.5 rounded">
                 Baixa Venda / Baixa Margem
               </span>
             </div>
-            {dogs.length === 0 ? (
+            {baixoDesempenhoItems.length === 0 ? (
               <p className="text-[11px] text-gray-555 italic">Sem itens neste quadrante</p>
             ) : (
               <div className="flex flex-wrap gap-1.5">
-                {dogs.map((item) => (
+                {baixoDesempenhoItems.map((item) => (
                   <span
                     key={item.menu_item_id}
                     className="text-[10px] font-bold bg-gray-900 border border-gray-800 text-white px-2 py-1 rounded-lg"
@@ -1293,12 +1295,22 @@ function MenuMatrixTabView({
 import { useQuery, keepPreviousData } from '@tanstack/react-query'
 
 export default function AnalyticsDashboard() {
-  const [period, setPeriod] = useState<'day' | 'week' | 'month'>('day')
+  const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'custom'>('day')
+  const [startDate, setStartDate] = useState<string>('')
+  const [endDate, setEndDate] = useState<string>('')
   const [activeTab, setActiveTab] = useState<'general' | 'kitchen' | 'menu-matrix'>('general')
 
   const { data, isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ['analytics', period],
+    queryKey: ['analytics', period, startDate, endDate],
     queryFn: async () => {
+      const params: Record<string, string> = { period }
+      if (period === 'custom' && startDate) {
+        params.start_date = new Date(startDate).toISOString()
+        if (endDate) {
+          params.end_date = new Date(endDate).toISOString()
+        }
+      }
+
       const [
         statsRes,
         salesRes,
@@ -1311,15 +1323,15 @@ export default function AnalyticsDashboard() {
         combosRes,
         cannibalRes,
       ] = await Promise.all([
-        httpClient.get<DashboardStats>('/v1/analytics/dashboard', { params: { period } }),
-        httpClient.get<SalesReport>('/v1/analytics/sales', { params: { period } }),
-        httpClient.get<KitchenPerformance>('/v1/analytics/kitchen', { params: { period } }),
-        httpClient.get<MenuMatrixReport>('/v1/analytics/menu-matrix', { params: { period } }),
-        httpClient.get<OrderInsights>('/v1/analytics/orders', { params: { period } }),
+        httpClient.get<DashboardStats>('/v1/analytics/dashboard', { params }),
+        httpClient.get<SalesReport>('/v1/analytics/sales', { params }),
+        httpClient.get<KitchenPerformance>('/v1/analytics/kitchen', { params }),
+        httpClient.get<MenuMatrixReport>('/v1/analytics/menu-matrix', { params }),
+        httpClient.get<OrderInsights>('/v1/analytics/orders', { params }),
         httpClient.get<DemandForecast[]>('/v1/analytics/demand-forecast'),
-        httpClient.get<OrderFunnel>('/v1/analytics/order-funnel', { params: { period } }),
+        httpClient.get<OrderFunnel>('/v1/analytics/order-funnel', { params }),
         httpClient.get<TablePerformance[]>('/v1/analytics/table-performance', {
-          params: { period },
+          params,
         }),
         httpClient.get<ComboRecommendation[]>('/v1/analytics/combo-recommendations'),
         httpClient.get<CannibalizationWarning[]>('/v1/analytics/cannibalization-warnings'),
@@ -1388,10 +1400,10 @@ export default function AnalyticsDashboard() {
   const chartColors = ['#f97316', '#8b5cf6', '#06b6d4', '#10b981', '#f43f5e']
 
   // Categorized matrix items
-  const stars = menuMatrix?.items.filter((i) => i.classification === 'STAR') || []
-  const puzzles = menuMatrix?.items.filter((i) => i.classification === 'PUZZLE') || []
-  const plowhorses = menuMatrix?.items.filter((i) => i.classification === 'PLOWHORSE') || []
-  const dogs = menuMatrix?.items.filter((i) => i.classification === 'DOG') || []
+  const eliteItems = menuMatrix?.items.filter((i) => i.classification === 'ELITE') || []
+  const oportunidadeItems = menuMatrix?.items.filter((i) => i.classification === 'OPORTUNIDADE') || []
+  const volumeItems = menuMatrix?.items.filter((i) => i.classification === 'ALTO_VOLUME') || []
+  const baixoDesempenhoItems = menuMatrix?.items.filter((i) => i.classification === 'BAIXO_DESEMPENHO') || []
 
   return (
     <div className="space-y-6">
@@ -1405,30 +1417,69 @@ export default function AnalyticsDashboard() {
             Engenharia de cardápio, produtividade por estação e faturamento em tempo real
           </p>
         </div>
-
         {/* Filters */}
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col sm:flex-row items-end sm:items-center gap-3">
+          {period === 'custom' && (
+            <div className="flex items-center gap-2 animate-fade-in">
+              <div className="relative group">
+                <input
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                  className="bg-gray-950/40 border border-gray-900 rounded-xl px-3 py-1.5 text-[10px] font-bold text-white focus:border-brand-500 outline-none transition-all"
+                />
+                <span className="absolute -top-4 left-1 text-[8px] uppercase font-black text-gray-600 group-focus-within:text-brand-500">
+                  Início
+                </span>
+              </div>
+              <span className="text-gray-700 text-xs font-black">/</span>
+              <div className="relative group">
+                <input
+                  type="date"
+                  value={endDate}
+                  onChange={(e) => setEndDate(e.target.value)}
+                  className="bg-gray-950/40 border border-gray-900 rounded-xl px-3 py-1.5 text-[10px] font-bold text-white focus:border-brand-500 outline-none transition-all"
+                />
+                <span className="absolute -top-4 left-1 text-[8px] uppercase font-black text-gray-600 group-focus-within:text-brand-500">
+                  Fim
+                </span>
+              </div>
+              {startDate && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setStartDate('')
+                    setEndDate('')
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-gray-900 text-gray-600 hover:text-rose-400 transition"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+          )}
           <div className="flex bg-gray-950/40 border border-gray-900 rounded-xl p-1">
             {[
               { id: 'day', label: 'Hoje' },
               { id: 'week', label: 'Semana' },
               { id: 'month', label: 'Mês' },
+              { id: 'custom', label: 'Personalizado', icon: Calendar },
             ].map((p) => (
               <button
                 type="button"
                 key={p.id}
-                onClick={() => setPeriod(p.id as 'day' | 'week' | 'month')}
-                className={`rounded-lg px-3.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider transition-all duration-300 ${
+                onClick={() => setPeriod(p.id as 'day' | 'week' | 'month' | 'custom')}
+                className={`rounded-lg px-3.5 py-1.5 text-[10px] font-extrabold uppercase tracking-wider transition-all duration-300 flex items-center gap-1.5 ${
                   period === p.id
                     ? 'bg-brand-500 text-white shadow-md shadow-brand-500/10'
                     : 'text-gray-400 hover:text-gray-200'
                 }`}
               >
+                {p.icon && <p.icon className="h-3 w-3" />}
                 {p.label}
               </button>
             ))}
           </div>
-
           <button
             type="button"
             onClick={() => refetch()}
@@ -1439,7 +1490,6 @@ export default function AnalyticsDashboard() {
           </button>
         </div>
       </div>
-
       {/* Tabs Navigation */}
       <div className="flex border-b border-gray-900">
         {[
@@ -1465,7 +1515,6 @@ export default function AnalyticsDashboard() {
           )
         })}
       </div>
-
       {isFetching && !stats ? (
         <div className="flex py-24 justify-center items-center gap-2.5">
           <Loader2 className="h-6 w-6 animate-spin text-brand-400" />
@@ -1489,7 +1538,6 @@ export default function AnalyticsDashboard() {
               tablePerf={tablePerf}
             />
           )}
-
           {activeTab === 'kitchen' && (
             <KitchenTabView
               kitchenStats={kitchenStats}
@@ -1497,14 +1545,13 @@ export default function AnalyticsDashboard() {
               isLoading={isLoading}
             />
           )}
-
           {activeTab === 'menu-matrix' && (
             <MenuMatrixTabView
               menuMatrix={menuMatrix}
-              stars={stars}
-              puzzles={puzzles}
-              plowhorses={plowhorses}
-              dogs={dogs}
+              eliteItems={eliteItems}
+              oportunidadeItems={oportunidadeItems}
+              volumeItems={volumeItems}
+              baixoDesempenhoItems={baixoDesempenhoItems}
               combos={combos}
               cannibalization={cannibalization}
             />

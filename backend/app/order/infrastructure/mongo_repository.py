@@ -51,7 +51,7 @@ class OrderHistoryMongoRepository:
         doc = {
             "order_id": order.id,
             "tenant_id": order.tenant_id,
-            "total": str(order.total().amount),
+            "total": float(order.total().amount),
             "state": order.state.name,
             "fulfillment": fulfillment_data,
             "items": [
@@ -59,15 +59,15 @@ class OrderHistoryMongoRepository:
                     "id": item.id,
                     "menu_item_id": item.menu_item_id,
                     "name": item.name_cpy,
-                    "price": str(item.price_cpy.amount),
+                    "price": float(item.price_cpy.amount),
                     "station_type": item.station_type_cpy,
                     "quantity": item.quantity,
                     "notes": item.notes,
-                    "subtotal": str(item.calculate_subtotal().amount),
+                    "subtotal": float(item.calculate_subtotal().amount),
                 }
                 for item in order.items
             ],
-            "closed_at": datetime.datetime.now(datetime.UTC).isoformat(),
+            "closed_at": datetime.datetime.now(datetime.UTC),
         }
 
         await self._collection.insert_one(doc)
@@ -86,12 +86,18 @@ class OrderHistoryMongoRepository:
         self, 
         tenant_id: str, 
         limit: int = 1000,
-        start_date: str | None = None
+        start_date: str | None = None,
+        end_date: str | None = None
     ) -> list[dict[str, Any]]:
         """Finds completed order documents for a tenant, sorted by closed_at desc."""
         query: dict[str, Any] = {"tenant_id": tenant_id}
-        if start_date:
-            query["closed_at"] = {"$gte": start_date}
+        if start_date or end_date:
+            date_query: dict[str, str] = {}
+            if start_date:
+                date_query["$gte"] = start_date
+            if end_date:
+                date_query["$lte"] = end_date
+            query["closed_at"] = date_query
 
         cursor = self._collection.find(query, {"_id": 0}).sort("closed_at", -1)
         res = await cursor.to_list(length=limit)

@@ -445,7 +445,9 @@ export default function HistoryPage() {
   const [history, setHistory] = useState<OrderHistory[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'all'>('all')
+  const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'all' | 'custom'>('all')
+  const [customStartDate, setCustomStartDate] = useState<string>('')
+  const [customEndDate, setCustomEndDate] = useState<string>('')
   const [selectedOrder, setSelectedOrder] = useState<OrderHistory | null>(null)
   const [isRefunding, setIsRefunding] = useState(false)
   const [refundConfirmId, setRefundConfirmId] = useState<number | null>(null)
@@ -466,6 +468,14 @@ export default function HistoryPage() {
         const d = new Date()
         d.setDate(d.getDate() - 30)
         params = `?start_date=${d.toISOString()}&limit=10000`
+      } else if (periodFilter === 'custom' && customStartDate) {
+        const start = new Date(customStartDate).toISOString()
+        params = `?start_date=${start}&limit=10000`
+        if (customEndDate) {
+          const end = new Date(customEndDate)
+          end.setHours(23, 59, 59, 999)
+          params += `&end_date=${end.toISOString()}`
+        }
       } else {
         params = '?limit=10000'
       }
@@ -623,7 +633,7 @@ export default function HistoryPage() {
           </div>
 
           <div className="flex bg-[#0b0b11] border border-gray-850 p-1 rounded-xl self-start md:self-auto">
-            {(['today', 'week', 'month', 'all'] as const).map((period) => (
+            {(['today', 'week', 'month', 'all', 'custom'] as const).map((period) => (
               <button
                 key={period}
                 type="button"
@@ -640,11 +650,71 @@ export default function HistoryPage() {
                     ? '7 Dias'
                     : period === 'month'
                       ? '30 Dias'
-                      : 'Tudo'}
+                      : period === 'custom'
+                        ? 'Personalizado'
+                        : 'Tudo'}
               </button>
             ))}
           </div>
         </div>
+
+        {periodFilter === 'custom' && (
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 p-4 rounded-2xl border border-gray-900/60 bg-gray-950/20 animate-fade-in">
+            <div className="flex items-center gap-3">
+              <Calendar className="h-4 w-4 text-brand-400" />
+              <span className="text-[10px] uppercase font-black text-gray-500 tracking-widest">
+                Intervalo Customizado:
+              </span>
+            </div>
+            
+            <div className="flex items-center gap-2">
+              <div className="relative group">
+                <input
+                  type="date"
+                  value={customStartDate}
+                  onChange={(e) => setCustomStartDate(e.target.value)}
+                  className="bg-gray-900/40 border border-gray-850 rounded-xl px-3 py-2 text-xs font-bold text-white focus:border-brand-500 outline-none transition-all"
+                />
+                <span className="absolute -top-4 left-1 text-[8px] uppercase font-black text-gray-600 group-focus-within:text-brand-500">
+                  Data Inicial
+                </span>
+              </div>
+              <span className="text-gray-700 text-xs font-black">/</span>
+              <div className="relative group">
+                <input
+                  type="date"
+                  value={customEndDate}
+                  onChange={(e) => setCustomEndDate(e.target.value)}
+                  className="bg-gray-900/40 border border-gray-850 rounded-xl px-3 py-2 text-xs font-bold text-white focus:border-brand-500 outline-none transition-all"
+                />
+                <span className="absolute -top-4 left-1 text-[8px] uppercase font-black text-gray-600 group-focus-within:text-brand-500">
+                  Data Final
+                </span>
+              </div>
+              
+              <button
+                type="button"
+                onClick={() => {
+                  setCustomStartDate('')
+                  setCustomEndDate('')
+                  setPeriodFilter('all')
+                }}
+                className="p-2 rounded-xl hover:bg-gray-900 text-gray-500 hover:text-rose-400 transition ml-2 border border-gray-855"
+                title="Limpar Filtro"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={fetchHistory}
+              className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-[10px] font-black uppercase rounded-xl transition shadow-lg shadow-brand-500/20"
+            >
+              Aplicar Filtro
+            </button>
+          </div>
+        )}
 
         <div className="grid grid-cols-1 xl:grid-cols-3 gap-6">
           <div className="xl:col-span-2 space-y-4">

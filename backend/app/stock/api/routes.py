@@ -582,45 +582,89 @@ async def check_recipes_availability(
     tenant_id: CurrentTenantId,
     _current_employee: CurrentEmployee,
 ) -> RecipeAvailabilityResponseSchema:
-    item_repo = SQLAlchemyStockItemRepository(db)
-    recipe_repo = SQLAlchemyRecipeRepository(db, item_repo)
+    from sqlalchemy import func
+    from app.stock.infrastructure.orm_models import RecipeORM, RecipeIngredientORM, StockItemORM, StockTransactionORM
+    from app.stock.domain.converters import MetricConverter, ImperialConverter
 
-    stmt = select(RecipeORM.menu_item_id).where(RecipeORM.tenant_id == tenant_id)
-    result = await db.execute(stmt)
-    menu_item_ids = list(result.scalars().all())
+    # 1. Fetch all recipes and their ingredients for this tenant in one go
+    recipe_stmt = (
+        select(RecipeORM.menu_item_id, RecipeIngredientORM.stock_item_id, RecipeIngredientORM.quantity_value, RecipeIngredientORM.quantity_unit)
+        .join(RecipeIngredientORM, RecipeORM.id == RecipeIngredientORM.recipe_id)
+        .where(RecipeORM.tenant_id == tenant_id)
+    )
+    recipe_res = await db.execute(recipe_stmt)
+    rows = recipe_res.all()
 
-    availability: dict[int, bool] = {}
-    for menu_item_id in menu_item_ids:
-        recipe = await recipe_repo.find_by_menu_item(menu_item_id, tenant_id)
-        if not recipe:
-            continue
+    # Initialise availability for ALL menu items found in recipes (at minimum)
+    # Better yet: get ALL menu items for the tenant to ensure we don't return an empty dict
+    menu_items_stmt = select(RecipeORM.menu_item_id).where(RecipeORM.tenant_id == tenant_id)
+    all_menu_items_res = await db.execute(menu_items_stmt)
+    availability: dict[int, bool] = {mid: True for mid in all_menu_items_res.scalars().all()}
 
+    if not rows:
+        return RecipeAvailabilityResponseSchema(availability=availability)
+
+    # Group by menu_item_id: {menu_item_id: [(stock_item_id, qty, unit), ...]}
+    recipes_map: dict[int, list[tuple[int, float, str]]] = {}
+    needed_stock_ids = set()
+    for mid, sid, val, unit in rows:
+        if mid not in recipes_map:
+            recipes_map[mid] = []
+        recipes_map[mid].append((sid, float(val), unit))
+        needed_stock_ids.add(sid)
+
+    # 2. Fetch current balances for all needed stock items using SQL aggregation
+    # Use LEFT JOIN to ensure we get the item even if it has 0 transactions
+    from sqlalchemy import case
+    balance_stmt = (
+        select(
+            StockItemORM.id,
+            StockItemORM.unit,
+            func.sum(
+                case(
+                    (StockTransactionORM.transaction_type.in_(["INPUT", "PRODUCTION", "ADJUSTMENT"]), StockTransactionORM.quantity_value),
+                    (StockTransactionORM.transaction_type.in_(["OUTPUT", "WASTE"]), -StockTransactionORM.quantity_value),
+                    else_=0
+                )
+            ).label("balance")
+        )
+        .outerjoin(StockTransactionORM, StockItemORM.id == StockTransactionORM.stock_item_id)
+        .where(StockItemORM.id.in_(needed_stock_ids))
+        .group_by(StockItemORM.id, StockItemORM.unit)
+    )
+    balance_res = await db.execute(balance_stmt)
+    balances = {row.id: (float(row.balance or 0), row.unit) for row in balance_res.all()}
+
+    # 3. Calculate availability
+    metric = MetricConverter()
+    imperial = ImperialConverter()
+
+    for menu_item_id, ingredients in recipes_map.items():
         has_sufficient = True
-        for ing in recipe.get_ingredients():
-            balance = ing.stock_item.get_balance()
-            required = ing.quantity
-
-            if balance.unit == required.unit:
-                if balance.value < required.value:
+        for sid, req_val, req_unit in ingredients:
+            if sid not in balances:
+                has_sufficient = False
+                break
+            
+            curr_bal, curr_unit = balances[sid]
+            
+            if curr_unit == req_unit:
+                if curr_bal < req_val:
                     has_sufficient = False
                     break
             else:
                 try:
-                    converted_val = MetricConverter().convert(
-                        balance.value, balance.unit, required.unit
-                    )
+                    converted_val = metric.convert(curr_bal, curr_unit, req_unit)
                 except ValueError:
                     try:
-                        converted_val = ImperialConverter().convert(
-                            balance.value, balance.unit, required.unit
-                        )
+                        converted_val = imperial.convert(curr_bal, curr_unit, req_unit)
                     except ValueError:
                         has_sufficient = False
                         break
-                if converted_val < required.value:
+                if converted_val < req_val:
                     has_sufficient = False
                     break
-
+        
         availability[menu_item_id] = has_sufficient
 
     return RecipeAvailabilityResponseSchema(availability=availability)
