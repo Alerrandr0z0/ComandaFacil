@@ -105,27 +105,7 @@ class ReceiveKitchenOrderItemListener:
 
             kitchen_repo = SQLAlchemyKitchenOrderItemRepository(session)
             try:
-                notes_cond = (
-                    or_(
-                        KitchenOrderItemORM.notes.is_(None),
-                        KitchenOrderItemORM.notes == "",
-                    )
-                    if not event.notes
-                    else KitchenOrderItemORM.notes == event.notes
-                )
-
-                stmt = (
-                    select(KitchenOrderItemORM)
-                    .where(
-                        KitchenOrderItemORM.state == "SURPLUS",
-                        KitchenOrderItemORM.name_cpy == menu_item.name,
-                        KitchenOrderItemORM.tenant_id == event.tenant_id,
-                        notes_cond,
-                    )
-                    .order_by(KitchenOrderItemORM.id.asc())
-                )
-                result = await session.execute(stmt)
-                surplus_orms = list(result.scalars().all())
+                surplus_orms = await self._fetch_surplus_orms(session, event, menu_item.name)
 
                 items_created: list[KitchenOrderItem] = []
                 for _ in range(event.quantity):
@@ -135,22 +115,47 @@ class ReceiveKitchenOrderItemListener:
                     items_created.append(item)
 
                 await session.commit()
-
-                # Sync to MongoDB read models
-                try:
-                    mongo = database.get_mongo_db()
-                except RuntimeError:
-                    mongo = None
-
-                if mongo is not None:
-                    sync = KitchenReadModelSync(mongo)
-                    for item in items_created:
-                        await sync.sync(item, menu_item_id=menu_item.id)
+                await self._sync_read_models(items_created, menu_item.id)
 
             except Exception as e:
                 logger.error(
                     f"Failed to receive kitchen order item for event {event}: {e}", exc_info=True
                 )
+
+    async def _fetch_surplus_orms(
+        self, session: Any, event: OrderItemAdded, item_name: str
+    ) -> list[KitchenOrderItemORM]:
+        notes_cond = (
+            or_(
+                KitchenOrderItemORM.notes.is_(None),
+                KitchenOrderItemORM.notes == "",
+            )
+            if not event.notes
+            else KitchenOrderItemORM.notes == event.notes
+        )
+
+        stmt = (
+            select(KitchenOrderItemORM)
+            .where(
+                KitchenOrderItemORM.state == "SURPLUS",
+                KitchenOrderItemORM.name_cpy == item_name,
+                KitchenOrderItemORM.tenant_id == event.tenant_id,
+                notes_cond,
+            )
+            .order_by(KitchenOrderItemORM.id.asc())
+        )
+        result = await session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def _sync_read_models(self, items: list[KitchenOrderItem], menu_item_id: int) -> None:
+        try:
+            mongo = database.get_mongo_db()
+        except RuntimeError:
+            return
+
+        sync = KitchenReadModelSync(mongo)
+        for item in items:
+            await sync.sync(item, menu_item_id=menu_item_id)
 
 
 class CancelKitchenOrderItemListener:
@@ -219,44 +224,47 @@ class CancelKitchenOrderItemListener:
                 )
 
                 await session.commit()
-
-                # Synchronize MongoDB read models
-                try:
-                    mongo = database.get_mongo_db()
-                except RuntimeError:
-                    mongo = None
-
-                if mongo is not None:
-                    if delete_ids:
-                        await mongo["kitchen_read"].delete_many(
-                            {
-                                "kitchen_item_id": {"$in": delete_ids},
-                                "tenant_id": event.tenant_id,
-                            }
-                        )
-                    sync = KitchenReadModelSync(mongo)
-                    for k_item in items_to_sync:
-                        await sync.sync(k_item)
-
-                # Broadcast websocket events
-                for k_item in items_to_sync:
-                    with contextlib.suppress(Exception):
-                        await kds_ws_manager.broadcast_to_station(
-                            tenant_id=event.tenant_id,
-                            station_type=k_item.station_type_cpy,
-                            event_data={
-                                "event": "ITEM_CANCEL_REQUESTED",
-                                "item": {
-                                    "id": k_item.id,
-                                    "correlation_id": k_item.correlation_id,
-                                    "state": k_item.state.name,
-                                },
-                            },
-                        )
+                await self._sync_read_models(event.tenant_id, items_to_sync, delete_ids)
+                await self._broadcast_cancellations(event.tenant_id, items_to_sync)
 
             except Exception as e:
                 logger.error(
                     f"Failed to cancel kitchen order items for event {event}: {e}", exc_info=True
+                )
+
+    async def _sync_read_models(
+        self, tenant_id: str, items_to_sync: list[KitchenOrderItem], delete_ids: list[int]
+    ) -> None:
+        try:
+            mongo = database.get_mongo_db()
+        except RuntimeError:
+            return
+
+        if delete_ids:
+            await mongo["kitchen_read"].delete_many(
+                {"kitchen_item_id": {"$in": delete_ids}, "tenant_id": tenant_id}
+            )
+
+        sync = KitchenReadModelSync(mongo)
+        for k_item in items_to_sync:
+            await sync.sync(k_item)
+
+    async def _broadcast_cancellations(
+        self, tenant_id: str, items_to_sync: list[KitchenOrderItem]
+    ) -> None:
+        for k_item in items_to_sync:
+            with contextlib.suppress(Exception):
+                await kds_ws_manager.broadcast_to_station(
+                    tenant_id=tenant_id,
+                    station_type=k_item.station_type_cpy,
+                    event_data={
+                        "event": "ITEM_CANCEL_REQUESTED",
+                        "item": {
+                            "id": k_item.id,
+                            "correlation_id": k_item.correlation_id,
+                            "state": k_item.state.name,
+                        },
+                    },
                 )
 
 

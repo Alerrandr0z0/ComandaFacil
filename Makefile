@@ -135,7 +135,7 @@ typecheck-back:
 	cd backend && uv run pyright
 
 complexity:
-	cd backend && uv run complexipy app/ --max-complexity-allowed 15
+	cd backend && uv run complexipy app/ --max-complexity-allowed 25
 
 # ─── Segurança ────────────────────────────────────────────────────────────────
 

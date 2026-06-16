@@ -1,4 +1,5 @@
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import AsyncGenerator
+from typing import Any
 
 from motor.motor_asyncio import AsyncIOMotorClient, AsyncIOMotorDatabase
 from sqlalchemy.ext.asyncio import (
@@ -43,27 +44,13 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
         token = pending_events_var.set([])
         original_commit = session.commit
 
-        async def commit_with_events(
-            orig_commit: Callable[[], Awaitable[None]] = original_commit,
-        ) -> None:
-            # 1. Write outbox entries for syncable events (same transaction)
-            outbox_writer = OutboxWriter(session)
+        async def commit_with_events() -> None:
             events = pending_events_var.get()
             if events:
-                for event in events:
-                    mapped = serialize_event_for_outbox(event)
-                    if mapped is not None:
-                        await outbox_writer.add_entry(
-                            aggregate_type=mapped["aggregate_type"],
-                            aggregate_id=mapped["aggregate_id"],
-                            event_type=mapped["event_type"],
-                            payload=mapped["payload"],
-                        )
+                await _write_outbox_entries(session, events)
 
-            # 2. Commit business data + outbox entries atomically
-            await orig_commit()
+            await original_commit()
 
-            # 3. Dispatch domain events (audit listeners, etc.)
             if events:
                 pending_events_var.set([])
                 for event in events:
@@ -78,10 +65,27 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             await session.rollback()
             raise
         finally:
-            try:
-                pending_events_var.reset(token)
-            except ValueError:
-                pending_events_var.set(None)
+            _reset_pending_events(token)
+
+
+async def _write_outbox_entries(session: AsyncSession, events: list[Any]) -> None:
+    outbox_writer = OutboxWriter(session)
+    for event in events:
+        mapped = serialize_event_for_outbox(event)
+        if mapped is not None:
+            await outbox_writer.add_entry(
+                aggregate_type=mapped["aggregate_type"],
+                aggregate_id=mapped["aggregate_id"],
+                event_type=mapped["event_type"],
+                payload=mapped["payload"],
+            )
+
+
+def _reset_pending_events(token: Any) -> None:
+    try:
+        pending_events_var.reset(token)
+    except ValueError:
+        pending_events_var.set(None)
 
 
 # ─── MongoDB ──────────────────────────────────────────────────────────────────

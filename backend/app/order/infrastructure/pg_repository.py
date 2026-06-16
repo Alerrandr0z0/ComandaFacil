@@ -73,7 +73,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
         orms = result.scalars().all()
         return [self._map_to_domain(o) for o in orms]
 
-    async def save(self, order: OrderForm) -> None:  # noqa: C901
+    async def save(self, order: OrderForm) -> None:
         stmt = (
             select(OrderFormORM)
             .where(OrderFormORM.id == order.id, OrderFormORM.tenant_id == order.tenant_id)
@@ -101,14 +101,23 @@ class SQLAlchemyOrderRepository(OrderRepository):
             orm = OrderFormORM(**orm_kwargs)
             self._session.add(orm)
 
-        # Map fulfillment strategy fields
         self._map_strategy_to_orm(orm, order.fulfillment_strategy)
+        new_item_orms = self._populate_items(orm, order)
 
-        # Re-populate items
+        await self._session.flush()
+
+        if order.id == 0:
+            order.id = orm.id
+            if order.display_code == "0":
+                order.display_code = str(orm.id)
+                orm.display_code = order.display_code
+
+        newly_created_map = self._sync_item_ids(order, new_item_orms)
+        self._process_events_with_ids(order, newly_created_map)
+
+    def _populate_items(self, orm: OrderFormORM, order: OrderForm) -> list[OrderFormItemORM]:
         new_item_orms: list[OrderFormItemORM] = []
-        newly_created_map: dict[tuple[int, str], int] = {}
         for item in order.items:
-            is_new = item.id == 0
             item_kwargs: dict[str, object] = {
                 "order_id": order.id,
                 "menu_item_id": item.menu_item_id,
@@ -121,28 +130,26 @@ class SQLAlchemyOrderRepository(OrderRepository):
                 "notes": item.notes,
                 "status": item.status.value,
             }
-            if not is_new:
+            if item.id != 0:
                 item_kwargs["id"] = item.id
             item_orm = OrderFormItemORM(**item_kwargs)
             orm.items.append(item_orm)
             new_item_orms.append(item_orm)
+        return new_item_orms
 
-        await self._session.flush()
-
-        # Update domain order ID if it was auto-generated
-        if order.id == 0:
-            order.id = orm.id
-            if order.display_code == "0":
-                order.display_code = str(orm.id)
-                orm.display_code = order.display_code
-
-        # Update domain item IDs from auto-generated ORM IDs
+    def _sync_item_ids(
+        self, order: OrderForm, new_item_orms: list[OrderFormItemORM]
+    ) -> dict[tuple[int, str], int]:
+        newly_created_map: dict[tuple[int, str], int] = {}
         for domain_item, item_orm in zip(order.items, new_item_orms, strict=True):
             if domain_item.id == 0:
                 domain_item.id = item_orm.id
                 newly_created_map[(domain_item.menu_item_id, domain_item.notes or "")] = item_orm.id
+        return newly_created_map
 
-        # Map auto-generated IDs onto OrderItemAdded domain events
+    def _process_events_with_ids(
+        self, order: OrderForm, newly_created_map: dict[tuple[int, str], int]
+    ) -> None:
         raw_events = order.collect_events()
         processed_events = []
         for ev in raw_events:

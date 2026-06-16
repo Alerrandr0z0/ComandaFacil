@@ -146,71 +146,12 @@ class MongoAnalyticsRepository:
         by_cat = await orders_coll.aggregate(cat_pipe).to_list(None)
 
         # Fetch sales trends
-        trends: list[dict[str, Any]] = []
         if period == AnalyticsPeriod.DAY:
-            trend_pipe = [
-                {"$match": match},
-                {
-                    "$group": {
-                        "_id": {"$hour": {"date": "$created_at", "timezone": "-03:00"}},
-                        "total": {"$sum": "$total"},
-                    }
-                },
-                {"$sort": {"_id": 1}},
-            ]
-            trend_results = await orders_coll.aggregate(trend_pipe).to_list(None)
-            for r in trend_results:
-                hour_val = r.get("_id")
-                try:
-                    hour_int = int(hour_val) if hour_val is not None else 0
-                    time_str = f"{hour_int:02d}:00"
-                except (ValueError, TypeError):
-                    time_str = f"{hour_val}:00" if hour_val else "00:00"
-                trends.append({"time": time_str, "total": float(r.get("total", 0.0))})
+            trends = await self._get_daily_trends(orders_coll, match)
         elif period == AnalyticsPeriod.WEEK:
-            trend_pipe = [
-                {"$match": match},
-                {
-                    "$group": {
-                        "_id": {"$dayOfWeek": {"date": "$created_at", "timezone": "-03:00"}},
-                        "total": {"$sum": "$total"},
-                    }
-                },
-                {"$sort": {"_id": 1}},
-            ]
-            trend_results = await orders_coll.aggregate(trend_pipe).to_list(None)
-            dow_names = {
-                1: "Dom",
-                2: "Seg",
-                3: "Ter",
-                4: "Qua",
-                5: "Qui",
-                6: "Sex",
-                7: "Sáb",
-            }
-            trends = [
-                {
-                    "time": dow_names.get(r.get("_id"), str(r.get("_id"))),
-                    "total": float(r.get("total", 0.0)),
-                }
-                for r in trend_results
-            ]
+            trends = await self._get_weekly_trends(orders_coll, match)
         else:  # MONTH
-            trend_pipe = [
-                {"$match": match},
-                {
-                    "$group": {
-                        "_id": {"$week": {"date": "$created_at", "timezone": "-03:00"}},
-                        "total": {"$sum": "$total"},
-                    }
-                },
-                {"$sort": {"_id": 1}},
-            ]
-            trend_results = await orders_coll.aggregate(trend_pipe).to_list(None)
-            trends = [
-                {"time": f"Semana {i + 1}", "total": float(r.get("total", 0.0))}
-                for i, r in enumerate(trend_results)
-            ]
+            trends = await self._get_monthly_trends(orders_coll, match)
 
         total_sales = stats[0]["total_sales"] if stats else 0
         total_orders = stats[0]["total_orders"] if stats else 0
@@ -224,6 +165,68 @@ class MongoAnalyticsRepository:
             by_category={c["_id"]: Decimal(str(c["total"])) for c in by_cat},
             trends=trends,
         )
+
+    async def _get_daily_trends(self, coll: Any, match: dict[str, Any]) -> list[dict[str, Any]]:
+        trend_pipe = [
+            {"$match": match},
+            {
+                "$group": {
+                    "_id": {"$hour": {"date": "$created_at", "timezone": "-03:00"}},
+                    "total": {"$sum": "$total"},
+                }
+            },
+            {"$sort": {"_id": 1}},
+        ]
+        results = await coll.aggregate(trend_pipe).to_list(None)
+        trends = []
+        for r in results:
+            hour_val = r.get("_id")
+            try:
+                hour_int = int(hour_val) if hour_val is not None else 0
+                time_str = f"{hour_int:02d}:00"
+            except (ValueError, TypeError):
+                time_str = f"{hour_val}:00" if hour_val else "00:00"
+            trends.append({"time": time_str, "total": float(r.get("total", 0.0))})
+        return trends
+
+    async def _get_weekly_trends(self, coll: Any, match: dict[str, Any]) -> list[dict[str, Any]]:
+        trend_pipe = [
+            {"$match": match},
+            {
+                "$group": {
+                    "_id": {"$dayOfWeek": {"date": "$created_at", "timezone": "-03:00"}},
+                    "total": {"$sum": "$total"},
+                }
+            },
+            {"$sort": {"_id": 1}},
+        ]
+        results = await coll.aggregate(trend_pipe).to_list(None)
+        dow_names = {1: "Dom", 2: "Seg", 3: "Ter", 4: "Qua", 5: "Qui", 6: "Sex", 7: "Sáb"}
+        return [
+            {
+                "time": dow_names.get(r.get("_id"), str(r.get("_id"))),
+                "total": float(r.get("total", 0.0)),
+            }
+            for r in results
+        ]
+
+    async def _get_monthly_trends(self, coll: Any, match: dict[str, Any]) -> list[dict[str, Any]]:
+        trend_pipe = [
+            {"$match": match},
+            {
+                "$group": {
+                    "_id": {"$week": {"date": "$created_at", "timezone": "-03:00"}},
+                    "total": {"$sum": "$total"},
+                }
+            },
+            {"$sort": {"_id": 1}},
+        ]
+        results = await coll.aggregate(trend_pipe).to_list(None)
+        return [
+            {"time": f"Semana {i + 1}", "total": float(r.get("total", 0.0))}
+            for i, r in enumerate(results)
+        ]
+
 
     async def get_order_insights(
         self,
@@ -625,25 +628,45 @@ class MongoAnalyticsRepository:
                 "items_prepared": row.get("total_prepared") or 0,
             }
 
-        total_prepared = stats[0].get("total_prepared", 0) if stats else 0
-        completed = stats[0].get("completed", 0) if stats else 0
-        avg_prep_ms = stats[0].get("avg_prep_time", 0.0) if stats else 0.0
-        avg_queue_ms = stats[0].get("avg_queue_time", 0.0) if stats else 0.0
-        completion_rate = completed / total_prepared if total_prepared > 0 else 0.0
-
-        completed_under_15 = stats[0].get("completed_under_15", 0) if stats else 0
-        sla_compliance_rate = completed_under_15 / completed if completed > 0 else 0.0
-
-        std_dev_prep_ms = stats[0].get("std_dev_prep", 0.0) if stats else 0.0
-        if std_dev_prep_ms is None:
-            std_dev_prep_ms = 0.0
-
         throughput_trends = await self._get_throughput_trends(kitchen_coll, tenant_id, period, dr)
         bottlenecks = await self._get_bottlenecks(kitchen_coll, tenant_id, dr)
         queue_vs_prep_trends = await self._get_queue_vs_prep_trends(
             kitchen_coll, tenant_id, period, dr
         )
         waste_val, waste_cnt = await self._get_cancelled_waste(kitchen_coll, tenant_id, dr)
+
+        return self._map_kitchen_performance(
+            stats[0] if stats else {},
+            by_station,
+            throughput_trends,
+            bottlenecks,
+            queue_vs_prep_trends,
+            waste_val,
+            waste_cnt,
+            period,
+        )
+
+    def _map_kitchen_performance(
+        self,
+        stats_row: dict[str, Any],
+        by_station: dict[str, Any],
+        throughput_trends: list[dict[str, Any]],
+        bottlenecks: list[dict[str, Any]],
+        queue_vs_prep_trends: list[dict[str, Any]],
+        waste_val: float,
+        waste_cnt: int,
+        period: AnalyticsPeriod,
+    ) -> KitchenPerformance:
+        total_prepared = stats_row.get("total_prepared", 0)
+        completed = stats_row.get("completed", 0)
+        avg_prep_ms = stats_row.get("avg_prep_time", 0.0)
+        avg_queue_ms = stats_row.get("avg_queue_time", 0.0)
+        completion_rate = completed / total_prepared if total_prepared > 0 else 0.0
+
+        completed_under_15 = stats_row.get("completed_under_15", 0)
+        sla_compliance_rate = completed_under_15 / completed if completed > 0 else 0.0
+
+        std_dev_prep_ms = stats_row.get("std_dev_prep", 0.0) or 0.0
 
         return KitchenPerformance(
             period=period,
@@ -660,6 +683,7 @@ class MongoAnalyticsRepository:
             waste_cancelled_value=waste_val,
             waste_cancelled_count=waste_cnt,
         )
+
 
     async def get_menu_items_sales(
         self,

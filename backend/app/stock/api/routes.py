@@ -577,7 +577,7 @@ async def get_consumed_by(
     status_code=status.HTTP_200_OK,
     summary="Check stock availability for all menu item recipes",
 )
-async def check_recipes_availability(  # noqa: C901
+async def check_recipes_availability(
     db: DbSession,
     tenant_id: CurrentTenantId,
     _current_employee: CurrentEmployee,
@@ -645,38 +645,41 @@ async def check_recipes_availability(  # noqa: C901
     balances = {row.id: (float(row.balance or 0), row.unit) for row in balance_res.all()}
 
     # 3. Calculate availability
+    for menu_item_id, ingredients in recipes_map.items():
+        availability[menu_item_id] = _check_item_availability(ingredients, balances)
+
+    return RecipeAvailabilityResponseSchema(availability=availability)
+
+
+def _check_item_availability(
+    ingredients: list[tuple[int, float, str]],
+    balances: dict[int, tuple[float, str]],
+) -> bool:
     metric = MetricConverter()
     imperial = ImperialConverter()
 
-    for menu_item_id, ingredients in recipes_map.items():
-        has_sufficient = True
-        for sid, req_val, req_unit in ingredients:
-            if sid not in balances:
-                has_sufficient = False
-                break
+    for sid, req_val, req_unit in ingredients:
+        if sid not in balances:
+            return False
 
-            curr_bal, curr_unit = balances[sid]
+        curr_bal, curr_unit = balances[sid]
 
-            if curr_unit == req_unit:
-                if curr_bal < req_val:
-                    has_sufficient = False
-                    break
-            else:
+        if curr_unit == req_unit:
+            if curr_bal < req_val:
+                return False
+        else:
+            try:
+                converted_val = float(metric.convert(Decimal(str(curr_bal)), curr_unit, req_unit))
+            except ValueError:
                 try:
-                    converted_val = float(metric.convert(Decimal(str(curr_bal)), curr_unit, req_unit))
+                    converted_val = float(
+                        imperial.convert(Decimal(str(curr_bal)), curr_unit, req_unit)
+                    )
                 except ValueError:
-                    try:
-                        converted_val = float(imperial.convert(Decimal(str(curr_bal)), curr_unit, req_unit))
-                    except ValueError:
-                        has_sufficient = False
-                        break
-                if converted_val < req_val:
-                    has_sufficient = False
-                    break
-
-        availability[menu_item_id] = has_sufficient
-
-    return RecipeAvailabilityResponseSchema(availability=availability)
+                    return False
+            if converted_val < req_val:
+                return False
+    return True
 
 
 @router.get(
