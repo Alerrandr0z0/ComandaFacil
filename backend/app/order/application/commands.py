@@ -42,7 +42,7 @@ class CreateOrderHandler:
     def __init__(self, order_repo: OrderRepository) -> None:
         self._order_repo: Final[OrderRepository] = order_repo
 
-    def _generate_order_id(self, all_orders: list[OrderForm], requested_id: int | None) -> int:
+    def _generate_order_id(self, requested_id: int | None) -> int:
         """Returns requested_id if provided, or 0 to let the database generate one via sequence."""
         return requested_id if requested_id is not None else 0
 
@@ -84,14 +84,14 @@ class CreateOrderHandler:
             raise ValueError(f"Fulfillment type '{command.fulfillment_type}' inválido.")
 
     async def handle(self, command: CreateOrderCommand) -> OrderForm:
-        all_tenant_orders = await self._order_repo.find_all_by_tenant(command.tenant_id)
-        order_id = self._generate_order_id(all_tenant_orders, command.id)
-        existing = await self._order_repo.find_by_id(order_id, command.tenant_id)
-        if existing:
-            if existing.state.name == "CLOSED":
-                await self._order_repo.delete(order_id, command.tenant_id)
-            else:
-                raise ConflictError(f"Comanda com id {order_id} já existe.")
+        order_id = self._generate_order_id(command.id)
+        if order_id != 0:
+            existing = await self._order_repo.find_by_id(order_id, command.tenant_id)
+            if existing:
+                if existing.state.name == "CLOSED":
+                    await self._order_repo.delete(order_id, command.tenant_id)
+                else:
+                    raise ConflictError(f"Comanda com id {order_id} já existe.")
 
         order = OrderForm(
             id=order_id,

@@ -1,3 +1,4 @@
+import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   AlertTriangle,
   Eye,
@@ -9,8 +10,7 @@ import {
   User,
   X,
 } from 'lucide-react'
-import { useVirtualizer } from '@tanstack/react-virtual'
-import { useCallback, useEffect, useMemo, useState, useRef } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '@/features/auth/auth_context'
 import Layout from '@/shared/components/layout'
 import { httpClient } from '@/shared/lib/http_client'
@@ -445,7 +445,9 @@ export default function HistoryPage() {
   const [history, setHistory] = useState<OrderHistory[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState('')
-  const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'all' | 'custom'>('all')
+  const [periodFilter, setPeriodFilter] = useState<'today' | 'week' | 'month' | 'all' | 'custom'>(
+    'all',
+  )
   const [customStartDate, setCustomStartDate] = useState<string>('')
   const [customEndDate, setCustomEndDate] = useState<string>('')
   const [selectedOrder, setSelectedOrder] = useState<OrderHistory | null>(null)
@@ -489,7 +491,7 @@ export default function HistoryPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [periodFilter])
+  }, [periodFilter, customStartDate, customEndDate])
 
   useEffect(() => {
     fetchHistory()
@@ -520,9 +522,7 @@ export default function HistoryPage() {
   }
 
   const filteredHistory = useMemo(() => {
-    return history.filter(
-      (item) => matchesSearchTerm(item, searchTerm),
-    )
+    return history.filter((item) => matchesSearchTerm(item, searchTerm))
   }, [history, searchTerm])
 
   const parentRef = useRef<HTMLDivElement>(null)
@@ -666,7 +666,7 @@ export default function HistoryPage() {
                 Intervalo Customizado:
               </span>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <div className="relative group">
                 <input
@@ -691,7 +691,7 @@ export default function HistoryPage() {
                   Data Final
                 </span>
               </div>
-              
+
               <button
                 type="button"
                 onClick={() => {
@@ -732,9 +732,9 @@ export default function HistoryPage() {
                   </p>
                 </div>
               ) : (
-                <div 
-                  ref={parentRef} 
-                  className="overflow-auto border border-gray-900/60 rounded-2xl bg-gray-950/10 backdrop-blur-md shadow-lg shadow-black/10" 
+                <div
+                  ref={parentRef}
+                  className="overflow-auto border border-gray-900/60 rounded-2xl bg-gray-950/10 backdrop-blur-md shadow-lg shadow-black/10"
                   style={{ height: '600px' }}
                 >
                   <table className="w-full text-left border-collapse relative">
@@ -748,7 +748,10 @@ export default function HistoryPage() {
                         <th className="py-3.5 px-4 w-[10%] text-center">Ações</th>
                       </tr>
                     </thead>
-                    <tbody className="text-xs relative" style={{ height: `${rowVirtualizer.getTotalSize()}px` }}>
+                    <tbody
+                      className="text-xs relative"
+                      style={{ height: `${rowVirtualizer.getTotalSize()}px` }}
+                    >
                       {rowVirtualizer.getVirtualItems().map((virtualRow) => {
                         const item = filteredHistory[virtualRow.index]
                         return (
@@ -765,8 +768,12 @@ export default function HistoryPage() {
                               transform: `translateY(${virtualRow.start}px)`,
                             }}
                           >
-                            <td className="px-4 font-bold text-gray-200 w-[15%]">#{item.order_id}</td>
-                            <td className="px-4 text-gray-400 w-[20%]">{formatDate(item.closed_at)}</td>
+                            <td className="px-4 font-bold text-gray-200 w-[15%]">
+                              #{item.order_id}
+                            </td>
+                            <td className="px-4 text-gray-400 w-[20%]">
+                              {formatDate(item.closed_at)}
+                            </td>
                             <td className="px-4 w-[25%] truncate">
                               <span className="font-semibold text-gray-300">
                                 {formatFulfillmentType(item.fulfillment.type)}
@@ -776,11 +783,12 @@ export default function HistoryPage() {
                                   (Mesa {item.fulfillment.table.table_number})
                                 </span>
                               )}
-                              {item.fulfillment.type === 'TAKEAWAY' && item.fulfillment.takeaway && (
-                                <span className="text-[10px] text-gray-500 ml-1">
-                                  {item.fulfillment.takeaway.customer_name}
-                                </span>
-                              )}
+                              {item.fulfillment.type === 'TAKEAWAY' &&
+                                item.fulfillment.takeaway && (
+                                  <span className="text-[10px] text-gray-500 ml-1">
+                                    {item.fulfillment.takeaway.customer_name}
+                                  </span>
+                                )}
                             </td>
                             <td className="px-4 w-[15%]">
                               <span

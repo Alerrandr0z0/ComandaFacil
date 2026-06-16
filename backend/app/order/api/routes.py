@@ -490,12 +490,20 @@ async def get_order_history(
     tenant_id: CurrentTenantId,
     mongo: MongoDB,
     limit: int = Query(1000, ge=1, le=10000, description="Max number of items to return"),
-    start_date: str | None = Query(None, description="ISO timestamp to filter by closed_at >= start_date"),
-    end_date: str | None = Query(None, description="ISO timestamp to filter by closed_at <= end_date"),
+    start_date: str | None = Query(
+        None, description="ISO timestamp to filter by closed_at >= start_date"
+    ),
+    end_date: str | None = Query(
+        None, description="ISO timestamp to filter by closed_at <= end_date"
+    ),
 ) -> list[dict[str, Any]]:
     mongo_repo = OrderHistoryMongoRepository(mongo)
     handler = GetOrderHistoryHandler(mongo_repo)
-    return await handler.handle(GetOrderHistoryQuery(tenant_id=tenant_id, limit=limit, start_date=start_date, end_date=end_date))
+    return await handler.handle(
+        GetOrderHistoryQuery(
+            tenant_id=tenant_id, limit=limit, start_date=start_date, end_date=end_date
+        )
+    )
 
 
 @router.get(

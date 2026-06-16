@@ -85,14 +85,14 @@ class SQLAlchemyKitchenOrderItemRepository(KitchenOrderItemRepository):
             }
             if item.id != 0:
                 orm_kwargs["id"] = item.id
-                
+
             orm = KitchenOrderItemORM(**orm_kwargs)
             self._session.add(orm)
 
         await self._session.flush()
         if item.id == 0:
             item.id = orm.id
-            
+
         register_pending_events(item.collect_events())
 
     def map_to_domain(self, orm: KitchenOrderItemORM) -> KitchenOrderItem:

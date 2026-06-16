@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel, ConfigDict, Field
-from sqlalchemy import select
+from sqlalchemy import case, func, select
 
 from app.dependencies import (
     CurrentEmployee,
@@ -577,18 +577,20 @@ async def get_consumed_by(
     status_code=status.HTTP_200_OK,
     summary="Check stock availability for all menu item recipes",
 )
-async def check_recipes_availability(
+async def check_recipes_availability(  # noqa: C901
     db: DbSession,
     tenant_id: CurrentTenantId,
     _current_employee: CurrentEmployee,
 ) -> RecipeAvailabilityResponseSchema:
-    from sqlalchemy import func
-    from app.stock.infrastructure.orm_models import RecipeORM, RecipeIngredientORM, StockItemORM, StockTransactionORM
-    from app.stock.domain.converters import MetricConverter, ImperialConverter
 
     # 1. Fetch all recipes and their ingredients for this tenant in one go
     recipe_stmt = (
-        select(RecipeORM.menu_item_id, RecipeIngredientORM.stock_item_id, RecipeIngredientORM.quantity_value, RecipeIngredientORM.quantity_unit)
+        select(
+            RecipeORM.menu_item_id,
+            RecipeIngredientORM.stock_item_id,
+            RecipeIngredientORM.quantity_value,
+            RecipeIngredientORM.quantity_unit,
+        )
         .join(RecipeIngredientORM, RecipeORM.id == RecipeIngredientORM.recipe_id)
         .where(RecipeORM.tenant_id == tenant_id)
     )
@@ -599,7 +601,7 @@ async def check_recipes_availability(
     # Better yet: get ALL menu items for the tenant to ensure we don't return an empty dict
     menu_items_stmt = select(RecipeORM.menu_item_id).where(RecipeORM.tenant_id == tenant_id)
     all_menu_items_res = await db.execute(menu_items_stmt)
-    availability: dict[int, bool] = {mid: True for mid in all_menu_items_res.scalars().all()}
+    availability: dict[int, bool] = dict.fromkeys(all_menu_items_res.scalars().all(), True)
 
     if not rows:
         return RecipeAvailabilityResponseSchema(availability=availability)
@@ -615,18 +617,25 @@ async def check_recipes_availability(
 
     # 2. Fetch current balances for all needed stock items using SQL aggregation
     # Use LEFT JOIN to ensure we get the item even if it has 0 transactions
-    from sqlalchemy import case
     balance_stmt = (
         select(
             StockItemORM.id,
             StockItemORM.unit,
             func.sum(
                 case(
-                    (StockTransactionORM.transaction_type.in_(["INPUT", "PRODUCTION", "ADJUSTMENT"]), StockTransactionORM.quantity_value),
-                    (StockTransactionORM.transaction_type.in_(["OUTPUT", "WASTE"]), -StockTransactionORM.quantity_value),
-                    else_=0
+                    (
+                        StockTransactionORM.transaction_type.in_(
+                            ["INPUT", "PRODUCTION", "ADJUSTMENT"]
+                        ),
+                        StockTransactionORM.quantity_value,
+                    ),
+                    (
+                        StockTransactionORM.transaction_type.in_(["OUTPUT", "WASTE"]),
+                        -StockTransactionORM.quantity_value,
+                    ),
+                    else_=0,
                 )
-            ).label("balance")
+            ).label("balance"),
         )
         .outerjoin(StockTransactionORM, StockItemORM.id == StockTransactionORM.stock_item_id)
         .where(StockItemORM.id.in_(needed_stock_ids))
@@ -645,26 +654,26 @@ async def check_recipes_availability(
             if sid not in balances:
                 has_sufficient = False
                 break
-            
+
             curr_bal, curr_unit = balances[sid]
-            
+
             if curr_unit == req_unit:
                 if curr_bal < req_val:
                     has_sufficient = False
                     break
             else:
                 try:
-                    converted_val = metric.convert(curr_bal, curr_unit, req_unit)
+                    converted_val = float(metric.convert(Decimal(str(curr_bal)), curr_unit, req_unit))
                 except ValueError:
                     try:
-                        converted_val = imperial.convert(curr_bal, curr_unit, req_unit)
+                        converted_val = float(imperial.convert(Decimal(str(curr_bal)), curr_unit, req_unit))
                     except ValueError:
                         has_sufficient = False
                         break
                 if converted_val < req_val:
                     has_sufficient = False
                     break
-        
+
         availability[menu_item_id] = has_sufficient
 
     return RecipeAvailabilityResponseSchema(availability=availability)

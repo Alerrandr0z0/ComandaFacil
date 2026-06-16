@@ -210,9 +210,9 @@ async def test_mongo_order_history_repository() -> None:  # noqa: C901
     assert doc is not None
     assert doc["order_id"] == 100
     assert doc["tenant_id"] == "franquia_002"
-    assert doc["total"] == "25.00"  # 18.00 items + 7.00 delivery fee
+    assert doc["total"] == 25.0  # 18.00 items + 7.00 delivery fee
     assert doc["fulfillment"]["type"] == "DELIVERY"
     assert doc["fulfillment"]["delivery"]["delivery_state"] == "AWAITING_PICKUP"
     assert len(doc["items"]) == 1
     assert doc["items"][0]["name"] == "Soda"
-    assert doc["items"][0]["subtotal"] == "18.00"
+    assert doc["items"][0]["subtotal"] == 18.0

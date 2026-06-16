@@ -1292,7 +1292,8 @@ function MenuMatrixTabView({
     </div>
   )
 }
-import { useQuery, keepPreviousData } from '@tanstack/react-query'
+
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 
 export default function AnalyticsDashboard() {
   const [period, setPeriod] = useState<'day' | 'week' | 'month' | 'custom'>('day')
@@ -1401,9 +1402,11 @@ export default function AnalyticsDashboard() {
 
   // Categorized matrix items
   const eliteItems = menuMatrix?.items.filter((i) => i.classification === 'ELITE') || []
-  const oportunidadeItems = menuMatrix?.items.filter((i) => i.classification === 'OPORTUNIDADE') || []
+  const oportunidadeItems =
+    menuMatrix?.items.filter((i) => i.classification === 'OPORTUNIDADE') || []
   const volumeItems = menuMatrix?.items.filter((i) => i.classification === 'ALTO_VOLUME') || []
-  const baixoDesempenhoItems = menuMatrix?.items.filter((i) => i.classification === 'BAIXO_DESEMPENHO') || []
+  const baixoDesempenhoItems =
+    menuMatrix?.items.filter((i) => i.classification === 'BAIXO_DESEMPENHO') || []
 
   return (
     <div className="space-y-6">

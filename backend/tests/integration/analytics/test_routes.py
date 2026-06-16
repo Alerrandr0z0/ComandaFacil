@@ -140,4 +140,4 @@ async def test_analytics_menu_matrix_route(
     assert item["cost"] == 100.0
     assert item["avg_price"] == 25.0
     assert item["margin"] == -75.0
-    assert item["classification"] == "STAR"
+    assert item["classification"] == "ELITE"

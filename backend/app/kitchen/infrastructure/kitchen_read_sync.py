@@ -30,7 +30,7 @@ class KitchenReadModelSync:
             "tenant_id": item.tenant_id,
             "previous_state": item.previous_state,
         }
-        
+
         # Handle menu_item_id: if provided, set it. If not, try to keep existing.
         if menu_item_id is not None:
             set_fields["menu_item_id"] = menu_item_id

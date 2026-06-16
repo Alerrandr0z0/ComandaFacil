@@ -24,17 +24,19 @@ test('should toggle catalog item availability', async ({ page }) => {
   await expect(itemCard).toBeVisible({ timeout: 10000 })
 
   // Find the toggle button inside the item (Disponível / Indisponível)
-  const toggleBtn = itemCard.locator('button').filter({ hasText: /Disponível|Indisponível/ }).first()
+  const toggleBtn = itemCard
+    .locator('button')
+    .filter({ hasText: /Disponível|Indisponível/ })
+    .first()
   const initialText = (await toggleBtn.textContent())?.trim()
   const expectedTextAfterToggle = initialText === 'Disponível' ? 'Indisponível' : 'Disponível'
 
   // Click to toggle and wait for the response
-  const patchPromise = page.waitForResponse(resp => 
-    resp.url().includes(`/v1/menu/items/`) && resp.request().method() === 'PATCH'
+  const patchPromise = page.waitForResponse(
+    (resp) => resp.url().includes(`/v1/menu/items/`) && resp.request().method() === 'PATCH',
   )
   await toggleBtn.click()
-  const response = await patchPromise
-  console.log(`PATCH Response Status: ${response.status()}`)
+  const _response = await patchPromise
 
   // Verify it changed on-screen
   await expect(toggleBtn).toHaveText(expectedTextAfterToggle)
@@ -42,15 +44,21 @@ test('should toggle catalog item availability', async ({ page }) => {
   // Reload page and verify it persisted
   await page.reload()
   await expect(page.getByText('Carregando catálogo...')).not.toBeVisible()
-  
-  const sameItemAfterReload = page.locator('div.grid > div').filter({ hasText: 'Moqueca de Camarão' }).first()
-  const toggleBtnAfterReload = sameItemAfterReload.locator('button').filter({ hasText: /Disponível|Indisponível/ }).first()
+
+  const sameItemAfterReload = page
+    .locator('div.grid > div')
+    .filter({ hasText: 'Moqueca de Camarão' })
+    .first()
+  const toggleBtnAfterReload = sameItemAfterReload
+    .locator('button')
+    .filter({ hasText: /Disponível|Indisponível/ })
+    .first()
   await expect(toggleBtnAfterReload).toHaveText(expectedTextAfterToggle, { timeout: 10000 })
 
   // Toggle back to clean up state
   await toggleBtnAfterReload.click()
-  await page.waitForResponse(resp => 
-    resp.url().includes(`/v1/menu/items/`) && resp.request().method() === 'PATCH'
+  await page.waitForResponse(
+    (resp) => resp.url().includes(`/v1/menu/items/`) && resp.request().method() === 'PATCH',
   )
   await expect(toggleBtnAfterReload).toHaveText(initialText || '', { timeout: 10000 })
 })

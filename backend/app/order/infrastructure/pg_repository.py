@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -73,7 +73,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
         orms = result.scalars().all()
         return [self._map_to_domain(o) for o in orms]
 
-    async def save(self, order: OrderForm) -> None:
+    async def save(self, order: OrderForm) -> None:  # noqa: C901
         stmt = (
             select(OrderFormORM)
             .where(OrderFormORM.id == order.id, OrderFormORM.tenant_id == order.tenant_id)
@@ -88,7 +88,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
             orm.payment_requested = order._payment_requested  # type: ignore[reportPrivateUsage]
             orm.items.clear()
         else:
-            orm_kwargs = {
+            orm_kwargs: dict[str, Any] = {
                 "tenant_id": order.tenant_id,
                 "display_code": order.display_code,
                 "state": order.state.name,
@@ -97,7 +97,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
             }
             if order.id != 0:
                 orm_kwargs["id"] = order.id
-                
+
             orm = OrderFormORM(**orm_kwargs)
             self._session.add(orm)
 
@@ -128,7 +128,7 @@ class SQLAlchemyOrderRepository(OrderRepository):
             new_item_orms.append(item_orm)
 
         await self._session.flush()
-        
+
         # Update domain order ID if it was auto-generated
         if order.id == 0:
             order.id = orm.id

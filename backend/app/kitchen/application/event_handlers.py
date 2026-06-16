@@ -28,14 +28,13 @@ class ReceiveKitchenOrderItemListener:
     async def _process_sequence(
         self,
         event: OrderItemAdded,
-        seq: int,
         kitchen_repo: SQLAlchemyKitchenOrderItemRepository,
         menu_item: Any,
         surplus_orms: list[KitchenOrderItemORM],
     ) -> KitchenOrderItem:
         # We check if this specific item sequence was already processed to avoid duplicates on retry
         # (Though with ID=0, we'll rely on the handler logic to only call this for new items)
-        
+
         if surplus_orms:
             surplus_orm = surplus_orms.pop(0)
             item = kitchen_repo.map_to_domain(surplus_orm)
@@ -62,7 +61,7 @@ class ReceiveKitchenOrderItemListener:
             return item
 
         item = KitchenOrderItem(
-            id=0, # Let database generate unique ID
+            id=0,  # Let database generate unique ID
             correlation_id=event.item_id,
             name_cpy=menu_item.name,
             station_type_cpy=menu_item.station_type,
@@ -129,9 +128,9 @@ class ReceiveKitchenOrderItemListener:
                 surplus_orms = list(result.scalars().all())
 
                 items_created: list[KitchenOrderItem] = []
-                for seq in range(event.quantity):
+                for _ in range(event.quantity):
                     item = await self._process_sequence(
-                        event, seq, kitchen_repo, menu_item, surplus_orms
+                        event, kitchen_repo, menu_item, surplus_orms
                     )
                     items_created.append(item)
 

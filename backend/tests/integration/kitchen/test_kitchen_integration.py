@@ -182,7 +182,7 @@ async def test_kds_http_lifecycle_endpoints_success(
 
 
 @pytest.mark.asyncio
-async def test_kds_websocket_and_background_task_dispatch_flow_success(
+async def test_kds_websocket_and_background_task_dispatch_flow_success(  # noqa: C901, PLR0915
     api_client: AsyncClient, sqlite_session: AsyncSession
 ) -> None:
     # Arrange: Setup OrderForm and MenuItem
@@ -241,7 +241,7 @@ async def test_kds_websocket_and_background_task_dispatch_flow_success(
             for event in events:
                 await EventBus.publish(event)
 
-    sqlite_session.commit = commit_with_events  # type: ignore[method-assign]
+    sqlite_session.commit = commit_with_events
 
     async def override_db_session() -> AsyncGenerator[AsyncSession, None]:
         try:
@@ -292,10 +292,11 @@ async def test_kds_websocket_and_background_task_dispatch_flow_success(
         assert event_data["item"]["correlation_id"] == 500
         assert event_data["item"]["name_cpy"] == "Milkshake"
         assert event_data["item"]["state"] == "WAITING"
+        generated_id = event_data["item"]["id"]
 
         # Act 2: Prepare the item via API
         prep_res = client.patch(
-            "/api/v1/kitchen/items/500000/prepare",
+            f"/api/v1/kitchen/items/{generated_id}/prepare",
             headers={"X-Tenant-ID": "franquia_001"},
         )
         assert prep_res.status_code == 200
@@ -303,7 +304,7 @@ async def test_kds_websocket_and_background_task_dispatch_flow_success(
         # Assert 2: WebSocket should receive preparing event
         event_prep = ws.receive_json()
         assert event_prep["event"] == "ITEM_PREPARING"
-        assert event_prep["item"]["id"] == 500000
+        assert event_prep["item"]["id"] == generated_id
         assert event_prep["item"]["state"] == "PREPARING"
 
     app.dependency_overrides.clear()

@@ -48,10 +48,7 @@ class GetOrderHistoryHandler:
     async def handle(self, query: GetOrderHistoryQuery) -> list[dict[str, Any]]:
         """Fetch completed order read models from NoSQL read database."""
         return await self._mongo_repo.find_all_by_tenant(
-            query.tenant_id, 
-            limit=query.limit, 
-            start_date=query.start_date,
-            end_date=query.end_date
+            query.tenant_id, limit=query.limit, start_date=query.start_date, end_date=query.end_date
         )
 
     def __repr__(self) -> str:

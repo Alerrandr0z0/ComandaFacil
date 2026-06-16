@@ -145,31 +145,32 @@ class GetMenuMatrixHandler:
         avg_margin = sum(item["margin"] for item in items) / total_items if total_items > 0 else 0.0
 
         for item in items:
-            pop = "HIGH" if item["quantity"] >= avg_qty else "LOW"
-            prof = "HIGH" if item["margin"] >= avg_margin else "LOW"
-
-            if pop == "HIGH" and prof == "HIGH":
-                classif = "ELITE"
-                recom = (
-                    "Manter e Destacar: Produto de alta performance. Treinar equipe para manter padrão de excelência."
-                )
-            elif pop == "LOW" and prof == "HIGH":
-                classif = "OPORTUNIDADE"
-                recom = "Promover: Alta margem com baixo giro. Avaliar ações de marketing ou ajuste estratégico de preço."
-            elif pop == "HIGH" and prof == "LOW":
-                classif = "ALTO_VOLUME"
-                recom = "Otimização de Custos: Alta demanda com baixa margem. Renegociar insumos para elevar rentabilidade."
-            else:
-                classif = "BAIXO_DESEMPENHO"
-                recom = "Substituir ou Reformular: Baixa performance global. Avaliar exclusão ou renovação total do item."
-
-            item["popularity"] = pop
-            item["profitability"] = prof
-            item["classification"] = classif
-            item["recommendation"] = recom
+            self._classify_item(item, avg_qty, avg_margin)
 
         return {
             "items": items,
             "average_quantity": avg_qty,
             "average_margin": avg_margin,
         }
+
+    def _classify_item(self, item: dict[str, Any], avg_qty: float, avg_margin: float) -> None:
+        pop = "HIGH" if item["quantity"] >= avg_qty else "LOW"
+        prof = "HIGH" if item["margin"] >= avg_margin else "LOW"
+
+        if pop == "HIGH" and prof == "HIGH":
+            classif = "ELITE"
+            recom = "Manter e Destacar: Produto de alta performance. Treinar equipe para manter padrão de excelência."
+        elif pop == "LOW" and prof == "HIGH":
+            classif = "OPORTUNIDADE"
+            recom = "Promover: Alta margem com baixo giro. Avaliar ações de marketing ou ajuste estratégico de preço."
+        elif pop == "HIGH" and prof == "LOW":
+            classif = "ALTO_VOLUME"
+            recom = "Otimização de Custos: Alta demanda com baixa margem. Renegociar insumos para elevar rentabilidade."
+        else:
+            classif = "BAIXO_DESEMPENHO"
+            recom = "Substituir ou Reformular: Baixa performance global. Avaliar exclusão ou renovação total do item."
+
+        item["popularity"] = pop
+        item["profitability"] = prof
+        item["classification"] = classif
+        item["recommendation"] = recom

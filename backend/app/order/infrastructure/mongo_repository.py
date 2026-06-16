@@ -83,11 +83,11 @@ class OrderHistoryMongoRepository:
         return res[0] if res else None
 
     async def find_all_by_tenant(
-        self, 
-        tenant_id: str, 
+        self,
+        tenant_id: str,
         limit: int = 1000,
         start_date: str | None = None,
-        end_date: str | None = None
+        end_date: str | None = None,
     ) -> list[dict[str, Any]]:
         """Finds completed order documents for a tenant, sorted by closed_at desc."""
         query: dict[str, Any] = {"tenant_id": tenant_id}

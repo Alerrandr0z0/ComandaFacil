@@ -27,12 +27,10 @@ from app.stock.infrastructure.pg_repository import (
 router = APIRouter(prefix="/analytics", tags=["Analytics"])
 
 
-def _parse_date_range(
-    start_date: str | None, end_date: str | None
-) -> DateRange | None:
+def _parse_date_range(start_date: str | None, end_date: str | None) -> DateRange | None:
     if not start_date:
         return None
-    
+
     try:
         start = datetime.datetime.fromisoformat(start_date.replace("Z", "+00:00"))
         if end_date:
@@ -55,7 +53,9 @@ async def get_dashboard(
     repo = MongoAnalyticsRepository(mongo)
     handler = GetDashboardHandler(repo)
     date_range = _parse_date_range(start_date, end_date)
-    data = await handler.handle(GetDashboardQuery(tenant_id=tenant_id, period=period, date_range=date_range))
+    data = await handler.handle(
+        GetDashboardQuery(tenant_id=tenant_id, period=period, date_range=date_range)
+    )
     return {
         "total_sales": str(data.total_sales),
         "orders_count": data.orders_count,
@@ -76,7 +76,9 @@ async def get_sales_report(
     repo = MongoAnalyticsRepository(mongo)
     handler = GetSalesReportHandler(repo)
     date_range = _parse_date_range(start_date, end_date)
-    data = await handler.handle(GetSalesReportQuery(tenant_id=tenant_id, period=period, date_range=date_range))
+    data = await handler.handle(
+        GetSalesReportQuery(tenant_id=tenant_id, period=period, date_range=date_range)
+    )
     return {
         "period": data.period.value,
         "total_sales": str(data.total_sales),
@@ -98,7 +100,9 @@ async def get_order_insights(
     repo = MongoAnalyticsRepository(mongo)
     handler = GetOrderInsightsHandler(repo)
     date_range = _parse_date_range(start_date, end_date)
-    data = await handler.handle(GetOrderInsightsQuery(tenant_id=tenant_id, period=period, date_range=date_range))
+    data = await handler.handle(
+        GetOrderInsightsQuery(tenant_id=tenant_id, period=period, date_range=date_range)
+    )
     return {
         "period": data.period.value,
         "total_orders": data.total_orders,
@@ -119,7 +123,9 @@ async def get_kitchen_performance(
     repo = MongoAnalyticsRepository(mongo)
     handler = GetKitchenPerformanceHandler(repo)
     date_range = _parse_date_range(start_date, end_date)
-    data = await handler.handle(GetKitchenPerformanceQuery(tenant_id=tenant_id, period=period, date_range=date_range))
+    data = await handler.handle(
+        GetKitchenPerformanceQuery(tenant_id=tenant_id, period=period, date_range=date_range)
+    )
     return {
         "period": data.period.value,
         "average_prep_time_minutes": data.average_prep_time_minutes,
@@ -152,7 +158,9 @@ async def get_menu_matrix(
 
     date_range = _parse_date_range(start_date, end_date)
     handler = GetMenuMatrixHandler(analytics_repo, recipe_repo)
-    return await handler.handle(GetMenuMatrixQuery(tenant_id=tenant_id, period=period, date_range=date_range))
+    return await handler.handle(
+        GetMenuMatrixQuery(tenant_id=tenant_id, period=period, date_range=date_range)
+    )
 
 
 @router.get("/demand-forecast", dependencies=[Depends(require_permission("VIEW_ANALYTICS"))])
