@@ -6,7 +6,7 @@ interface Employee {
   id: number
   name: string
   email: string
-  role: 'MANAGER' | 'WAITER' | 'COOK' | 'CASHIER' | null
+  role: 'MANAGER' | 'WAITER' | 'COOK' | 'CASHIER' | 'SUPER_ADMIN' | null
 }
 
 interface AuthContextType {

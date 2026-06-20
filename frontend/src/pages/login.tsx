@@ -1,10 +1,10 @@
 import axios from 'axios'
-import { type FormEvent, useState } from 'react'
+import { type FormEvent, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '@/features/auth/auth_context'
 
 export default function LoginPage() {
-  const { login } = useAuth()
+  const { login, employee } = useAuth()
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -14,6 +14,7 @@ export default function LoginPage() {
   const [isSubmitting, setIsSubmitting] = useState(false)
 
   const validate = () => {
+    // ... (rest of validate function remains the same, need to be careful with edit tool)
     const newErrors: { [key: string]: string } = {}
     if (!email) {
       newErrors.email = 'E-mail é obrigatório'
@@ -46,17 +47,26 @@ export default function LoginPage() {
     setErrorMsg(null)
     try {
       await login(email, password, Number(tenantId))
-      navigate('/orders')
     } catch (err) {
       if (axios.isAxiosError(err) && err.response?.data?.detail) {
         setErrorMsg(err.response.data.detail as string)
       } else {
         setErrorMsg('Erro de conexão ou credenciais inválidas.')
       }
-    } finally {
       setIsSubmitting(false)
+      return
     }
   }
+
+  useEffect(() => {
+    if (employee) {
+      if (employee.role === 'SUPER_ADMIN') {
+        navigate('/admin')
+      } else {
+        navigate('/orders')
+      }
+    }
+  }, [employee, navigate])
 
   return (
     <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gray-950 px-4">
