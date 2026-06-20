@@ -34,6 +34,13 @@ class InMemoryTenantRepository(TenantRepository):
     async def find_by_id(self, id: int) -> Tenant | None:
         return self._tenants.get(id)
 
+    async def find_all(self) -> list[Tenant]:
+        return list(self._tenants.values())
+
+    async def delete(self, id: int) -> None:
+        if id in self._tenants:
+            del self._tenants[id]
+
     async def save(self, tenant: Tenant) -> None:
         self._tenants[tenant.id] = tenant
 
@@ -69,22 +76,22 @@ class InMemorySessionRepository(SessionRepository):
         self._sessions.pop(session_id, None)
 
 
-@pytest.fixture
+@pytest.fixture()
 def tenant_repo() -> InMemoryTenantRepository:
     return InMemoryTenantRepository()
 
 
-@pytest.fixture
+@pytest.fixture()
 def employee_repo() -> InMemoryEmployeeRepository:
     return InMemoryEmployeeRepository()
 
 
-@pytest.fixture
+@pytest.fixture()
 def session_repo() -> InMemorySessionRepository:
     return InMemorySessionRepository()
 
 
-@pytest.mark.unit
+@pytest.mark.unit()
 async def test_create_employee_success(employee_repo: InMemoryEmployeeRepository) -> None:
     # Arrange
     handler = CreateEmployeeHandler(employee_repo)
@@ -106,7 +113,7 @@ async def test_create_employee_success(employee_repo: InMemoryEmployeeRepository
     assert saved.name == "John Doe"
 
 
-@pytest.mark.unit
+@pytest.mark.unit()
 async def test_create_employee_duplicate_email(employee_repo: InMemoryEmployeeRepository) -> None:
     # Arrange
     handler = CreateEmployeeHandler(employee_repo)
@@ -122,7 +129,7 @@ async def test_create_employee_duplicate_email(employee_repo: InMemoryEmployeeRe
         await handler.handle(command)
 
 
-@pytest.mark.unit
+@pytest.mark.unit()
 async def test_assign_role_success(
     employee_repo: InMemoryEmployeeRepository, tenant_repo: InMemoryTenantRepository
 ) -> None:
@@ -147,7 +154,7 @@ async def test_assign_role_success(
     assert saved_emp.roles[0].role_type == RoleType.MANAGER
 
 
-@pytest.mark.unit
+@pytest.mark.unit()
 async def test_assign_role_nonexistent_employee(
     employee_repo: InMemoryEmployeeRepository, tenant_repo: InMemoryTenantRepository
 ) -> None:
@@ -163,7 +170,7 @@ async def test_assign_role_nonexistent_employee(
         await handler.handle(command)
 
 
-@pytest.mark.unit
+@pytest.mark.unit()
 async def test_assign_role_nonexistent_tenant(
     employee_repo: InMemoryEmployeeRepository, tenant_repo: InMemoryTenantRepository
 ) -> None:
@@ -179,7 +186,7 @@ async def test_assign_role_nonexistent_tenant(
         await handler.handle(command)
 
 
-@pytest.mark.unit
+@pytest.mark.unit()
 async def test_login_success(
     employee_repo: InMemoryEmployeeRepository,
     tenant_repo: InMemoryTenantRepository,
@@ -209,7 +216,7 @@ async def test_login_success(
     assert saved_session.employee_id == 1
 
 
-@pytest.mark.unit
+@pytest.mark.unit()
 async def test_login_invalid_credentials(
     employee_repo: InMemoryEmployeeRepository,
     tenant_repo: InMemoryTenantRepository,
@@ -224,7 +231,7 @@ async def test_login_invalid_credentials(
         await handler.handle(command)
 
 
-@pytest.mark.unit
+@pytest.mark.unit()
 async def test_login_incorrect_password(
     employee_repo: InMemoryEmployeeRepository,
     tenant_repo: InMemoryTenantRepository,
@@ -245,7 +252,7 @@ async def test_login_incorrect_password(
         await handler.handle(command)
 
 
-@pytest.mark.unit
+@pytest.mark.unit()
 async def test_login_no_role_in_tenant(
     employee_repo: InMemoryEmployeeRepository,
     tenant_repo: InMemoryTenantRepository,
@@ -269,7 +276,7 @@ async def test_login_no_role_in_tenant(
         await handler.handle(command)
 
 
-@pytest.mark.unit
+@pytest.mark.unit()
 async def test_login_inactive_tenant(
     employee_repo: InMemoryEmployeeRepository,
     tenant_repo: InMemoryTenantRepository,
@@ -291,7 +298,7 @@ async def test_login_inactive_tenant(
         await handler.handle(command)
 
 
-@pytest.mark.unit
+@pytest.mark.unit()
 async def test_logout_success(session_repo: InMemorySessionRepository) -> None:
     # Arrange
     session = Session(
@@ -312,7 +319,7 @@ async def test_logout_success(session_repo: InMemorySessionRepository) -> None:
     assert await session_repo.find_by_id("token123") is None
 
 
-@pytest.mark.unit
+@pytest.mark.unit()
 async def test_get_employee_query(employee_repo: InMemoryEmployeeRepository) -> None:
     # Arrange
     employee = Employee.create(1, "John Doe", Email("john@comandafacil.com"), "pass")
@@ -330,7 +337,7 @@ async def test_get_employee_query(employee_repo: InMemoryEmployeeRepository) -> 
     assert result.name == "John Doe"
 
 
-@pytest.mark.unit
+@pytest.mark.unit()
 async def test_get_session_query(session_repo: InMemorySessionRepository) -> None:
     # Arrange
     session = Session(
