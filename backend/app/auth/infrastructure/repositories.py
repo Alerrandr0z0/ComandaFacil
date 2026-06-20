@@ -122,7 +122,6 @@ class SQLAlchemyEmployeeRepository(EmployeeRepository):
         # Add roles ORM mappings
         for role in employee.roles:
             role_orm = UserTenantRoleORM(
-                id=role.id,
                 tenant_id=role.tenant_id,
                 employee_id=employee.id,
                 role_type=role.role_type.value,
