@@ -20,6 +20,38 @@ export default function Layout({ children }: { children: React.ReactNode }) {
   const location = useLocation()
 
   const navItems = [
+    // Admin specific items
+    {
+      label: 'Painel Geral',
+      path: '/admin',
+      icon: TrendingUp,
+      roles: ['SUPER_ADMIN'],
+    },
+    {
+      label: 'Franquias',
+      path: '/admin/tenants',
+      icon: Utensils,
+      roles: ['SUPER_ADMIN'],
+    },
+    {
+      label: 'Fornecedores',
+      path: '/admin/suppliers',
+      icon: Coffee,
+      roles: ['SUPER_ADMIN'],
+    },
+    {
+      label: 'Gerentes',
+      path: '/admin/managers',
+      icon: Users,
+      roles: ['SUPER_ADMIN'],
+    },
+    {
+      label: 'Solicitações',
+      path: '/admin/requests',
+      icon: ClipboardList,
+      roles: ['SUPER_ADMIN'],
+    },
+    // Tenant-specific items
     {
       label: 'Salão',
       path: '/orders',
@@ -48,6 +80,8 @@ export default function Layout({ children }: { children: React.ReactNode }) {
     }
   }
 
+  const isGlobalAdmin = employee?.role === 'SUPER_ADMIN'
+
   return (
     <div className="flex min-h-screen bg-[#050508] text-gray-150 font-sans">
       {/* Sidebar Navigation - Glassmorphic design */}
@@ -60,7 +94,7 @@ export default function Layout({ children }: { children: React.ReactNode }) {
           <div>
             <h1 className="text-sm font-black tracking-wider text-white uppercase">ComandaFácil</h1>
             <span className="text-[10px] font-medium text-brand-400/80">
-              Franquia ID: {tenantId}
+              {isGlobalAdmin ? 'Administração Global' : `Franquia ID: ${tenantId}`}
             </span>
           </div>
         </div>
@@ -127,7 +161,9 @@ export default function Layout({ children }: { children: React.ReactNode }) {
             </div>
             <div>
               <h1 className="text-xs font-black tracking-widest uppercase">ComandaFácil</h1>
-              <span className="text-[8px] font-bold text-brand-400/80">ID: {tenantId}</span>
+              <span className="text-[8px] font-bold text-brand-400/80">
+                {isGlobalAdmin ? 'Administração Global' : `ID: ${tenantId}`}
+              </span>
             </div>
           </div>
           <button
