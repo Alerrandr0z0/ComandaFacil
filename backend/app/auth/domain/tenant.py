@@ -60,5 +60,13 @@ class TenantRepository(ABC):
         """Retrieves a Tenant by its unique identifier."""
 
     @abstractmethod
+    async def find_all(self) -> list[Tenant]:
+        """Retrieves all tenants."""
+
+    @abstractmethod
+    async def delete(self, id: int) -> None:
+        """Deletes a tenant."""
+
+    @abstractmethod
     async def save(self, tenant: Tenant) -> None:
         """Saves or updates a Tenant in persistent storage."""

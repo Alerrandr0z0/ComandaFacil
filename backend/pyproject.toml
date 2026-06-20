@@ -94,6 +94,8 @@ select = [
     "C90",  # mccabe (cyclomatic complexity!)
 ]
 ignore = [
+    "ANN101", # ignore missing type annotation for self
+    "ANN102", # ignore missing type annotation for cls
     "ANN401", # allow Any in type annotations when explicitly needed
     "TRY003", # allow custom strings inside Standard exception constructors (e.g. HTTPException)
     "S101",   # assert statements allowed (also managed in per-file-ignores)
@@ -141,10 +143,10 @@ max-complexity = 10
     "N818",     # exception names without 'Error' suffix is a design choice (e.g. DomainException)
 ]
 "app/stock/domain/stock_movement.py" = [
-    "TC001",    # MovementType is used in dataclass fields and repr at runtime
+    "TCH001",    # MovementType is used in dataclass fields and repr at runtime
 ]
 "app/stock/infrastructure/orm_models.py" = [
-    "TC003",    # datetime needed at runtime for SQLAlchemy Mapped column type resolution
+    "TCH003",    # datetime needed at runtime for SQLAlchemy Mapped column type resolution
 ]
 
 [tool.ruff.lint.pylint]
