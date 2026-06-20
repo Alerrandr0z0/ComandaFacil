@@ -19,6 +19,7 @@ class RoleType(StrEnum):
     WAITER = "WAITER"
     COOK = "COOK"
     CASHIER = "CASHIER"
+    SUPER_ADMIN = "SUPER_ADMIN"
 
 
 class IEmployeeStrategy(ABC):
@@ -57,6 +58,13 @@ class CashierStrategy(IEmployeeStrategy):
         return action == "CLOSE_ORDER"
 
 
+class AdminStrategy(IEmployeeStrategy):
+    """Strategy granting full permissions for super admins."""
+
+    def permits(self, action: str) -> bool:  # noqa: ARG002
+        return True
+
+
 class RolePermissions:
     """Factory mapping employee role types to their concrete permission strategies."""
 
@@ -78,6 +86,8 @@ class RolePermissions:
                 return CookStrategy()
             case RoleType.CASHIER:
                 return CashierStrategy()
+            case RoleType.SUPER_ADMIN:
+                return AdminStrategy()
             case _:
                 raise ValueError(f"Cargo sem estratégia definida: {role_type}")
 

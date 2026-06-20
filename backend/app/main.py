@@ -6,6 +6,7 @@ from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
+from app.admin.api.routes import router as admin_router
 from app.analytics.api.routes import router as analytics_router
 
 # Import routers
@@ -96,6 +97,7 @@ app.include_router(payment_router, prefix="/api/v1")
 app.include_router(stock_router, prefix="/api/v1")
 app.include_router(price_list_router, prefix="/api/v1")
 app.include_router(analytics_router, prefix="/api/v1")
+app.include_router(admin_router, prefix="/api/v1")
 
 
 @app.get("/health", tags=["Health"])

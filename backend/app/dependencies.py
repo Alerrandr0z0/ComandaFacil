@@ -6,7 +6,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from motor.motor_asyncio import AsyncIOMotorDatabase
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.auth.domain.employee import Employee
+from app.auth.domain.employee import Employee, RoleType
 from app.auth.domain.session import Session
 from app.auth.infrastructure.repositories import (
     SQLAlchemyEmployeeRepository,
@@ -91,6 +91,26 @@ async def get_current_employee(
 
 
 CurrentEmployee = Annotated[Employee, Depends(get_current_employee)]
+
+
+async def get_current_admin_employee(
+    current_employee: CurrentEmployee,
+) -> Employee:
+    """Dependency: gets the authenticated Employee and ensures they are a SUPER_ADMIN."""
+    # Assuming role is checked by iterating roles. We might need a better way to check this
+    # without needing a tenant context. For now, check if ANY active role is SUPER_ADMIN
+    is_admin = any(
+        role.role_type == RoleType.SUPER_ADMIN and role.is_active for role in current_employee.roles
+    )
+    if not is_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Requisição requer privilégios de administrador global.",
+        )
+    return current_employee
+
+
+CurrentAdminEmployee = Annotated[Employee, Depends(get_current_admin_employee)]
 
 
 def require_permission(action: str) -> Callable[..., Awaitable[Employee]]:
