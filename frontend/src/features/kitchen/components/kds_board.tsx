@@ -208,7 +208,8 @@ export default function KdsBoard() {
         params: { station_type: stationType },
       })
 
-      const data = res.data.map((item: KitchenItem) => ({
+      const rawData = Array.isArray(res.data) ? res.data : []
+      const data = rawData.map((item: KitchenItem) => ({
         ...item,
         id: item.id || (item.kitchen_item_id as number),
       }))

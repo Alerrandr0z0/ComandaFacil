@@ -205,8 +205,9 @@ export default function OrderGrid({
       setIsLoading(true)
       try {
         const res = await httpClient.get<OrderForm[]>('/v1/order')
+        const rawData = Array.isArray(res.data) ? res.data : []
         setOrders(
-          res.data.map((order) => ({
+          rawData.map((order) => ({
             order,
             loading: false,
             error: false,
