@@ -117,6 +117,7 @@ async def seed() -> None:
             (502, "Marcos Garçom", "marcos.garcom@barracadosol.com", "WAITER"),
             (503, "Sandra Cozinheira", "sandra.cozinheira@barracadosol.com", "COOK"),
             (504, "Roberta Caixa", "roberta.caixa@barracadosol.com", "CASHIER"),
+            (999, "Admin Global", "admin@comanda.facil", "SUPER_ADMIN"),
         ]
 
         for emp_id, name, email, role in employees_data:
